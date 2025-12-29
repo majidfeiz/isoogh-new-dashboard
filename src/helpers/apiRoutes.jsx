@@ -1,7 +1,17 @@
 // src/helpers/apiRoutes.jsx
 
 // آدرس بک‌اند Nest (از env که راحت عوض بشه)
-export const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || "http://127.0.0.1:8040";
+// اولویت با env در زمان build؛ اگر نبود، می‌توان در runtime مقدار window.__ENV__.VITE_API_BASE_URL را ست کرد.
+const runtimeBase =
+  typeof window !== "undefined" && window.__ENV__ && window.__ENV__.VITE_API_BASE_URL;
+const buildBase = import.meta.env?.VITE_API_BASE_URL;
+export const API_BASE_URL = runtimeBase || buildBase;
+
+if (!API_BASE_URL) {
+  // هشدار برای توسعه: بدون base URL اپ کار نمی‌کند
+  // eslint-disable-next-line no-console
+  console.warn("[API] VITE_API_BASE_URL is not set. Set it in .env or window.__ENV__");
+}
 // ورژن‌ها
 export const API_VERSION = {
   v1: "",
