@@ -3,9 +3,9 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-# Install dependencies
+# Install dependencies (tolerate peer deps from template)
 COPY package.json package-lock.json* yarn.lock* ./
-RUN if [ -f package-lock.json ]; then npm ci; elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; else npm install; fi
+RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; else npm install --legacy-peer-deps; fi
 
 # Build
 COPY . .
