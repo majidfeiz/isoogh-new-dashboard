@@ -6,6 +6,8 @@ WORKDIR /app
 # Install dependencies (tolerate peer deps from template)
 COPY package.json package-lock.json* yarn.lock* ./
 RUN if [ -f package-lock.json ]; then npm ci --legacy-peer-deps; elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; else npm install --legacy-peer-deps; fi
+# Ensure rollup native binary is present (npm optional dep bug workaround)
+RUN npm install --no-save @rollup/rollup-linux-x64-gnu || true
 
 # Build
 COPY . .
