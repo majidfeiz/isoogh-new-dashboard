@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Runtime data
+*.pid
+*.seed
+*.pid.lock
+
+# Env files
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local
+.env.test.local
+
+# Editor/OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Coverage / reports
+coverage/
+*.lcov
+
+# Cache
+.parcel-cache/
+.turbo/
+.eslintcache
+.cache/
+.vite/
+*.tsbuildinfo
+
+# Storybook / play assets
+storybook-static/
+.storybook-out/

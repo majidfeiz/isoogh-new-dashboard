@@ -1,0 +1,170 @@
+import avatar1 from "../../assets/images/users/avatar-1.jpg"
+import avatar2 from "../../assets/images/users/avatar-2.jpg"
+import avatar3 from "../../assets/images/users/avatar-3.jpg"
+import avatar4 from "../../assets/images/users/avatar-4.jpg"
+import avatar5 from "../../assets/images/users/avatar-5.jpg"
+import avatar7 from "../../assets/images/users/avatar-7.jpg"
+
+const users = [
+  {
+    id: 1,
+    name: "داوود جهانگیری",
+    designation: "UI/UX طراح",
+    color: "primary",
+    email: "david@skote.com",
+    projects: "125",
+    tags: ["فتوشاپ", "ایلاستریتور"],
+  },
+  {
+    id: 2,
+    img: avatar2,
+    name: "علی علیزاده",
+    designation: "توسعه دهنده Frontend",
+    email: "ali@skote.com",
+    projects: "132",
+    tags: ["Html", "Css", "Php"],
+  },
+  {
+    id: 3,
+    img: avatar3,
+    name: "محمد صلواتی",
+    designation: "Backend توسعه دهنده ",
+    email: "mmss@skote.com",
+    projects: "1112",
+    tags: ["Php", "جاوا", "پایتون", "Html"],
+  },
+  {
+    id: 4,
+    name: "سارا نوری",
+    designation: "Full Stack توسعه دهنده ",
+    color: "success",
+    email: "sara@skote.com",
+    projects: "121",
+    tags: ["روبی", "Php", "UI/UX طراح"],
+  },
+  {
+    id: 5,
+    img: avatar4,
+    name: "مهشید جهانی",
+    designation: "توسعه دهنده Frontend",
+    email: "mahshid@skote.com",
+    projects: "145",
+    tags: ["Html", "Css", "جاوا"],
+  },
+  {
+    id: 6,
+    img: avatar5,
+    name: "سمیرا نداف",
+    designation: "UI/UX Designer",
+    email: "samira@skote.com",
+    projects: "136",
+    tags: ["فتوشاپ", "ایلاستریتور"],
+  },
+  {
+    id: 7,
+    name: "ساحل ابراهیمی",
+    designation: "Full Stack توسعه دهنده ",
+    color: "info",
+    email: "sahel@skote.com",
+    projects: "125",
+    tags: ["روبی", "Php", "جاوا"],
+  },
+  {
+    id: 8,
+    img: avatar7,
+    name: "زانیار نبوی",
+    designation: "Backend توسعه دهنده ",
+    color: "",
+    email: "zaniar@skote.com",
+    projects: "136",
+    tags: ["Php", "جاوا", "پایتون"],
+  },
+];
+const userProfile = {
+  id: 1,
+  name: "سارا توسلی",
+  designation: "UI/UX طراح",
+  img: avatar1,
+  projectCount: 125,
+  revenue: 1245,
+  personalDetail:
+    "سلام سارا توسلی هستم لورم ایپسوم متن ساختگی با تولید سادگی نامفهوم از صنعت چاپ و با استفاده از طراحان گرافیک است. چاپگرها و متون بلکه روزنامه و مجله در ستون و سطرآنچنان که لازم است و برای شرایط فعلی تکنولوژی مورد نیاز و کاربردهای متنوع با هدف بهبود ابزارهای کاربردی می باشد",
+  phone: "(123) 123 1234",
+  email: "saratavasoli@gmail.com",
+  location: "تهران, ایران",
+  experiences: [
+    {
+      id: 1,
+      iconClass: "bx-server",
+      link: "#",
+      designation: "Back end توسعه دهنده ی",
+      timeDuration: "1400 - 19",
+    },
+    {
+      id: 2,
+      iconClass: "bx-code",
+      link: "#",
+      designation: "Front end توسعه دهنده ی",
+      timeDuration: "1398 - 16",
+    },
+    {
+      id: 3,
+      iconClass: "bx-edit",
+      link: "#",
+      designation: "UI /UX طراح",
+      timeDuration: "1399 - 13",
+    },
+  ],
+  projects: [
+    {
+      id: 1,
+      name: "رابط کاربری ادمین Skote",
+      startDate: "2 مهر, 1401",
+      deadline: "20 دی, 1401",
+      budget: "تومان 506",
+    },
+    {
+      id: 2,
+      name: "لوگوی مدیر Skote",
+      startDate: "1 فروردین, 1401",
+      deadline: "2 تیر, 1401",
+      budget: "تومان 94",
+    },
+    {
+      id: 3,
+      name: "طراحی مجدد - لندینگ چند منظوره",
+      startDate: "21 شهریور, 1401",
+      deadline: "29 مهر, 1401",
+      budget: "تومان 156",
+    },
+    {
+      id: 4,
+      name: "رابط کاربری لنیدنگ برنامه",
+      startDate: "29 مهر, 1401",
+      deadline: "04 دی, 1401",
+      budget: "تومان 122",
+    },
+    {
+      id: 5,
+      name: "قالب وبلاگ",
+      startDate: "05 دی, 1401",
+      deadline: "16 بهمن, 1401",
+      budget: "تومان 164",
+    },
+    {
+      id: 6,
+      name: "طراحی مجدد - لندینگ چند منظوره",
+      startDate: "17 آذر, 1401",
+      deadline: "05 اسفند, 1401",
+      budget: "تومان 192",
+    },
+    {
+      id: 7,
+      name: "لوگو بندینگ",
+      startDate: "04 آبان, 1401",
+      deadline: "05 آذر, 1401",
+      budget: "تومان 94",
+    },
+  ],
+};
+export { users, userProfile }

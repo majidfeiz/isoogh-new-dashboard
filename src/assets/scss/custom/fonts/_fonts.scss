@@ -1,0 +1,76 @@
+//
+// Google font - Poppins
+//
+
+@import url('https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700&display=swap');
+@font-face {
+  font-family: 'yekan';
+  src: url('/src/assets/fonts/YekanBakhFaNum-Heavy.eot');
+  src: url('/src/assets/fonts/YekanBakhFaNum-Heavy.eot?#iefix') format('embedded-opentype'),
+      url('/src/assets/fonts/YekanBakhFaNum-Heavy.woff') format('woff');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'yekan';
+  src: url('/src/assets/fonts/YekanBakhFaNum-Bold.eot');
+  src: url('/src/assets/fonts/YekanBakhFaNum-Bold.eot?#iefix') format('embedded-opentype'),
+      url('/src/assets/fonts/YekanBakhFaNum-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+  ascent-override: 100%;
+}
+
+@font-face {
+  font-family: 'yekan';
+  src: url('/src/assets/fonts/YekanBakhFaNum-Light.eot');
+  src: url('/src/assets/fonts/YekanBakhFaNum-Light.eot?#iefix') format('embedded-opentype'),
+      url('/src/assets/fonts/YekanBakhFaNum-Light.woff') format('woff');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'yekan-fat';
+  src: url('/src/assets/fonts/YekanBakhFaNum-Fat.eot');
+  src: url('/src/assets/fonts/YekanBakhFaNum-Fat.eot?#iefix') format('embedded-opentype'),
+      url('/src/assets/fonts/YekanBakhFaNum-Fat.woff') format('woff');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'yekan';
+  src: url('/src/assets/fonts/YekanBakhFaNum-Regular.eot');
+  src: url('/src/assets/fonts/YekanBakhFaNum-Regular.eot?#iefix') format('embedded-opentype'),
+      url('/src/assets/fonts/YekanBakhFaNum-Regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'yekan';
+  src: url('/src/assets/fonts/YekanBakhFaNum-Thin.eot');
+  src: url('/src/assets/fonts/YekanBakhFaNum-Thin.eot?#iefix') format('embedded-opentype'),
+      url('/src/assets/fonts/YekanBakhFaNum-Thin.woff') format('woff');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'yekan';
+  src: url('/src/assets/fonts/YekanBakhFaNum-Medium.eot');
+  src: url('/src/assets/fonts/YekanBakhFaNum-Medium.eot?#iefix') format('embedded-opentype'),
+      url('/src/assets/fonts/YekanBakhFaNum-Medium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  ascent-override: 100%;
+}
