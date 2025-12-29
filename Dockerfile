@@ -8,6 +8,9 @@ COPY package.json package-lock.json* yarn.lock* ./
 ENV NPM_CONFIG_LEGACY_PEER_DEPS=true
 RUN if [ -f package-lock.json ]; then npm install; elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; else npm install; fi
 
+# Ensure rollup native binary is present (npm optional dep bug workaround)
+RUN npm install --no-save --legacy-peer-deps @rollup/rollup-linux-x64-gnu@4.52.5
+
 # Build
 COPY . .
 ARG VITE_API_BASE_URL=http://127.0.0.1:8040
