@@ -5,7 +5,8 @@
 const runtimeBase =
   typeof window !== "undefined" && window.__ENV__ && window.__ENV__.VITE_API_BASE_URL;
 const buildBase = import.meta.env?.VITE_API_BASE_URL;
-export const API_BASE_URL = runtimeBase || buildBase;
+const defaultBase = "https://napi.isoogh.ir";
+export const API_BASE_URL = runtimeBase || buildBase || defaultBase;
 
 if (!API_BASE_URL) {
   // هشدار برای توسعه: بدون base URL اپ کار نمی‌کند
