@@ -2,7 +2,7 @@
   "name": "Isoogh new dashboard",
   "private": true,
   "version": "1.0.0",
-    "engines": {
+  "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
@@ -79,6 +79,7 @@
     "react-jvectormap": "^0.0.16",
     "react-leaflet": "4.2.1",
     "react-modal-video": "^2.0.1",
+    "react-multi-date-picker": "^4.5.2",
     "react-native-inline-datepicker": "^1.2.0",
     "react-number-format": "5.3.1",
     "react-perfect-scrollbar": "^1.5.8",
