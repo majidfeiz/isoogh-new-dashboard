@@ -83,10 +83,24 @@ const TableContainer = ({
   isCustomPageSize,
   handleUserClick,
   isJobListGlobalFilter,
+  manualSorting = false,
+  sortingState,
+  onSortingChange,
 }) => {
 
   const [columnFilters, setColumnFilters] = useState([]);
   const [globalFilter, setGlobalFilter] = useState('');
+  const [internalSorting, setInternalSorting] = useState([]);
+
+  const sorting = manualSorting ? (sortingState || internalSorting) : internalSorting;
+
+  const handleSortingChange = updater => {
+    const next = typeof updater === "function" ? updater(sorting) : updater;
+    setInternalSorting(next);
+    if (manualSorting && typeof onSortingChange === "function") {
+      onSortingChange(next);
+    }
+  };
 
   const fuzzyFilter = (row, columnId, value, addMeta) => {
     const itemRank = rankItem(row.getValue(columnId), value);
@@ -105,14 +119,17 @@ const TableContainer = ({
     state: {
       columnFilters,
       globalFilter,
+      sorting,
     },
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: handleSortingChange,
     globalFilterFn: fuzzyFilter,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
+    getSortedRowModel: manualSorting ? undefined : getSortedRowModel(),
+    manualSorting,
   });
 
   const {
@@ -177,8 +194,16 @@ const TableContainer = ({
             {getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map(header => {
+                  const sortState = header.column.getIsSorted();
+                  const sortableClass = header.column.getCanSort()
+                    ? sortState === "asc"
+                      ? "sorting sorting_asc"
+                      : sortState === "desc"
+                        ? "sorting sorting_desc"
+                        : "sorting"
+                    : "";
                   return (
-                    <th key={header.id} colSpan={header.colSpan} className={`${header.column.columnDef.enableSorting ? "sorting sorting_desc" : ""}`}>
+                    <th key={header.id} colSpan={header.colSpan} className={sortableClass}>
                       {header.isPlaceholder ? null : (
                         <React.Fragment>
                           <div
@@ -193,12 +218,8 @@ const TableContainer = ({
                               header.column.columnDef.header,
                               header.getContext()
                             )}
-                            {
-                              {
-                                asc: '',
-                                desc: '',
-                              }
-                              [header.column.getIsSorted()] ?? null}
+                            {sortState === "asc" && <span className="ms-1">▲</span>}
+                            {sortState === "desc" && <span className="ms-1">▼</span>}
                           </div>
                           {header.column.getCanFilter() ? (
                             <div>

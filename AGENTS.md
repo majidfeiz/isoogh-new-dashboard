@@ -25,6 +25,10 @@ Project guide for Codex agents working in this repo.
 - Domain services are in `src/services/*.jsx` (auth, users, roles, permissions, voip).
 - When adding endpoints, update `API_ROUTES` in `src/helpers/apiRoutes.jsx` first.
 - Prefer creating new service modules under `src/services/` to encapsulate API calls and keep components thin.
+- Backend API docs (Swagger):
+  - Local dev: `http://localhost:8040/api-docs#/`
+  - Remote: `https://napi.isoogh.ir/api-docs#/`
+  Use these to check updated endpoints whenever backend changes.
 
 ## i18n
 - i18n setup in `src/i18n.jsx`; default language stored in `localStorage.I18N_LANGUAGE` (default `fa`).
