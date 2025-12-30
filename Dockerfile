@@ -13,7 +13,7 @@ RUN npm install --no-save --legacy-peer-deps @rollup/rollup-linux-x64-gnu@4.52.5
 
 # Build
 COPY . .
-ARG VITE_API_BASE_URL=http://127.0.0.1:8040
+ARG VITE_API_BASE_URL=https://napi.isoogh.ir
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
