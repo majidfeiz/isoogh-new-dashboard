@@ -23,6 +23,8 @@ import { AuthProvider } from "./context/AuthContext.jsx";
 
 // Import scss
 import "./assets/scss/theme.scss";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 // import fakeBackend from "/src/helpers/AuthType/fakeBackend";
 // fakeBackend();
@@ -54,29 +56,32 @@ const App = (props) => {
 
   return (
     <AuthProvider>
-      <Routes>
-        {publicRoutes.map((route, idx) => (
-          <Route
-            path={route.path}
-            element={<NonAuthLayout>{route.component}</NonAuthLayout>}
-            key={idx}
-            exact={true}
-          />
-        ))}
+      <>
+        <Routes>
+          {publicRoutes.map((route, idx) => (
+            <Route
+              path={route.path}
+              element={<NonAuthLayout>{route.component}</NonAuthLayout>}
+              key={idx}
+              exact={true}
+            />
+          ))}
 
-        {authProtectedRoutes.map((route, idx) => (
-          <Route
-            path={route.path}
-            element={
-              <Authmiddleware>
-                <Layout>{route.component}</Layout>
-              </Authmiddleware>
-            }
-            key={idx}
-            exact={true}
-          />
-        ))}
-      </Routes>
+          {authProtectedRoutes.map((route, idx) => (
+            <Route
+              path={route.path}
+              element={
+                <Authmiddleware>
+                  <Layout>{route.component}</Layout>
+                </Authmiddleware>
+              }
+              key={idx}
+              exact={true}
+            />
+          ))}
+        </Routes>
+        <ToastContainer position="top-right" rtl autoClose={5000} />
+      </>
     </AuthProvider>
   );
 };

@@ -49,3 +49,31 @@ export async function getOutboundCallHistories({
     },
   };
 }
+
+// خروجی CSV برای تماس‌های خروجی
+export async function exportOutboundCallHistories({
+  page = 1,
+  per_page = 15,
+  type = "",
+  q = "",
+  start_date = "",
+  end_date = "",
+  onDownloadProgress,
+} = {}) {
+  const url = getApiUrl(API_ROUTES.voip.exportOutboundCallHistories);
+
+  const response = await apiGet(url, {
+    responseType: "blob",
+    onDownloadProgress,
+    params: {
+      page,
+      per_page,
+      type: type || undefined,
+      q: q || undefined,
+      start_date: start_date || undefined,
+      end_date: end_date || undefined,
+    },
+  });
+
+  return response?.data;
+}

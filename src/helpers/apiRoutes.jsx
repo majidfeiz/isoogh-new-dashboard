@@ -67,6 +67,7 @@ export const API_ROUTES = {
   },
   voip: {
     outboundCallHistories: "/voip/outbound-call-histories",
+    exportOutboundCallHistories: "/voip/outbound-call-histories/export",
   },
   // مثال برای بعداً:
   // users: {

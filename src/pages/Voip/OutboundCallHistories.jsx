@@ -1,5 +1,5 @@
 // src/pages/Voip/OutboundCallHistories.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardBody,
@@ -11,6 +11,7 @@ import {
   Form,
   Label,
   InputGroup,
+  Progress,
 } from "reactstrap";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -21,7 +22,11 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 
-import { getOutboundCallHistories } from "../../services/voipService.jsx";
+import {
+  getOutboundCallHistories,
+} from "../../services/voipService.jsx";
+import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
+import { getAccessToken } from "../../helpers/authStorage.jsx";
 
 const OutboundCallHistories = () => {
   document.title = "تماس‌های خروجی | داشبورد آیسوق";
@@ -42,6 +47,10 @@ const OutboundCallHistories = () => {
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [searchError, setSearchError] = useState("");
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportProgress, setExportProgress] = useState(null);
+  const [exportPhase, setExportPhase] = useState("idle"); // idle | pending | downloading | finalizing
+  const approxTotalRef = useRef(null);
   const searchTypes = useMemo(
     () => [
       { value: "", label: "نوع جستجو..." },
@@ -166,6 +175,151 @@ const OutboundCallHistories = () => {
     },
     [fetchData, sort.by, sort.order]
   );
+
+  const handleExport = useCallback(async () => {
+    if (startDate && endDate && startDate > endDate) {
+      setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
+      return;
+    }
+
+    const start = startDate
+      ? moment(startDate.toDate()).format("YYYY-MM-DD")
+      : "";
+    const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
+    const cleanedQ = q?.trim?.() || "";
+
+    const perPage = meta?.total && meta.total > 0 ? meta.total : meta.limit;
+
+    setExportLoading(true);
+    setSearchError("");
+    setExportProgress(0);
+    setExportPhase("pending");
+    approxTotalRef.current = null;
+    try {
+      const params = new URLSearchParams();
+      params.append("page", "1");
+      params.append("per_page", String(perPage));
+      if (type) params.append("type", type);
+      if (cleanedQ) params.append("q", cleanedQ);
+      if (start) params.append("start_date", start);
+      if (end) params.append("end_date", end);
+
+      const url = `${getApiUrl(API_ROUTES.voip.exportOutboundCallHistories)}?${params.toString()}`;
+      const token = getAccessToken();
+      const res = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+
+      if (!res.ok || !res.body) {
+        const text = await res.text();
+        throw new Error(text || "خطا در خروجی گرفتن");
+      }
+
+      const approxHeader =
+        res.headers.get("X-Approx-Content-Length") ||
+        res.headers.get("x-approx-content-length") ||
+        res.headers.get("Content-Length");
+      const approxTotal = approxHeader ? Number(approxHeader) : 0;
+      if (approxTotal > 0) {
+        approxTotalRef.current = approxTotal;
+        setExportPhase("downloading");
+        setExportProgress(1); // شروع با 1% تا نوار خالی نباشد
+      }
+
+      const reader = res.body.getReader();
+      const chunks = [];
+      let loaded = 0;
+      const total = approxTotalRef.current || 0;
+      const decoder = new TextDecoder("utf-8");
+      let carry = "";
+      let headerBytes = 0;
+      let rowsSeen = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunkSize = value?.byteLength ?? value?.length ?? 0;
+        if (chunkSize > 0) {
+          chunks.push(value);
+          loaded += chunkSize;
+
+          const chunkText = carry + decoder.decode(value, { stream: true });
+          const parts = chunkText.split("\n");
+          carry = parts.pop() || "";
+
+          parts.forEach((line, idx) => {
+            const trimmed = line.trim();
+            if (!trimmed) return;
+            if (headerBytes === 0) {
+              // اولین خط را به عنوان هدر در نظر بگیر
+              headerBytes = line.length + 1; // شامل \n
+            } else {
+              rowsSeen += 1;
+            }
+          });
+
+          const approx =
+            approxTotalRef.current ||
+            (rowsSeen > 0
+              ? Math.round(
+                  headerBytes +
+                    ((loaded - headerBytes) / Math.max(rowsSeen, 1)) * perPage
+                )
+              : 0);
+
+          if (total > 0) {
+            const percent = Math.min(
+              99,
+              Math.round((loaded / total) * 100)
+            );
+            setExportPhase("downloading");
+            setExportProgress(percent);
+          } else if (approx > 0) {
+            const percent = Math.min(
+              99,
+              Math.round((loaded / approx) * 100)
+            );
+            setExportPhase("downloading");
+            setExportProgress(percent);
+          } else {
+            setExportPhase("pending");
+            setExportProgress(null);
+          }
+        }
+      }
+
+      // افزودن BOM برای نمایش صحیح حروف فارسی در Excel
+      const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
+      const csvBlob = new Blob([bom, ...chunks], {
+        type: "text/csv;charset=utf-8;",
+      });
+
+      const urlObject = window.URL.createObjectURL(csvBlob);
+      const link = document.createElement("a");
+      link.href = urlObject;
+      const stamp = moment().format("YYYYMMDD-HHmmss");
+      link.setAttribute("download", `outbound-calls-${stamp}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(urlObject);
+      setExportPhase("finalizing");
+      setExportProgress(100);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("خطا در خروجی اکسل", e);
+      setSearchError("خروجی گرفتن ناموفق بود. دوباره تلاش کنید.");
+    } finally {
+      setExportLoading(false);
+      setTimeout(() => {
+        setExportProgress(null);
+        setExportPhase("idle");
+        approxTotalRef.current = null;
+      }, 1000);
+    }
+  }, [endDate, meta.limit, meta.total, q, startDate, type]);
 
   const formatUnixFa = (unix) => {
     if (!unix || Number(unix) <= 0) return "-";
@@ -439,19 +593,29 @@ const OutboundCallHistories = () => {
                               />
                             </Col>
                             <Col sm="6">
-                              <DatePicker
-                                calendar={persian}
-                                locale={persian_fa}
-                                value={endDate}
-                                onChange={(date) => {
-                                  setEndDate(date || null);
-                                }}
-                                format="YYYY/MM/DD"
-                                placeholder="تاریخ پایان"
-                                className="form-control"
-                                inputClass="form-control"
-                                calendarPosition="bottom-right"
-                              />
+                              <div className="d-flex gap-2">
+                                <DatePicker
+                                  calendar={persian}
+                                  locale={persian_fa}
+                                  value={endDate}
+                                  onChange={(date) => {
+                                    setEndDate(date || null);
+                                  }}
+                                  format="YYYY/MM/DD"
+                                  placeholder="تاریخ پایان"
+                                  className="form-control"
+                                  inputClass="form-control"
+                                  calendarPosition="bottom-right"
+                                />
+                                <Button
+                                  color="success"
+                                  type="button"
+                                  onClick={handleExport}
+                                  disabled={exportLoading || loading}
+                                >
+                                  {exportLoading ? "در حال آماده‌سازی..." : "خروجی CSV"}
+                                </Button>
+                              </div>
                             </Col>
                           </Row>
                         </Col>
@@ -465,6 +629,41 @@ const OutboundCallHistories = () => {
                           </div>
                         </Col>
                       </Row>
+                      {exportLoading && (
+                        <div className="mt-3">
+                          <div className="d-flex align-items-center gap-3 flex-wrap">
+                            <div className="d-flex align-items-center gap-2">
+                              <div
+                                style={{
+                                  width: 12,
+                                  height: 12,
+                                  borderRadius: "50%",
+                                  background: "#28a745",
+                                  boxShadow: "0 0 0 4px rgba(40,167,69,0.15)",
+                                }}
+                              ></div>
+                              <span className="text-success fw-semibold">
+                                {exportPhase === "finalizing"
+                                  ? "در حال نهایی‌سازی فایل"
+                                  : exportPhase === "downloading"
+                                    ? "در حال دانلود فایل"
+                                    : "در حال آماده‌سازی فایل"}
+                              </span>
+                            </div>
+                            <div className="flex-grow-1" style={{ minWidth: 240 }}>
+                              <Progress
+                                value={exportProgress ?? 0}
+                                animated={exportProgress == null}
+                                striped
+                                color="success"
+                                style={{ height: 10 }}
+                              >
+                                {exportProgress != null ? `${exportProgress}%` : ""}
+                              </Progress>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </Form>
                 </div>
