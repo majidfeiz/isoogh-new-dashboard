@@ -86,6 +86,8 @@ const TableContainer = ({
   manualSorting = false,
   sortingState,
   onSortingChange,
+  rowClassName,
+  rowStyle,
 }) => {
 
   const [columnFilters, setColumnFilters] = useState([]);
@@ -237,8 +239,10 @@ const TableContainer = ({
 
           <tbody>
             {getRowModel().rows.map(row => {
+              const cls = typeof rowClassName === "function" ? rowClassName(row) : "";
+              const style = typeof rowStyle === "function" ? rowStyle(row) : undefined;
               return (
-                <tr key={row.id}>
+                <tr key={row.id} className={cls} style={style}>
                   {row.getVisibleCells().map(cell => {
                     return (
                       <td key={cell.id}>

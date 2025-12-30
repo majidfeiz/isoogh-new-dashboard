@@ -239,6 +239,11 @@ const SidebarContent = (props) => {
             to: "/voip/outbound-call-histories",
             permission: "voip.outbound.index",
           },
+          {
+            label: "تماس خروجی آنلاین",
+            to: "/voip/outbound-call-histories/online",
+            permission: "voip.outbound.index",
+          },
         ],
       },
     ],
