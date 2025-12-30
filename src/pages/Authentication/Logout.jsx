@@ -1,25 +1,24 @@
-import React, { useEffect } from "react";
-import PropTypes from "prop-types";
-import withRouter from "../../components/Common/withRouter";
-import { logoutUser } from "../../store/actions";
-
-//redux
-import { useDispatch } from "react-redux";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { clearAuthData } from "../../helpers/authStorage.jsx";
 
 const Logout = () => {
-  const history = useNavigate();
-  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   useEffect(() => {
-    dispatch(logoutUser(history));
-  }, [dispatch, history]);
+    try {
+      // پاک کردن تمام داده‌های احراز هویت و هر داده‌ی ذخیره‌شده
+      clearAuthData();
+      localStorage.clear();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error("[Logout] failed to clear storage", e);
+    } finally {
+      navigate("/login", { replace: true });
+    }
+  }, [navigate]);
 
-  return <></>;
+  return null;
 };
 
-Logout.propTypes = {
-  history: PropTypes.object,
-};
-
-export default withRouter(Logout);
+export default Logout;
