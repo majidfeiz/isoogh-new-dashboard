@@ -110,6 +110,7 @@
     "regenerator-runtime": "0.14.0",
     "reselect": "^5.0.1",
     "simplebar-react": "^3.2.4",
+    "socket.io-client": "^4.7.2",
     "styled-components": "6.1.1",
     "swiper": "11.0.5",
     "toastr": "^2.1.4",

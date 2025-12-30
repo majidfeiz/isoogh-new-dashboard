@@ -2,6 +2,14 @@
 import { apiGet } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
+// مستندات سوکت تماس‌های خروجی (namespace, event ها و ...)
+export async function getOutboundCallHistorySocketDocs() {
+  const url = getApiUrl(API_ROUTES.voip.outboundCallHistoriesSocketDocs);
+  const response = await apiGet(url);
+  const payload = response?.data || {};
+  return payload?.data || payload || {};
+}
+
 // لیست تماس‌های خروجی (paginate + search)
 export async function getOutboundCallHistories({
   page = 1,

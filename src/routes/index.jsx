@@ -196,6 +196,7 @@ import UserPermissions from "../pages/Users/UserPermissions";
 
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
+import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
 
 
 const authProtectedRoutes = [
@@ -259,6 +260,7 @@ const authProtectedRoutes = [
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
+  { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
 
   //   //Email
   { path: "/email-inbox", component: <EmailInbox /> },
