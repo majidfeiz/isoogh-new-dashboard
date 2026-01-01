@@ -33,7 +33,9 @@ const UserForm = () => {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    mobile: "",
+    username: "",
+    ssn: "",
+    phone: "",
     password: "",
     password_confirmation: "",
     status: "active",
@@ -54,7 +56,9 @@ const UserForm = () => {
           ...prev,
           name: user.name || "",
           email: user.email || "",
-          mobile: user.mobile || "",
+          username: user.username || "",
+          ssn: user.ssn || "",
+          phone: user.phone || user.mobile || "",
           status: user.status || "active",
           password: "",
           password_confirmation: "",
@@ -87,13 +91,17 @@ const UserForm = () => {
           delete payload.password;
           delete payload.password_confirmation;
         }
+        // حذف فیلد mobile قدیمی اگر وجود داشت
+        delete payload.mobile;
         await updateUser(id, payload);
         setAlert({
           type: "success",
           message: "کاربر با موفقیت ویرایش شد.",
         });
       } else {
-        await createUser(form);
+        const payload = { ...form };
+        delete payload.mobile;
+        await createUser(payload);
         setAlert({
           type: "success",
           message: "کاربر جدید با موفقیت ایجاد شد.",
@@ -150,82 +158,128 @@ const UserForm = () => {
                 )}
 
                 <Form onSubmit={handleSubmit}>
-                  <FormGroup>
-                    <Label for="name">نام</Label>
-                    <Input
-                      id="name"
-                      name="name"
-                      value={form.name}
-                      onChange={handleChange}
-                    />
-                    {renderError("name")}
-                  </FormGroup>
+                  <Row className="g-3">
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="name">نام</Label>
+                        <Input
+                          id="name"
+                          name="name"
+                          value={form.name}
+                          onChange={handleChange}
+                          placeholder="مثلاً فاطمه ممشلی"
+                        />
+                        {renderError("name")}
+                      </FormGroup>
+                    </Col>
 
-                  <FormGroup>
-                    <Label for="email">ایمیل</Label>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      value={form.email}
-                      onChange={handleChange}
-                    />
-                    {renderError("email")}
-                  </FormGroup>
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="username">نام کاربری</Label>
+                        <Input
+                          id="username"
+                          name="username"
+                          value={form.username}
+                          onChange={handleChange}
+                          placeholder="مثلاً 24880680176"
+                        />
+                        {renderError("username")}
+                      </FormGroup>
+                    </Col>
 
-                  <FormGroup>
-                    <Label for="mobile">موبایل</Label>
-                    <Input
-                      id="mobile"
-                      name="mobile"
-                      value={form.mobile}
-                      onChange={handleChange}
-                    />
-                    {renderError("mobile")}
-                  </FormGroup>
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="phone">شماره موبایل</Label>
+                        <Input
+                          id="phone"
+                          name="phone"
+                          value={form.phone}
+                          onChange={handleChange}
+                          placeholder="مثلاً 0912..."
+                        />
+                        {renderError("phone")}
+                        {renderError("mobile")}
+                      </FormGroup>
+                    </Col>
 
-                  <FormGroup>
-                    <Label for="status">وضعیت</Label>
-                    <Input
-                      type="select"
-                      id="status"
-                      name="status"
-                      value={form.status}
-                      onChange={handleChange}
-                    >
-                      <option value="active">فعال</option>
-                      <option value="inactive">غیرفعال</option>
-                    </Input>
-                    {renderError("status")}
-                  </FormGroup>
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="ssn">کد ملی</Label>
+                        <Input
+                          id="ssn"
+                          name="ssn"
+                          value={form.ssn}
+                          onChange={handleChange}
+                          placeholder="مثلاً 4880680176"
+                        />
+                        {renderError("ssn")}
+                      </FormGroup>
+                    </Col>
 
-                  <FormGroup>
-                    <Label for="password">
-                      رمز عبور{isEdit && " (در صورت نیاز به تغییر)"}
-                    </Label>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      value={form.password}
-                      onChange={handleChange}
-                    />
-                    {renderError("password")}
-                  </FormGroup>
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="email">ایمیل</Label>
+                        <Input
+                          id="email"
+                          name="email"
+                          type="email"
+                          value={form.email}
+                          onChange={handleChange}
+                          placeholder="example@mail.com"
+                        />
+                        {renderError("email")}
+                      </FormGroup>
+                    </Col>
 
-                  <FormGroup>
-                    <Label for="password_confirmation">
-                      تکرار رمز عبور
-                    </Label>
-                    <Input
-                      id="password_confirmation"
-                      name="password_confirmation"
-                      type="password"
-                      value={form.password_confirmation}
-                      onChange={handleChange}
-                    />
-                    {renderError("password_confirmation")}
-                  </FormGroup>
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="status">وضعیت</Label>
+                        <Input
+                          type="select"
+                          id="status"
+                          name="status"
+                          value={form.status}
+                          onChange={handleChange}
+                        >
+                          <option value="active">فعال</option>
+                          <option value="inactive">غیرفعال</option>
+                        </Input>
+                        {renderError("status")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="password">
+                          رمز عبور{isEdit && " (در صورت نیاز به تغییر)"}
+                        </Label>
+                        <Input
+                          id="password"
+                          name="password"
+                          type="password"
+                          value={form.password}
+                          onChange={handleChange}
+                        />
+                        {renderError("password")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="password_confirmation">
+                          تکرار رمز عبور
+                        </Label>
+                        <Input
+                          id="password_confirmation"
+                          name="password_confirmation"
+                          type="password"
+                          value={form.password_confirmation}
+                          onChange={handleChange}
+                        />
+                        {renderError("password_confirmation")}
+                      </FormGroup>
+                    </Col>
+                  </Row>
 
                   <div className="d-flex justify-content-end gap-2">
                     <Button

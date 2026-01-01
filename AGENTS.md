@@ -42,6 +42,13 @@ Project guide for Codex agents working in this repo.
 - Match existing file style (mostly double quotes, JSX, and semicolons in many files).
 - Keep changes localized; avoid editing `node_modules` and generated assets.
 
+## CSV export pattern (VoIP + Users)
+- Use streaming `fetch` (not axios) with auth header to avoid empty CSV rows.
+- Build URL with query params, read `X-Approx-Content-Length`/`Content-Length` to estimate total, and update a progress bar as chunks arrive (start at ~1%, cap at 99% until complete).
+- While reading, decode text to count header bytes/rows to approximate total if length is missing; fall back to that for progress.
+- Append UTF-8 BOM when creating the CSV Blob, then `URL.createObjectURL` + anchor click; revoke URL after download.
+- Examples: `src/pages/Voip/OutboundCallHistories.jsx` and `src/pages/Users/Users.jsx` implement the canonical flow; mirror this for future exports.
+
 ## Common commands
 - Dev server: `npm run dev` or `yarn dev`
 - Build: `npm run build`

@@ -65,6 +65,7 @@ export const API_ROUTES = {
 
     syncRoles: (id) => `/authorization/users/${id}/roles`,
     syncPermissions: (id) => `/authorization/users/${id}/permissions`,
+    export: "/users/export",
   },
   voip: {
     outboundCallHistories: "/voip/outbound-call-histories",

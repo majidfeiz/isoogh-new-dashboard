@@ -8,7 +8,13 @@ import {
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
 // گرفتن لیست کاربران
-export async function getUsers({ page = 1, limit = 10, search = "" } = {}) {
+export async function getUsers({
+  page = 1,
+  limit = 10,
+  search = "",
+  sortBy,
+  sortOrder,
+} = {}) {
   const url = getApiUrl(API_ROUTES.users.list);
 
   const response = await apiGet(url, {
@@ -16,13 +22,16 @@ export async function getUsers({ page = 1, limit = 10, search = "" } = {}) {
       page,
       limit,
       search: search || undefined,
+      sortBy: sortBy || undefined,
+      sortOrder: sortOrder || undefined,
     },
   });
 
   const payload = response.data;
   const data = payload?.data || {};
   const items = data.items || [];
-  const pagination = data.pagination || {};
+  // Backend returns pagination info under `meta` (or sometimes `pagination`)
+  const pagination = data.pagination || data.meta || {};
 
   return {
     items,
@@ -30,9 +39,39 @@ export async function getUsers({ page = 1, limit = 10, search = "" } = {}) {
       page: pagination.page ?? page,
       limit: pagination.limit ?? limit,
       total: pagination.total ?? items.length,
-      lastPage: pagination.lastPage ?? 1,
+      lastPage:
+        pagination.lastPage ??
+        (pagination.total && (pagination.limit || limit)
+          ? Math.ceil((pagination.total || 0) / (pagination.limit || limit))
+          : 1),
     },
   };
+}
+
+// خروجی CSV کاربران
+export async function exportUsers({
+  page = 1,
+  limit = 1000,
+  search = "",
+  sortBy = "id",
+  sortOrder = "DESC",
+  onDownloadProgress,
+} = {}) {
+  const url = getApiUrl(API_ROUTES.users.export);
+
+  const response = await apiGet(url, {
+    responseType: "blob",
+    onDownloadProgress,
+    params: {
+      page,
+      limit,
+      search: search || undefined,
+      sortBy: sortBy || undefined,
+      sortOrder: sortOrder || undefined,
+    },
+  });
+
+  return response?.data;
 }
 
 // ساخت کاربر جدید
