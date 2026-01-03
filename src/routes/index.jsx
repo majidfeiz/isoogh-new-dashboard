@@ -198,6 +198,14 @@ import UserPermissions from "../pages/Users/UserPermissions";
 import StudentList from "../pages/Students/StudentList.jsx";
 import StudentForm from "../pages/Students/StudentForm.jsx";
 
+// schools
+import SchoolList from "../pages/Schools/SchoolList.jsx";
+import SchoolForm from "../pages/Schools/SchoolForm.jsx";
+
+// managers
+import ManagerList from "../pages/Managers/ManagerList.jsx";
+import ManagerForm from "../pages/Managers/ManagerForm.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -266,6 +274,16 @@ const authProtectedRoutes = [
   { path: "/students", component: <StudentList /> },
   { path: "/students/create", component: <StudentForm /> },
   { path: "/students/:id/edit", component: <StudentForm /> },
+
+  // Managers
+  { path: "/managers", component: <ManagerList /> },
+  { path: "/managers/create", component: <ManagerForm /> },
+  { path: "/managers/:id/edit", component: <ManagerForm /> },
+
+  // Schools
+  { path: "/schools", component: <SchoolList /> },
+  { path: "/schools/create", component: <SchoolForm /> },
+  { path: "/schools/:id/edit", component: <SchoolForm /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },

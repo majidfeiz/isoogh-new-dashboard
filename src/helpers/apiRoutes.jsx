@@ -76,6 +76,20 @@ export const API_ROUTES = {
     export: "/students/export",
     import: "/students/import",
   },
+  managers: {
+    list: "/managers",
+    create: "/managers",
+    detail: (id) => `/managers/${id}`,
+    update: (id) => `/managers/${id}`,
+    delete: (id) => `/managers/${id}`,
+  },
+  schools: {
+    list: "/schools",
+    create: "/schools",
+    detail: (id) => `/schools/${id}`,
+    update: (id) => `/schools/${id}`,
+    delete: (id) => `/schools/${id}`,
+  },
   voip: {
     outboundCallHistories: "/voip/outbound-call-histories",
     exportOutboundCallHistories: "/voip/outbound-call-histories/export",
