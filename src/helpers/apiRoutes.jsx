@@ -67,6 +67,15 @@ export const API_ROUTES = {
     syncPermissions: (id) => `/authorization/users/${id}/permissions`,
     export: "/users/export",
   },
+  students: {
+    list: "/students",
+    create: "/students",
+    detail: (id) => `/students/${id}`,
+    update: (id) => `/students/${id}`,
+    delete: (id) => `/students/${id}`,
+    export: "/students/export",
+    import: "/students/import",
+  },
   voip: {
     outboundCallHistories: "/voip/outbound-call-histories",
     exportOutboundCallHistories: "/voip/outbound-call-histories/export",

@@ -230,6 +230,16 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "دانش‌آموزان",
+        icon: "bx bx-book-open",
+        permissionAny: ["students.index", "students.create"],
+        children: [
+          { label: "لیست دانش‌آموزان", to: "/students", permission: "students.index" },
+          { label: "ایجاد دانش‌آموز جدید", to: "/students/create", permission: "students.create" },
+        ],
+      },
+      {
+        type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
         permissionAny: ["voip.outbound.index"],

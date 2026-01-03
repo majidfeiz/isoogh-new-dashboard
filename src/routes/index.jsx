@@ -194,6 +194,10 @@ import UserForm from "../pages/Users/UserForm";
 
 import UserPermissions from "../pages/Users/UserPermissions";
 
+// students
+import StudentList from "../pages/Students/StudentList.jsx";
+import StudentForm from "../pages/Students/StudentForm.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -257,6 +261,11 @@ const authProtectedRoutes = [
   { path: "/users/:id/edit", component: <UserForm /> },
   
   { path: "/users/:id/permissions", component: <UserPermissions /> },
+
+  // Students
+  { path: "/students", component: <StudentList /> },
+  { path: "/students/create", component: <StudentForm /> },
+  { path: "/students/:id/edit", component: <StudentForm /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
