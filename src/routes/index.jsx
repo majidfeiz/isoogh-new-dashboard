@@ -206,6 +206,9 @@ import SchoolForm from "../pages/Schools/SchoolForm.jsx";
 import ManagerList from "../pages/Managers/ManagerList.jsx";
 import ManagerForm from "../pages/Managers/ManagerForm.jsx";
 
+// advisers
+import AdviserList from "../pages/Advisers/AdviserList.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -279,6 +282,9 @@ const authProtectedRoutes = [
   { path: "/managers", component: <ManagerList /> },
   { path: "/managers/create", component: <ManagerForm /> },
   { path: "/managers/:id/edit", component: <ManagerForm /> },
+
+  // Advisers
+  { path: "/advisers", component: <AdviserList /> },
 
   // Schools
   { path: "/schools", component: <SchoolList /> },

@@ -83,6 +83,14 @@ export const API_ROUTES = {
     update: (id) => `/managers/${id}`,
     delete: (id) => `/managers/${id}`,
   },
+  advisers: {
+    list: "/advisers",
+    create: "/advisers",
+    detail: (id) => `/advisers/${id}`,
+    update: (id) => `/advisers/${id}`,
+    delete: (id) => `/advisers/${id}`,
+    export: "/advisers/export",
+  },
   schools: {
     list: "/schools",
     create: "/schools",

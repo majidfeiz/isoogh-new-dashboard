@@ -240,6 +240,15 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "مشاوران",
+        icon: "bx bx-user-voice",
+        permissionAny: ["advisers.index"],
+        children: [
+          { label: "لیست مشاوران", to: "/advisers", permission: "advisers.index" },
+        ],
+      },
+      {
+        type: "group",
         label: "دانش‌آموزان",
         icon: "bx bx-book-open",
         permissionAny: ["students.index", "students.create"],
