@@ -98,6 +98,13 @@ export const API_ROUTES = {
     update: (id) => `/schools/${id}`,
     delete: (id) => `/schools/${id}`,
   },
+  grades: {
+    list: "/grades",
+    create: "/grades",
+    detail: (id) => `/grades/${id}`,
+    update: (id) => `/grades/${id}`,
+    delete: (id) => `/grades/${id}`,
+  },
   voip: {
     outboundCallHistories: "/voip/outbound-call-histories",
     exportOutboundCallHistories: "/voip/outbound-call-histories/export",

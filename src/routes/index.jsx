@@ -202,6 +202,10 @@ import StudentForm from "../pages/Students/StudentForm.jsx";
 import SchoolList from "../pages/Schools/SchoolList.jsx";
 import SchoolForm from "../pages/Schools/SchoolForm.jsx";
 
+// grades
+import GradeList from "../pages/Grades/GradeList.jsx";
+import GradeForm from "../pages/Grades/GradeForm.jsx";
+
 // managers
 import ManagerList from "../pages/Managers/ManagerList.jsx";
 import ManagerForm from "../pages/Managers/ManagerForm.jsx";
@@ -290,6 +294,11 @@ const authProtectedRoutes = [
   { path: "/schools", component: <SchoolList /> },
   { path: "/schools/create", component: <SchoolForm /> },
   { path: "/schools/:id/edit", component: <SchoolForm /> },
+
+  // Grades
+  { path: "/grades", component: <GradeList /> },
+  { path: "/grades/create", component: <GradeForm /> },
+  { path: "/grades/:id/edit", component: <GradeForm /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },

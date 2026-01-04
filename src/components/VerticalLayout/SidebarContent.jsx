@@ -259,6 +259,16 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "پایه‌ها",
+        icon: "bx bx-layer",
+        permissionAny: ["grades.index", "grades.create"],
+        children: [
+          { label: "لیست پایه‌ها", to: "/grades", permission: "grades.index" },
+          { label: "ایجاد پایه جدید", to: "/grades/create", permission: "grades.create" },
+        ],
+      },
+      {
+        type: "group",
         label: "مدارس",
         icon: "bx bxs-school",
         permissionAny: ["schools.index", "schools.create"],
