@@ -11,6 +11,8 @@ export async function getStudents({
   sortOrder,
   schoolId,
   userId,
+  tag,
+  tagId,
 } = {}) {
   const url = getApiUrl(API_ROUTES.students.list);
 
@@ -23,6 +25,8 @@ export async function getStudents({
       sortOrder: sortOrder || undefined,
       schoolId: schoolId || undefined,
       userId: userId || undefined,
+      tag: tag || undefined,
+      tagId: tagId || undefined,
     },
   });
 

@@ -14,6 +14,10 @@ import {
   InputGroupText,
   Progress,
   Alert,
+  Badge,
+  Modal,
+  ModalHeader,
+  ModalBody,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
 
@@ -42,6 +46,8 @@ const StudentList = () => {
     name: "",
     username: "",
     ssn: "",
+    tag: "",
+    tagId: "",
   });
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -62,6 +68,9 @@ const StudentList = () => {
   const [importUploadProgress, setImportUploadProgress] = useState(null);
   const ROW_HEIGHT = 44;
   const VIRTUAL_BUFFER = 10;
+  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [tagModalTitle, setTagModalTitle] = useState("");
+  const [tagModalItems, setTagModalItems] = useState([]);
 
   const pagedImportRows = useMemo(() => {
     const start = (importPreviewPage - 1) * importPreviewPageSize;
@@ -128,6 +137,8 @@ const StudentList = () => {
           page,
           limit: meta.limit,
           search: searchQuery,
+          tag: currentFilters.tag,
+          tagId: currentFilters.tagId,
           sortBy: currentSort?.by,
           sortOrder: currentSort?.order,
         });
@@ -170,7 +181,7 @@ const StudentList = () => {
   };
 
   const handleResetFilters = () => {
-    const reset = { name: "", username: "", ssn: "" };
+    const reset = { name: "", username: "", ssn: "", tag: "", tagId: "" };
     setFilters(reset);
     fetchData(1, reset, sort);
   };
@@ -193,6 +204,8 @@ const StudentList = () => {
       if (sort?.by) params.append("sortBy", sort.by);
       if (sort?.order) params.append("sortOrder", sort.order);
       if (searchQuery) params.append("search", searchQuery);
+      if (filters.tag) params.append("tag", filters.tag);
+      if (filters.tagId) params.append("tagId", filters.tagId);
 
       const url = `${getApiUrl(API_ROUTES.students.export)}?${params.toString()}`;
       const token = getAccessToken();
@@ -462,6 +475,19 @@ const StudentList = () => {
     return names.length > 0 ? names.join("، ") : "-";
   }, []);
 
+  const handleShowTags = useCallback((student) => {
+    const tags = Array.isArray(student?.tags) ? student.tags : [];
+    setTagModalItems(tags);
+    const title =
+      student?.name ||
+      student?.user?.name ||
+      student?.username ||
+      student?.user?.username ||
+      `دانش‌آموز #${student?.id ?? ""}`;
+    setTagModalTitle(title);
+    setTagModalOpen(true);
+  }, []);
+
   const columns = useMemo(
     () => [
       {
@@ -530,6 +556,53 @@ const StudentList = () => {
         cell: (info) => renderSchools(info.getValue()),
       },
       {
+        id: "tags",
+        header: "تگ‌ها",
+        accessorKey: "tags",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const tags = row.original?.tags || [];
+          if (!Array.isArray(tags) || tags.length === 0) return "-";
+
+          const maxInline = 3;
+          const inline = tags.slice(0, maxInline);
+          const remaining = tags.length - inline.length;
+
+          return (
+            <div className="d-flex flex-wrap gap-1">
+              {inline.map((t) => (
+                <Badge key={t.id || t.name} color="info" pill className="px-2">
+                  <span className="text-truncate" style={{ maxWidth: 140, display: "inline-block" }}>
+                    {t.name || t.title || t.id}
+                  </span>
+                </Badge>
+              ))}
+              {remaining > 0 && (
+                <Button
+                  size="sm"
+                  color="light"
+                  className="px-2 py-0"
+                  onClick={() => handleShowTags(row.original)}
+                >
+                  +{remaining} بیشتر
+                </Button>
+              )}
+              {remaining <= 0 && tags.length > maxInline && (
+                <Button
+                  size="sm"
+                  color="light"
+                  className="px-2 py-0"
+                  onClick={() => handleShowTags(row.original)}
+                >
+                  همه
+                </Button>
+              )}
+            </div>
+          );
+        },
+      },
+      {
         id: "actions",
         header: "عملیات",
         enableColumnFilter: false,
@@ -559,7 +632,7 @@ const StudentList = () => {
         },
       },
     ],
-    [handleEdit, handleDelete, renderSchools]
+    [handleEdit, handleDelete, renderSchools, handleShowTags]
   );
 
   const handleSortingChange = useCallback(
@@ -913,6 +986,33 @@ const StudentList = () => {
                     </Col>
 
                     <Col xl="3" lg="4" md="6">
+                      <Label className="form-label">نام تگ (جستجوی جزئی)</Label>
+                      <InputGroup>
+                        <InputGroupText>
+                          <i className="bx bx-purchase-tag-alt" />
+                        </InputGroupText>
+                        <Input
+                          type="text"
+                          name="tag"
+                          value={filters.tag}
+                          onChange={handleFilterChange}
+                          placeholder="مثلاً پایه نهم ..."
+                        />
+                      </InputGroup>
+                    </Col>
+
+                    <Col xl="3" lg="4" md="6">
+                      <Label className="form-label">شناسه تگ (parent_tags.id)</Label>
+                      <Input
+                        type="number"
+                        name="tagId"
+                        value={filters.tagId}
+                        onChange={handleFilterChange}
+                        placeholder="مثلاً 565"
+                      />
+                    </Col>
+
+                    <Col xl="3" lg="4" md="6">
                       <Label className="form-label">نام کاربری</Label>
                       <InputGroup>
                         <InputGroupText>
@@ -993,6 +1093,29 @@ const StudentList = () => {
           </Col>
         </Row>
       </div>
+
+      <Modal isOpen={tagModalOpen} toggle={() => setTagModalOpen(false)} size="lg" centered>
+        <ModalHeader toggle={() => setTagModalOpen(false)}>
+          تگ‌های {tagModalTitle}
+        </ModalHeader>
+        <ModalBody>
+          {tagModalItems.length === 0 ? (
+            <div className="text-muted">تگی ثبت نشده است.</div>
+          ) : (
+            <div className="d-flex flex-wrap gap-2">
+              {tagModalItems.map((t) => (
+                <Badge key={t.id || t.name} color="info" pill className="px-3 py-2">
+                  <div className="fw-semibold">{t.name || t.title || t.id}</div>
+                  <div className="text-muted small">
+                    {t.school_id ? `مدرسه: ${t.school_id}` : ""}
+                    {t.parent_id ? ` | والد: ${t.parent_id}` : ""}
+                  </div>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </ModalBody>
+      </Modal>
     </div>
   );
 };

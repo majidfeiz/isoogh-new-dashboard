@@ -213,6 +213,11 @@ import ManagerForm from "../pages/Managers/ManagerForm.jsx";
 // advisers
 import AdviserList from "../pages/Advisers/AdviserList.jsx";
 
+// parent tags
+import ParentTagList from "../pages/ParentTags/ParentTagList.jsx";
+import ParentTagForm from "../pages/ParentTags/ParentTagForm.jsx";
+import ParentTagUsers from "../pages/ParentTags/ParentTagUsers.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -299,6 +304,12 @@ const authProtectedRoutes = [
   { path: "/grades", component: <GradeList /> },
   { path: "/grades/create", component: <GradeForm /> },
   { path: "/grades/:id/edit", component: <GradeForm /> },
+
+  // Parent Tags
+  { path: "/parent-tags", component: <ParentTagList /> },
+  { path: "/parent-tags/create", component: <ParentTagForm /> },
+  { path: "/parent-tags/:id/edit", component: <ParentTagForm /> },
+  { path: "/parent-tags/:id/users", component: <ParentTagUsers /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },

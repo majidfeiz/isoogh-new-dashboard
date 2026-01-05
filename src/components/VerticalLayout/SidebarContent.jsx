@@ -269,6 +269,16 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "تگ‌ها",
+        icon: "bx bx-purchase-tag-alt",
+        permissionAny: ["parent-tags.index", "parent-tags.create"],
+        children: [
+          { label: "لیست تگ‌ها", to: "/parent-tags", permission: "parent-tags.index" },
+          { label: "ایجاد تگ جدید", to: "/parent-tags/create", permission: "parent-tags.create" },
+        ],
+      },
+      {
+        type: "group",
         label: "مدارس",
         icon: "bx bxs-school",
         permissionAny: ["schools.index", "schools.create"],
