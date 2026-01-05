@@ -230,6 +230,65 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "مدیران",
+        icon: "bx bx-id-card",
+        permissionAny: ["managers.index", "managers.create"],
+        children: [
+          { label: "لیست مدیران", to: "/managers", permission: "managers.index" },
+          { label: "ایجاد مدیر جدید", to: "/managers/create", permission: "managers.create" },
+        ],
+      },
+      {
+        type: "group",
+        label: "مشاوران",
+        icon: "bx bx-user-voice",
+        permissionAny: ["advisers.index"],
+        children: [
+          { label: "لیست مشاوران", to: "/advisers", permission: "advisers.index" },
+        ],
+      },
+      {
+        type: "group",
+        label: "دانش‌آموزان",
+        icon: "bx bx-book-open",
+        permissionAny: ["students.index", "students.create"],
+        children: [
+          { label: "لیست دانش‌آموزان", to: "/students", permission: "students.index" },
+          { label: "ایجاد دانش‌آموز جدید", to: "/students/create", permission: "students.create" },
+        ],
+      },
+      {
+        type: "group",
+        label: "پایه‌ها",
+        icon: "bx bx-layer",
+        permissionAny: ["grades.index", "grades.create"],
+        children: [
+          { label: "لیست پایه‌ها", to: "/grades", permission: "grades.index" },
+          { label: "ایجاد پایه جدید", to: "/grades/create", permission: "grades.create" },
+        ],
+      },
+      {
+        type: "group",
+        label: "تگ‌ها",
+        icon: "bx bx-purchase-tag-alt",
+        permissionAny: ["parent-tags.index", "parent-tags.create"],
+        children: [
+          { label: "لیست تگ‌ها", to: "/parent-tags", permission: "parent-tags.index" },
+          { label: "ایجاد تگ جدید", to: "/parent-tags/create", permission: "parent-tags.create" },
+        ],
+      },
+      {
+        type: "group",
+        label: "مدارس",
+        icon: "bx bxs-school",
+        permissionAny: ["schools.index", "schools.create"],
+        children: [
+          { label: "لیست مدارس", to: "/schools", permission: "schools.index" },
+          { label: "ایجاد مدرسه جدید", to: "/schools/create", permission: "schools.create" },
+        ],
+      },
+      {
+        type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
         permissionAny: ["voip.outbound.index"],

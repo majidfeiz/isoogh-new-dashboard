@@ -194,6 +194,30 @@ import UserForm from "../pages/Users/UserForm";
 
 import UserPermissions from "../pages/Users/UserPermissions";
 
+// students
+import StudentList from "../pages/Students/StudentList.jsx";
+import StudentForm from "../pages/Students/StudentForm.jsx";
+
+// schools
+import SchoolList from "../pages/Schools/SchoolList.jsx";
+import SchoolForm from "../pages/Schools/SchoolForm.jsx";
+
+// grades
+import GradeList from "../pages/Grades/GradeList.jsx";
+import GradeForm from "../pages/Grades/GradeForm.jsx";
+
+// managers
+import ManagerList from "../pages/Managers/ManagerList.jsx";
+import ManagerForm from "../pages/Managers/ManagerForm.jsx";
+
+// advisers
+import AdviserList from "../pages/Advisers/AdviserList.jsx";
+
+// parent tags
+import ParentTagList from "../pages/ParentTags/ParentTagList.jsx";
+import ParentTagForm from "../pages/ParentTags/ParentTagForm.jsx";
+import ParentTagUsers from "../pages/ParentTags/ParentTagUsers.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -257,6 +281,35 @@ const authProtectedRoutes = [
   { path: "/users/:id/edit", component: <UserForm /> },
   
   { path: "/users/:id/permissions", component: <UserPermissions /> },
+
+  // Students
+  { path: "/students", component: <StudentList /> },
+  { path: "/students/create", component: <StudentForm /> },
+  { path: "/students/:id/edit", component: <StudentForm /> },
+
+  // Managers
+  { path: "/managers", component: <ManagerList /> },
+  { path: "/managers/create", component: <ManagerForm /> },
+  { path: "/managers/:id/edit", component: <ManagerForm /> },
+
+  // Advisers
+  { path: "/advisers", component: <AdviserList /> },
+
+  // Schools
+  { path: "/schools", component: <SchoolList /> },
+  { path: "/schools/create", component: <SchoolForm /> },
+  { path: "/schools/:id/edit", component: <SchoolForm /> },
+
+  // Grades
+  { path: "/grades", component: <GradeList /> },
+  { path: "/grades/create", component: <GradeForm /> },
+  { path: "/grades/:id/edit", component: <GradeForm /> },
+
+  // Parent Tags
+  { path: "/parent-tags", component: <ParentTagList /> },
+  { path: "/parent-tags/create", component: <ParentTagForm /> },
+  { path: "/parent-tags/:id/edit", component: <ParentTagForm /> },
+  { path: "/parent-tags/:id/users", component: <ParentTagUsers /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
