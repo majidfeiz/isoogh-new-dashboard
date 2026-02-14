@@ -289,6 +289,24 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "فرم تماس",
+        icon: "bx bx-support",
+        permissionAny: ["support-forms.index", "support-forms.create"],
+        children: [
+          {
+            label: "لیست فرم‌های تماس",
+            to: "/support-forms",
+            permission: "support-forms.index",
+          },
+          {
+            label: "ایجاد فرم تماس",
+            to: "/support-forms/create",
+            permission: "support-forms.create",
+          },
+        ],
+      },
+      {
+        type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
         permissionAny: ["voip.outbound.index"],

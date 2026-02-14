@@ -207,6 +207,19 @@ $value in $theme-colors {
   }
 }
 
+.support-form-question-check {
+  position: relative;
+  z-index: 9999;
+  pointer-events: auto !important;
+
+  .form-check-input,
+  .form-check-label {
+    position: relative;
+    z-index: 10000;
+    pointer-events: auto !important;
+  }
+}
+
 .rdl-move {
 
     .form-check-input,

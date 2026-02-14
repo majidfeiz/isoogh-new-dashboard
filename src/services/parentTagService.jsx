@@ -139,6 +139,36 @@ export async function deleteParentTagValue(id, userId) {
   return res.data;
 }
 
+export async function getParentTagValues(id, { page = 1, limit = 200, search = "" } = {}) {
+  const url = getApiUrl(API_ROUTES.parentTags.values(id));
+  const response = await apiGet(url, {
+    params: {
+      page,
+      limit,
+      search: search || undefined,
+    },
+  });
+
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  const items = Array.isArray(data) ? data : data.items || data.data || [];
+  const pagination = data.meta || data.pagination || {};
+
+  return {
+    items,
+    pagination: {
+      page: pagination.page ?? page,
+      limit: pagination.limit ?? limit,
+      total: pagination.total ?? items.length,
+      lastPage:
+        pagination.lastPage ??
+        (pagination.total && (pagination.limit || limit)
+          ? Math.ceil((pagination.total || 0) / (pagination.limit || limit))
+          : 1),
+    },
+  };
+}
+
 export async function exportParentTags(params = {}) {
   const url = new URL(getApiUrl(API_ROUTES.parentTags.export));
   Object.entries(params || {}).forEach(([key, value]) => {
