@@ -124,6 +124,13 @@ export const API_ROUTES = {
     exportOutboundCallHistories: "/voip/outbound-call-histories/export",
     outboundCallHistoriesSocketDocs: "/voip/outbound-call-histories/socket-docs",
   },
+  supportForms: {
+    list: "/support-forms",
+    create: "/support-forms",
+    detail: (id) => `/support-forms/${id}`,
+    update: (id) => `/support-forms/${id}`,
+    delete: (id) => `/support-forms/${id}`,
+  },
   // مثال برای بعداً:
   // users: {
   //   list: `${API_VERSION.v1}/users`,

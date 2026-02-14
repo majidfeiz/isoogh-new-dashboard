@@ -218,6 +218,10 @@ import ParentTagList from "../pages/ParentTags/ParentTagList.jsx";
 import ParentTagForm from "../pages/ParentTags/ParentTagForm.jsx";
 import ParentTagUsers from "../pages/ParentTags/ParentTagUsers.jsx";
 
+// support forms
+import SupportFormList from "../pages/SupportForms/SupportFormList.jsx";
+import SupportFormForm from "../pages/SupportForms/SupportFormForm.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -310,6 +314,11 @@ const authProtectedRoutes = [
   { path: "/parent-tags/create", component: <ParentTagForm /> },
   { path: "/parent-tags/:id/edit", component: <ParentTagForm /> },
   { path: "/parent-tags/:id/users", component: <ParentTagUsers /> },
+
+  // Support Forms
+  { path: "/support-forms", component: <SupportFormList /> },
+  { path: "/support-forms/create", component: <SupportFormForm /> },
+  { path: "/support-forms/:id/edit", component: <SupportFormForm /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
