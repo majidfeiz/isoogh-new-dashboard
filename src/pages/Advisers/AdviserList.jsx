@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Badge,
   Button,
@@ -39,6 +40,7 @@ const formatDateTime = (value) => {
 
 const AdviserList = () => {
   document.title = "مشاوران | داشبورد آیسوق";
+  const navigate = useNavigate();
 
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
@@ -380,8 +382,31 @@ const AdviserList = () => {
         enableSorting: true,
         cell: (info) => formatDateTime(info.getValue()),
       },
+      {
+        id: "actions",
+        header: "عملیات",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const adviserId = row.original?.id;
+          return (
+            <Button
+              color="primary"
+              size="sm"
+              onClick={() =>
+                navigate(`/advisers/${adviserId}/students`, {
+                  state: { adviser: row.original },
+                })
+              }
+              disabled={!adviserId}
+            >
+              لیست دانش‌آموزان
+            </Button>
+          );
+        },
+      },
     ],
-    []
+    [navigate]
   );
 
   const handleSortingChange = useCallback(

@@ -90,6 +90,11 @@ export const API_ROUTES = {
     update: (id) => `/advisers/${id}`,
     delete: (id) => `/advisers/${id}`,
     export: "/advisers/export",
+    studentCandidates: (adviserId) => `/advisers/${adviserId}/student-candidates`,
+    students: (adviserId) => `/advisers/${adviserId}/students`,
+    studentsBySearch: (adviserId) => `/advisers/${adviserId}/students/by-search`,
+    studentsByTag: (adviserId) => `/advisers/${adviserId}/students/by-tag`,
+    detachStudent: (adviserId, studentId) => `/advisers/${adviserId}/students/${studentId}`,
   },
   schools: {
     list: "/schools",
@@ -130,6 +135,18 @@ export const API_ROUTES = {
     detail: (id) => `/support-forms/${id}`,
     update: (id) => `/support-forms/${id}`,
     delete: (id) => `/support-forms/${id}`,
+    advisers: (id) => `/support-forms/${id}/advisers`,
+    adviserCandidates: (id) => `/support-forms/${id}/adviser-candidates`,
+    detachAdviser: (id, adviserId) => `/support-forms/${id}/advisers/${adviserId}`,
+    adviserStudentCandidates: (id, adviserId) =>
+      `/support-forms/${id}/advisers/${adviserId}/student-candidates`,
+    adviserStudents: (id, adviserId) => `/support-forms/${id}/advisers/${adviserId}/students`,
+    adviserStudentsByTag: (id, adviserId) =>
+      `/support-forms/${id}/advisers/${adviserId}/students/by-tag`,
+    detachAdviserStudent: (id, adviserId, studentId) =>
+      `/support-forms/${id}/advisers/${adviserId}/students/${studentId}`,
+    detachAdviserStudents: (id, adviserId) =>
+      `/support-forms/${id}/advisers/${adviserId}/students`,
   },
   // مثال برای بعداً:
   // users: {

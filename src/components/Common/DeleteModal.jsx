@@ -2,7 +2,7 @@ import PropTypes from 'prop-types'
 import React from "react"
 import { Modal, ModalBody } from "reactstrap"
 
-const DeleteModal = ({ show, onDeleteClick, onCloseClick }) => {
+const DeleteModal = ({ show, onDeleteClick, onCloseClick, loading = false }) => {
   return (
     <Modal size="md" isOpen={show} toggle={onCloseClick} centered={true}>
       <div className="modal-content">
@@ -11,6 +11,7 @@ const DeleteModal = ({ show, onDeleteClick, onCloseClick }) => {
             type="button"
             onClick={onCloseClick}
             className="btn-close position-absolute end-0 top-0 m-3"
+            disabled={loading}
           ></button>
           <div className="avatar-sm mb-4 mx-auto">
             <div className="avatar-title bg-primary text-primary bg-opacity-10 font-size-20 rounded-3">
@@ -26,13 +27,15 @@ const DeleteModal = ({ show, onDeleteClick, onCloseClick }) => {
               type="button"
               className="btn btn-danger"
               onClick={onDeleteClick}
+              disabled={loading}
             >
-              پاک کردن
+              {loading ? "در حال حذف..." : "پاک کردن"}
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               onClick={onCloseClick}
+              disabled={loading}
             >
               بستن
             </button>
@@ -46,7 +49,8 @@ const DeleteModal = ({ show, onDeleteClick, onCloseClick }) => {
 DeleteModal.propTypes = {
   onCloseClick: PropTypes.func,
   onDeleteClick: PropTypes.func,
-  show: PropTypes.any
+  show: PropTypes.any,
+  loading: PropTypes.bool
 }
 
 export default DeleteModal
