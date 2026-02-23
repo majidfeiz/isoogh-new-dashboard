@@ -2,6 +2,43 @@
 import { apiGet } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
+/**
+ * @typedef {Object} OutboundCallHistoryFile
+ * @property {number|string|null} id
+ * @property {string} code
+ * @property {string} name
+ * @property {string} url
+ * @property {string} type
+ * @property {string} size
+ * @property {string} time
+ * @property {string} title
+ * @property {string} description
+ */
+
+/**
+ * @typedef {Object} OutboundCallHistory
+ * @property {number|string|null} id
+ * @property {string} disposition
+ * @property {OutboundCallHistoryFile[]} files
+ */
+
+const normalizeOutboundFile = (file = {}) => ({
+  id: file?.id ?? null,
+  code: file?.code ?? "",
+  name: file?.name ?? "",
+  url: file?.url ?? "",
+  type: file?.type ?? "",
+  size: file?.size ?? "",
+  time: file?.time ?? "",
+  title: file?.title ?? "",
+  description: file?.description ?? "",
+});
+
+const normalizeOutboundCallItem = (item = {}) => ({
+  ...item,
+  files: Array.isArray(item?.files) ? item.files.map(normalizeOutboundFile) : [],
+});
+
 // مستندات سوکت تماس‌های خروجی (namespace, event ها و ...)
 export async function getOutboundCallHistorySocketDocs() {
   const url = getApiUrl(API_ROUTES.voip.outboundCallHistoriesSocketDocs);
@@ -42,7 +79,7 @@ export async function getOutboundCallHistories({
   const payload = response.data;
   const wrapped = payload?.data ?? payload ?? {};
 
-  const items = wrapped?.data || wrapped?.items || [];
+  const items = (wrapped?.data || wrapped?.items || []).map(normalizeOutboundCallItem);
   const meta = wrapped?.meta || wrapped?.pagination || {};
 
   return {

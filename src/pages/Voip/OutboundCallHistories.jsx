@@ -12,6 +12,9 @@ import {
   Label,
   InputGroup,
   Progress,
+  Modal,
+  ModalHeader,
+  ModalBody,
 } from "reactstrap";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -22,11 +25,17 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 
-import {
-  getOutboundCallHistories,
-} from "../../services/voipService.jsx";
+import { getOutboundCallHistories } from "../../services/voipService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
+
+const INITIAL_EXPORT_STATE = {
+  status: "idle", // idle | preparing | downloading | success | error | cancelled
+  receivedBytes: 0,
+  totalBytes: null,
+  percent: null,
+  errorMessage: null,
+};
 
 const OutboundCallHistories = () => {
   document.title = "تماس‌های خروجی | داشبورد آیسوق";
@@ -47,10 +56,14 @@ const OutboundCallHistories = () => {
   const [startDate, setStartDate] = useState(null);
   const [endDate, setEndDate] = useState(null);
   const [searchError, setSearchError] = useState("");
-  const [exportLoading, setExportLoading] = useState(false);
-  const [exportProgress, setExportProgress] = useState(null);
-  const [exportPhase, setExportPhase] = useState("idle"); // idle | pending | downloading | finalizing
-  const approxTotalRef = useRef(null);
+
+  const [exportState, setExportState] = useState(INITIAL_EXPORT_STATE);
+  const exportAbortRef = useRef(null);
+
+  const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [selectedCallFiles, setSelectedCallFiles] = useState([]);
+  const [selectedCallId, setSelectedCallId] = useState(null);
+
   const searchTypes = useMemo(
     () => [
       { value: "", label: "نوع جستجو..." },
@@ -116,9 +129,7 @@ const OutboundCallHistories = () => {
       return;
     }
 
-    const start = startDate
-      ? moment(startDate.toDate()).format("YYYY-MM-DD")
-      : "";
+    const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
     const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
 
     fetchData({
@@ -134,9 +145,7 @@ const OutboundCallHistories = () => {
 
   const handlePageChange = useCallback(
     (page) => {
-      const start = startDate
-        ? moment(startDate.toDate()).format("YYYY-MM-DD")
-        : "";
+      const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
       const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
 
       fetchData({
@@ -155,6 +164,7 @@ const OutboundCallHistories = () => {
   const onKeyDown = (e) => {
     if (e.key === "Enter") handleSearch();
   };
+
   const handleResetFilters = useCallback(
     (e) => {
       if (e) e.preventDefault();
@@ -176,29 +186,84 @@ const OutboundCallHistories = () => {
     [fetchData, sort.by, sort.order]
   );
 
+  const parseTotalBytes = (headers) => {
+    const raw =
+      headers.get("X-Approx-Content-Length") ||
+      headers.get("x-approx-content-length") ||
+      headers.get("Content-Length") ||
+      headers.get("content-length");
+
+    if (!raw) return null;
+
+    const n = Number(String(raw).replace(/[^\d]/g, ""));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const formatBytes = (bytes) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    return `${(kb / 1024).toFixed(1)} MB`;
+  };
+
+  const parseFilename = (contentDisposition) => {
+    if (!contentDisposition) return "outbound-call-histories.csv";
+
+    const utf8 = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+    if (utf8?.[1]) {
+      try {
+        return decodeURIComponent(utf8[1].trim().replace(/^"|"$/g, ""));
+      } catch {
+        return utf8[1].trim().replace(/^"|"$/g, "");
+      }
+    }
+
+    const normal = contentDisposition.match(/filename="?([^";]+)"?/i);
+    if (normal?.[1]) return normal[1].trim();
+
+    return "outbound-call-histories.csv";
+  };
+
+  const downloadBlob = (blob, filename) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", filename || "outbound-call-histories.csv");
+    document.body.appendChild(link);
+    link.click();
+    if (link.parentNode) link.parentNode.removeChild(link);
+    setTimeout(() => window.URL.revokeObjectURL(url), 1200);
+  };
+
   const handleExport = useCallback(async () => {
+    if (exportAbortRef.current) return;
+
     if (startDate && endDate && startDate > endDate) {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
       return;
     }
 
-    const start = startDate
-      ? moment(startDate.toDate()).format("YYYY-MM-DD")
-      : "";
+    const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
     const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
     const cleanedQ = q?.trim?.() || "";
-
     const perPage = meta?.total && meta.total > 0 ? meta.total : meta.limit;
 
-    setExportLoading(true);
     setSearchError("");
-    setExportProgress(0);
-    setExportPhase("pending");
-    approxTotalRef.current = null;
+    setExportState({
+      status: "preparing",
+      receivedBytes: 0,
+      totalBytes: null,
+      percent: null,
+      errorMessage: null,
+    });
+
     try {
       const params = new URLSearchParams();
       params.append("page", "1");
       params.append("per_page", String(perPage));
+      if (sort?.by) params.append("sort_by", sort.by);
+      if (sort?.order) params.append("sort_order", sort.order);
       if (type) params.append("type", type);
       if (cleanedQ) params.append("q", cleanedQ);
       if (start) params.append("start_date", start);
@@ -206,10 +271,14 @@ const OutboundCallHistories = () => {
 
       const url = `${getApiUrl(API_ROUTES.voip.exportOutboundCallHistories)}?${params.toString()}`;
       const token = getAccessToken();
+      const controller = new AbortController();
+      exportAbortRef.current = controller;
+
       const res = await fetch(url, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -217,25 +286,17 @@ const OutboundCallHistories = () => {
         throw new Error(text || "خطا در خروجی گرفتن");
       }
 
-      const approxHeader =
-        res.headers.get("X-Approx-Content-Length") ||
-        res.headers.get("x-approx-content-length") ||
-        res.headers.get("Content-Length");
-      const approxTotal = approxHeader ? Number(approxHeader) : 0;
-      if (approxTotal > 0) {
-        approxTotalRef.current = approxTotal;
-        setExportPhase("downloading");
-        setExportProgress(1); // شروع با 1% تا نوار خالی نباشد
-      }
+      const totalBytes = parseTotalBytes(res.headers);
+      setExportState((prev) => ({
+        ...prev,
+        status: "downloading",
+        totalBytes,
+        percent: totalBytes ? 0 : null,
+      }));
 
       const reader = res.body.getReader();
       const chunks = [];
-      let loaded = 0;
-      const total = approxTotalRef.current || 0;
-      const decoder = new TextDecoder("utf-8");
-      let carry = "";
-      let headerBytes = 0;
-      let rowsSeen = 0;
+      let receivedBytes = 0;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -243,89 +304,89 @@ const OutboundCallHistories = () => {
         const chunkSize = value?.byteLength ?? value?.length ?? 0;
         if (chunkSize > 0) {
           chunks.push(value);
-          loaded += chunkSize;
+          receivedBytes += chunkSize;
 
-          const chunkText = carry + decoder.decode(value, { stream: true });
-          const parts = chunkText.split("\n");
-          carry = parts.pop() || "";
+          const percent = totalBytes
+            ? Math.min(99, Math.floor((receivedBytes / totalBytes) * 100))
+            : null;
 
-          parts.forEach((line, idx) => {
-            const trimmed = line.trim();
-            if (!trimmed) return;
-            if (headerBytes === 0) {
-              // اولین خط را به عنوان هدر در نظر بگیر
-              headerBytes = line.length + 1; // شامل \n
-            } else {
-              rowsSeen += 1;
-            }
-          });
-
-          const approx =
-            approxTotalRef.current ||
-            (rowsSeen > 0
-              ? Math.round(
-                  headerBytes +
-                    ((loaded - headerBytes) / Math.max(rowsSeen, 1)) * perPage
-                )
-              : 0);
-
-          if (total > 0) {
-            const percent = Math.min(
-              99,
-              Math.round((loaded / total) * 100)
-            );
-            setExportPhase("downloading");
-            setExportProgress(percent);
-          } else if (approx > 0) {
-            const percent = Math.min(
-              99,
-              Math.round((loaded / approx) * 100)
-            );
-            setExportPhase("downloading");
-            setExportProgress(percent);
-          } else {
-            setExportPhase("pending");
-            setExportProgress(null);
-          }
+          setExportState((prev) => ({
+            ...prev,
+            status: "downloading",
+            receivedBytes,
+            totalBytes,
+            percent,
+            errorMessage: null,
+          }));
         }
       }
 
-      // افزودن BOM برای نمایش صحیح حروف فارسی در Excel
-      const bom = new Uint8Array([0xef, 0xbb, 0xbf]);
-      const csvBlob = new Blob([bom, ...chunks], {
-        type: "text/csv;charset=utf-8;",
+      const csvBlob = new Blob(chunks, {
+        type: "text/csv;charset=utf-8",
       });
 
-      const urlObject = window.URL.createObjectURL(csvBlob);
-      const link = document.createElement("a");
-      link.href = urlObject;
-      const stamp = moment().format("YYYYMMDD-HHmmss");
-      link.setAttribute("download", `outbound-calls-${stamp}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(urlObject);
-      setExportPhase("finalizing");
-      setExportProgress(100);
+      const filename = parseFilename(res.headers.get("Content-Disposition"));
+      downloadBlob(csvBlob, filename || "outbound-call-histories.csv");
+
+      setExportState((prev) => ({
+        ...prev,
+        status: "success",
+        receivedBytes,
+        totalBytes,
+        percent: 100,
+        errorMessage: null,
+      }));
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("خطا در خروجی اکسل", e);
-      setSearchError("خروجی گرفتن ناموفق بود. دوباره تلاش کنید.");
+      if (e?.name === "AbortError") {
+        setExportState(INITIAL_EXPORT_STATE);
+        return;
+      }
+
+      console.error("خطا در خروجی CSV تماس خروجی", e);
+      setExportState((prev) => ({
+        ...prev,
+        status: "error",
+        errorMessage: e?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید.",
+      }));
     } finally {
-      setExportLoading(false);
-      setTimeout(() => {
-        setExportProgress(null);
-        setExportPhase("idle");
-        approxTotalRef.current = null;
-      }, 1000);
+      exportAbortRef.current = null;
     }
-  }, [endDate, meta.limit, meta.total, q, startDate, type]);
+  }, [endDate, meta.limit, meta.total, q, sort.by, sort.order, startDate, type]);
+
+  const handleCancelExport = useCallback(() => {
+    if (exportAbortRef.current) {
+      exportAbortRef.current.abort();
+      exportAbortRef.current = null;
+    }
+    setExportState(INITIAL_EXPORT_STATE);
+  }, []);
+
+  const getFileLabel = (file) =>
+    file?.title?.trim?.() || file?.name?.trim?.() || file?.code?.trim?.() || "فایل";
+
+  const isAudioFile = (file = {}) => {
+    const t = String(file?.type || "").toLowerCase();
+    const url = String(file?.url || "").toLowerCase();
+    return t.startsWith("audio/") || /\.(mp3|wav|ogg|m4a|aac|webm|flac)(\?|#|$)/.test(url);
+  };
+
+  const openFilesModal = (row = {}) => {
+    const files = Array.isArray(row?.files) ? row.files : [];
+    if (files.length === 0) return;
+    setSelectedCallFiles(files);
+    setSelectedCallId(row?.id ?? null);
+    setFileModalOpen(true);
+  };
+
+  const closeFilesModal = () => {
+    setFileModalOpen(false);
+    setSelectedCallFiles([]);
+    setSelectedCallId(null);
+  };
 
   const formatUnixFa = (unix) => {
     if (!unix || Number(unix) <= 0) return "-";
     const num = Number(unix);
-
-    // placeholder غیرواقعی
     if (num >= 2147483647) return "-";
 
     const d = new Date(num * 1000);
@@ -383,6 +444,29 @@ const OutboundCallHistories = () => {
         meta: { sortKey: "disposition" },
       },
       {
+        id: "files",
+        header: "فایل‌ها",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => {
+          const disposition = String(row.original?.disposition || "").toUpperCase();
+          const files = Array.isArray(row.original?.files) ? row.original.files : [];
+
+          if (disposition !== "ANSWERED" || files.length === 0) return "-";
+
+          return (
+            <Button
+              color="link"
+              className="p-0 text-decoration-underline text-break"
+              onClick={() => openFilesModal(row.original)}
+            >
+              {`مشاهده فایل‌ها (${files.length})`}
+            </Button>
+          );
+        },
+        meta: { sortKey: null },
+      },
+      {
         id: "wait",
         header: "انتظار (ث)",
         accessorKey: "wait",
@@ -406,7 +490,6 @@ const OutboundCallHistories = () => {
           const seconds = Number(dur);
           if (Number.isNaN(seconds)) return String(dur);
 
-          // نمایش ساده: ثانیه
           return `${seconds} ثانیه`;
         },
         meta: { sortKey: "duration" },
@@ -421,21 +504,30 @@ const OutboundCallHistories = () => {
         meta: { sortKey: "support_form_title" },
       },
       {
-        id: "adviser_id",
-        header: "Adviser ID",
-        accessorKey: "adviser_id",
+        id: "adviser_name",
+        header: "نام مشاور",
+        accessorKey: "adviser_name",
         enableSorting: false,
         enableColumnFilter: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: ({ row }) => row.original?.adviser_name ?? "-",
         meta: { sortKey: null },
       },
       {
-        id: "student_id",
-        header: "Student ID",
-        accessorKey: "student_id",
+        id: "student_full_name",
+        header: "نام و نام خانوادگی دانش‌آموز",
+        accessorKey: "student_full_name",
         enableSorting: false,
         enableColumnFilter: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: ({ row }) => row.original?.student_full_name ?? row.original?.student_name ?? "-",
+        meta: { sortKey: null },
+      },
+      {
+        id: "student_username",
+        header: "نام کاربری دانش‌آموز",
+        accessorKey: "student_username",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => row.original?.student_username ?? "-",
         meta: { sortKey: null },
       },
       {
@@ -454,20 +546,6 @@ const OutboundCallHistories = () => {
         cell: ({ row }) => formatUnixFa(row.original?.endtime_unix),
         meta: { sortKey: "endtime_unix" },
       },
-      {
-        id: "call_group_id",
-        header: "Call Group",
-        accessorKey: "call_group_id",
-        enableSorting: false,
-        enableColumnFilter: false,
-        cell: ({ row }) => {
-          const v = row.original?.call_group_id;
-          if (!v) return "-";
-          // کوتاه‌نمایی برای اینکه جدول به هم نریزه
-          return v.length > 22 ? `${v.slice(0, 22)}...` : v;
-        },
-        meta: { sortKey: null },
-      },
     ],
     []
   );
@@ -476,11 +554,7 @@ const OutboundCallHistories = () => {
     const map = {};
     columns.forEach((col) => {
       const key = col.meta?.sortKey;
-      if (!key) {
-        map[col.id] = null;
-      } else {
-        map[col.id] = key;
-      }
+      map[col.id] = key || null;
     });
     return map;
   }, [columns]);
@@ -491,7 +565,6 @@ const OutboundCallHistories = () => {
       const sortKey = first ? columnSortKeyMap[first.id] : null;
       const sortDirection = first ? (first.desc ? "DESC" : "ASC") : null;
 
-      // اگر ستون قابل سورت نبود، هیچ پارامتر اضافه نفرست
       if (!sortKey) {
         setSorting([]);
         setSort({ by: null, order: null });
@@ -508,9 +581,7 @@ const OutboundCallHistories = () => {
       setSorting(nextSorting);
       setSort({ by: sortKey, order: sortDirection });
 
-      const start = startDate
-        ? moment(startDate.toDate()).format("YYYY-MM-DD")
-        : "";
+      const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
       const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
 
       fetchData({
@@ -526,6 +597,9 @@ const OutboundCallHistories = () => {
     [columnSortKeyMap, fetchData, q, type, startDate, endDate]
   );
 
+  const isExportBusy = exportState.status === "preparing" || exportState.status === "downloading";
+  const showExportPanel = exportState.status !== "idle";
+
   return (
     <div className="page-content">
       <div className="container-fluid">
@@ -537,16 +611,17 @@ const OutboundCallHistories = () => {
               <CardHeader>
                 <div className="d-flex flex-column gap-2">
                   <h4 className="card-title mb-0">لیست تماس‌های خروجی</h4>
-                  <Form onSubmit={(e) => { e.preventDefault(); handleSearch(); }}>
+                  <Form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSearch();
+                    }}
+                  >
                     <div className="p-3 bg-light rounded-3 shadow-sm">
                       <Row className="g-3 align-items-end">
                         <Col md="3" sm="6">
                           <Label className="form-label text-muted mb-1">فیلد جستجو</Label>
-                          <Input
-                            type="select"
-                            value={type}
-                            onChange={(e) => setType(e.target.value)}
-                          >
+                          <Input type="select" value={type} onChange={(e) => setType(e.target.value)}>
                             {searchTypes.map((opt) => (
                               <option key={opt.value || "empty"} value={opt.value}>
                                 {opt.label}
@@ -554,6 +629,7 @@ const OutboundCallHistories = () => {
                             ))}
                           </Input>
                         </Col>
+
                         <Col md="4" sm="6">
                           <Label className="form-label text-muted mb-1">عبارت</Label>
                           <InputGroup>
@@ -574,6 +650,7 @@ const OutboundCallHistories = () => {
                             </Button>
                           </InputGroup>
                         </Col>
+
                         <Col md="5">
                           <Label className="form-label text-muted mb-1">بازه زمانی (شمسی)</Label>
                           <Row className="g-2">
@@ -582,9 +659,7 @@ const OutboundCallHistories = () => {
                                 calendar={persian}
                                 locale={persian_fa}
                                 value={startDate}
-                                onChange={(date) => {
-                                  setStartDate(date || null);
-                                }}
+                                onChange={(date) => setStartDate(date || null)}
                                 format="YYYY/MM/DD"
                                 placeholder="تاریخ شروع"
                                 className="form-control"
@@ -598,29 +673,36 @@ const OutboundCallHistories = () => {
                                   calendar={persian}
                                   locale={persian_fa}
                                   value={endDate}
-                                  onChange={(date) => {
-                                    setEndDate(date || null);
-                                  }}
+                                  onChange={(date) => setEndDate(date || null)}
                                   format="YYYY/MM/DD"
                                   placeholder="تاریخ پایان"
                                   className="form-control"
                                   inputClass="form-control"
                                   calendarPosition="bottom-right"
                                 />
+                                <Button color="success" type="button" onClick={handleExport} disabled={isExportBusy || loading}>
+                                  {isExportBusy ? "در حال دریافت..." : "خروجی CSV"}
+                                </Button>
                                 <Button
-                                  color="success"
+                                  color="danger"
+                                  outline
                                   type="button"
-                                  onClick={handleExport}
-                                  disabled={exportLoading || loading}
+                                  onClick={handleCancelExport}
+                                  disabled={!isExportBusy}
                                 >
-                                  {exportLoading ? "در حال آماده‌سازی..." : "خروجی CSV"}
+                                  لغو
                                 </Button>
                               </div>
                             </Col>
                           </Row>
                         </Col>
+
                         <Col md="12" className="d-flex justify-content-between flex-wrap gap-2">
-                          {searchError ? <div className="text-danger small">{searchError}</div> : <div className="text-muted small">سورت روی عناوین جدول فعال است.</div>}
+                          {searchError ? (
+                            <div className="text-danger small">{searchError}</div>
+                          ) : (
+                            <div className="text-muted small">سورت روی عناوین جدول فعال است.</div>
+                          )}
                           <div className="text-muted small">
                             <span className="me-2">برای پاکسازی سریع، روی "پاک کردن" بزن.</span>
                             <Button color="secondary" size="sm" outline onClick={handleResetFilters} disabled={loading}>
@@ -629,38 +711,43 @@ const OutboundCallHistories = () => {
                           </div>
                         </Col>
                       </Row>
-                      {exportLoading && (
+
+                      {showExportPanel && (
                         <div className="mt-3">
                           <div className="d-flex align-items-center gap-3 flex-wrap">
-                            <div className="d-flex align-items-center gap-2">
-                              <div
-                                style={{
-                                  width: 12,
-                                  height: 12,
-                                  borderRadius: "50%",
-                                  background: "#28a745",
-                                  boxShadow: "0 0 0 4px rgba(40,167,69,0.15)",
-                                }}
-                              ></div>
-                              <span className="text-success fw-semibold">
-                                {exportPhase === "finalizing"
-                                  ? "در حال نهایی‌سازی فایل"
-                                  : exportPhase === "downloading"
-                                    ? "در حال دانلود فایل"
-                                    : "در حال آماده‌سازی فایل"}
+                            <div className="text-muted small">
+                              وضعیت:
+                              <span className="ms-1">
+                                {exportState.status === "preparing" && "در حال آماده‌سازی"}
+                                {exportState.status === "downloading" && "در حال دانلود"}
+                                {exportState.status === "success" && "موفق"}
+                                {exportState.status === "error" && "خطا"}
+                                {exportState.status === "cancelled" && "لغو شد"}
+                              </span>
+                              <span className="ms-2">
+                                {exportState.totalBytes
+                                  ? `${formatBytes(exportState.receivedBytes)} / ${formatBytes(exportState.totalBytes)}${
+                                      exportState.percent != null ? ` (${exportState.percent}%)` : ""
+                                    }`
+                                  : `${formatBytes(exportState.receivedBytes)} downloaded`}
                               </span>
                             </div>
+
                             <div className="flex-grow-1" style={{ minWidth: 240 }}>
                               <Progress
-                                value={exportProgress ?? 0}
-                                animated={exportProgress == null}
+                                animated={exportState.percent === null && isExportBusy}
                                 striped
                                 color="success"
                                 style={{ height: 10 }}
+                                value={exportState.percent ?? 30}
                               >
-                                {exportProgress != null ? `${exportProgress}%` : ""}
+                                {exportState.percent != null ? `%${exportState.percent}` : ""}
                               </Progress>
                             </div>
+
+                            {exportState.errorMessage ? (
+                              <div className="text-danger small">{exportState.errorMessage}</div>
+                            ) : null}
                           </div>
                         </div>
                       )}
@@ -697,6 +784,58 @@ const OutboundCallHistories = () => {
           </Col>
         </Row>
       </div>
+
+      <Modal isOpen={fileModalOpen} toggle={closeFilesModal} centered size="lg">
+        <ModalHeader toggle={closeFilesModal}>
+          {selectedCallId != null ? `فایل‌های تماس #${selectedCallId}` : "فایل‌های تماس"}
+        </ModalHeader>
+        <ModalBody>
+          {!selectedCallFiles.length ? (
+            <div className="text-muted">فایلی برای این تماس ثبت نشده است.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table table-sm align-middle mb-0">
+                <thead>
+                  <tr>
+                    <th>عنوان</th>
+                    <th>پخش</th>
+                    <th>حجم</th>
+                    <th>مدت</th>
+                    <th>لینک</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedCallFiles.map((file) => (
+                    <tr key={file?.id ?? `${file?.url}-${file?.code}`}>
+                      <td className="text-break">{getFileLabel(file)}</td>
+                      <td style={{ minWidth: 220 }}>
+                        {isAudioFile(file) ? (
+                          <audio controls preload="none" src={file?.url} style={{ width: "100%" }}>
+                            مرورگر شما پخش صوت را پشتیبانی نمی‌کند.
+                          </audio>
+                        ) : (
+                          <span className="text-muted small">فایل غیرصوتی</span>
+                        )}
+                      </td>
+                      <td>{file?.size || "-"}</td>
+                      <td>{file?.time || "-"}</td>
+                      <td>
+                        {file?.url ? (
+                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-break">
+                            {getFileLabel(file)}
+                          </a>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </ModalBody>
+      </Modal>
     </div>
   );
 };

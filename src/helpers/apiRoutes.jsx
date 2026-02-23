@@ -148,6 +148,13 @@ export const API_ROUTES = {
     detachAdviserStudents: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/students`,
   },
+  files: {
+    list: "/files",
+    create: "/files",
+    detail: (id) => `/files/${id}`,
+    update: (id) => `/files/${id}`,
+    delete: (id) => `/files/${id}`,
+  },
   // مثال برای بعداً:
   // users: {
   //   list: `${API_VERSION.v1}/users`,

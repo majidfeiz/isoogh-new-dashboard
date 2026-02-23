@@ -225,6 +225,10 @@ import SupportFormForm from "../pages/SupportForms/SupportFormForm.jsx";
 import SupportFormAdvisers from "../pages/SupportForms/SupportFormAdvisers.jsx";
 import SupportFormAdviserStudents from "../pages/SupportForms/SupportFormAdviserStudents.jsx";
 
+// files
+import FileList from "../pages/Files/FileList.jsx";
+import FileForm from "../pages/Files/FileForm.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -328,6 +332,11 @@ const authProtectedRoutes = [
     path: "/support-forms/:id/advisers/:adviserId/students",
     component: <SupportFormAdviserStudents />,
   },
+
+  // files
+  { path: "/files", component: <FileList /> },
+  { path: "/files/create", component: <FileForm /> },
+  { path: "/files/:id/edit", component: <FileForm /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
