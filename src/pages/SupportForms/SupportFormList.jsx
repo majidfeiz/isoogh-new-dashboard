@@ -162,6 +162,13 @@ const SupportFormList = () => {
     [navigate]
   );
 
+  const handleAdvisers = useCallback(
+    (id) => {
+      navigate(`/support-forms/${id}/advisers`);
+    },
+    [navigate]
+  );
+
   const handleDelete = useCallback(
     async (id) => {
       const confirmed = window.confirm("آیا از حذف این فرم تماس مطمئن هستید؟");
@@ -235,6 +242,24 @@ const SupportFormList = () => {
         },
       },
       {
+        id: "advisers_count",
+        header: "تعداد مشاوران",
+        accessorKey: "advisers_count",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const original = row.original || {};
+          const count =
+            original.advisers_count ??
+            original.advisersCount ??
+            (Array.isArray(original.advisers) ? original.advisers.length : undefined) ??
+            (Array.isArray(original.advisers?.items)
+              ? original.advisers.items.length
+              : undefined);
+          return typeof count === "number" ? count : "-";
+        },
+      },
+      {
         id: "school_id",
         header: "مدرسه",
         accessorKey: "school_id",
@@ -256,6 +281,9 @@ const SupportFormList = () => {
 
           return (
             <div className="d-flex gap-2">
+              <Button color="info" size="sm" onClick={() => handleAdvisers(id)}>
+                مشاوران
+              </Button>
               <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
                 ویرایش
               </Button>
@@ -272,7 +300,7 @@ const SupportFormList = () => {
         },
       },
     ],
-    [gradeMap, handleDelete, handleEdit, loading, schoolMap]
+    [gradeMap, handleAdvisers, handleDelete, handleEdit, loading, schoolMap]
   );
 
   const handleSortingChange = useCallback(

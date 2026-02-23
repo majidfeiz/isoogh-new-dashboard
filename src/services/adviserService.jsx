@@ -72,3 +72,68 @@ export async function deleteAdviser(id) {
   const res = await apiDelete(url);
   return res.data;
 }
+
+const normalizePagedResponse = (response, fallback = {}) => {
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  const items = data.items || data.data || [];
+  const pagination = data.meta || data.pagination || payload?.meta || {};
+  const page = fallback.page ?? 1;
+  const limit = fallback.limit ?? 10;
+
+  return {
+    items,
+    pagination: {
+      page: pagination.page ?? page,
+      limit: pagination.limit ?? limit,
+      total: pagination.total ?? items.length,
+      lastPage:
+        pagination.lastPage ??
+        (pagination.total && (pagination.limit || limit)
+          ? Math.ceil((pagination.total || 0) / (pagination.limit || limit))
+          : 1),
+    },
+  };
+};
+
+export async function getAdviserStudentCandidates(adviserId, params = {}) {
+  const url = getApiUrl(API_ROUTES.advisers.studentCandidates(adviserId));
+  const response = await apiGet(url, { params });
+  return normalizePagedResponse(response, params);
+}
+
+export async function getAdviserStudents(adviserId, params = {}) {
+  const url = getApiUrl(API_ROUTES.advisers.students(adviserId));
+  const response = await apiGet(url, { params });
+  return normalizePagedResponse(response, params);
+}
+
+export async function attachAdviserStudents(adviserId, payload) {
+  const url = getApiUrl(API_ROUTES.advisers.students(adviserId));
+  const response = await apiPost(url, payload);
+  return response.data;
+}
+
+export async function attachAdviserStudentsBySearch(adviserId, payload) {
+  const url = getApiUrl(API_ROUTES.advisers.studentsBySearch(adviserId));
+  const response = await apiPost(url, payload);
+  return response.data;
+}
+
+export async function attachAdviserStudentsByTag(adviserId, payload) {
+  const url = getApiUrl(API_ROUTES.advisers.studentsByTag(adviserId));
+  const response = await apiPost(url, payload);
+  return response.data;
+}
+
+export async function detachAdviserStudent(adviserId, studentId) {
+  const url = getApiUrl(API_ROUTES.advisers.detachStudent(adviserId, studentId));
+  const response = await apiDelete(url);
+  return response.data;
+}
+
+export async function detachAdviserStudents(adviserId) {
+  const url = getApiUrl(API_ROUTES.advisers.students(adviserId));
+  const response = await apiDelete(url);
+  return response.data;
+}

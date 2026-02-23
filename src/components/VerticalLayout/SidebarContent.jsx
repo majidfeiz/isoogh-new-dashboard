@@ -307,6 +307,24 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "فایل‌ها",
+        icon: "bx bx-file",
+        permissionAny: ["files.index", "files.create"],
+        children: [
+          {
+            label: "لیست فایل‌ها",
+            to: "/files",
+            permission: "files.index",
+          },
+          {
+            label: "ایجاد فایل",
+            to: "/files/create",
+            permission: "files.create",
+          },
+        ],
+      },
+      {
+        type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
         permissionAny: ["voip.outbound.index"],

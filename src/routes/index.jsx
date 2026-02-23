@@ -212,6 +212,7 @@ import ManagerForm from "../pages/Managers/ManagerForm.jsx";
 
 // advisers
 import AdviserList from "../pages/Advisers/AdviserList.jsx";
+import AdviserStudents from "../pages/Advisers/AdviserStudents.jsx";
 
 // parent tags
 import ParentTagList from "../pages/ParentTags/ParentTagList.jsx";
@@ -221,6 +222,12 @@ import ParentTagUsers from "../pages/ParentTags/ParentTagUsers.jsx";
 // support forms
 import SupportFormList from "../pages/SupportForms/SupportFormList.jsx";
 import SupportFormForm from "../pages/SupportForms/SupportFormForm.jsx";
+import SupportFormAdvisers from "../pages/SupportForms/SupportFormAdvisers.jsx";
+import SupportFormAdviserStudents from "../pages/SupportForms/SupportFormAdviserStudents.jsx";
+
+// files
+import FileList from "../pages/Files/FileList.jsx";
+import FileForm from "../pages/Files/FileForm.jsx";
 
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
@@ -298,6 +305,7 @@ const authProtectedRoutes = [
 
   // Advisers
   { path: "/advisers", component: <AdviserList /> },
+  { path: "/advisers/:adviserId/students", component: <AdviserStudents /> },
 
   // Schools
   { path: "/schools", component: <SchoolList /> },
@@ -319,6 +327,16 @@ const authProtectedRoutes = [
   { path: "/support-forms", component: <SupportFormList /> },
   { path: "/support-forms/create", component: <SupportFormForm /> },
   { path: "/support-forms/:id/edit", component: <SupportFormForm /> },
+  { path: "/support-forms/:id/advisers", component: <SupportFormAdvisers /> },
+  {
+    path: "/support-forms/:id/advisers/:adviserId/students",
+    component: <SupportFormAdviserStudents />,
+  },
+
+  // files
+  { path: "/files", component: <FileList /> },
+  { path: "/files/create", component: <FileForm /> },
+  { path: "/files/:id/edit", component: <FileForm /> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
