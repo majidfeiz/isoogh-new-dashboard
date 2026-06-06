@@ -73,6 +73,7 @@
     "react-dropzone": "^14.2.3",
     "react-dual-listbox": "6.0.0",
     "react-flatpickr": "^3.10.13",
+    "react-grid-layout": "^2.2.3",
     "react-i18next": "13.5.0",
     "react-image-lightbox": "^5.1.4",
     "react-input-mask": "^2.0.4",

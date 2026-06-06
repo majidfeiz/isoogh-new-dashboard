@@ -6,11 +6,11 @@ import { createRequire } from 'module'
 const require = createRequire(import.meta.url)
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  esbuild: {
-    jsxFactory: 'h',
-    jsxFragment: 'Fragment',
+  define: {
+    // react-draggable uses process.env.NODE_ENV — must match actual mode so HMR works in dev
+    "process.env.NODE_ENV": JSON.stringify(mode === "production" ? "production" : "development"),
   },
   resolve: {
     alias: {
@@ -22,4 +22,4 @@ export default defineConfig({
   optimizeDeps: {
     include: ['@ckeditor/ckeditor5-watchdog', '@ckeditor/ckeditor5-react'],
   },
-})
+}))

@@ -225,6 +225,10 @@ import SupportFormForm from "../pages/SupportForms/SupportFormForm.jsx";
 import SupportFormAdvisers from "../pages/SupportForms/SupportFormAdvisers.jsx";
 import SupportFormAdviserStudents from "../pages/SupportForms/SupportFormAdviserStudents.jsx";
 
+// notifications
+import NotificationsPage from "../pages/Notifications/NotificationsPage.jsx";
+import NotificationComposePage from "../pages/Notifications/NotificationComposePage.jsx";
+
 // files
 import FileList from "../pages/Files/FileList.jsx";
 import FileForm from "../pages/Files/FileForm.jsx";
@@ -232,6 +236,27 @@ import FileForm from "../pages/Files/FileForm.jsx";
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
+
+// admin - dashboard widgets
+import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
+
+// super adviser portal
+import SuperAdviserSchools from "../pages/SuperAdviserPortal/Schools.jsx";
+import SuperAdviserAdvisers from "../pages/SuperAdviserPortal/Advisers.jsx";
+import SuperAdviserSupportForms from "../pages/SuperAdviserPortal/SupportForms.jsx";
+import SuperAdviserStudents from "../pages/SuperAdviserPortal/Students.jsx";
+import SuperAdviserPerformanceReport from "../pages/SuperAdviserPortal/PerformanceReport.jsx";
+import SuperAdviserMonitoring from "../pages/SuperAdviserPortal/Monitoring.jsx";
+import SuperAdviserSalary from "../pages/SuperAdviserPortal/Salary.jsx";
+import SuperAdviserAnswerSheet from "../pages/SuperAdviserPortal/AnswerSheet.jsx";
+
+// adviser portal
+import AdviserPortalSchools from "../pages/AdviserPortal/SchoolList.jsx";
+import AdviserPortalSupportForms from "../pages/AdviserPortal/SupportFormList.jsx";
+import AdviserPortalFormDetail from "../pages/AdviserPortal/FormDetail.jsx";
+import AdviserPortalCallLogs from "../pages/AdviserPortal/CallLogs.jsx";
+import AdviserPortalStats from "../pages/AdviserPortal/Stats.jsx";
+import AdviserPortalStudentProfile from "../pages/AdviserPortal/StudentProfile.jsx";
 
 
 const authProtectedRoutes = [
@@ -333,6 +358,10 @@ const authProtectedRoutes = [
     component: <SupportFormAdviserStudents />,
   },
 
+  // notifications
+  { path: "/notifications", component: <NotificationsPage /> },
+  { path: "/notifications/compose", component: <NotificationComposePage /> },
+
   // files
   { path: "/files", component: <FileList /> },
   { path: "/files/create", component: <FileForm /> },
@@ -341,6 +370,27 @@ const authProtectedRoutes = [
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
   { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
+
+  // admin - dashboard widgets
+  { path: "/admin/dashboard-widgets", component: <DashboardWidgetsAdmin /> },
+
+  // super adviser portal
+  { path: "/super-adviser-portal/schools", component: <SuperAdviserSchools /> },
+  { path: "/super-adviser-portal/advisers", component: <SuperAdviserAdvisers /> },
+  { path: "/super-adviser-portal/support-forms", component: <SuperAdviserSupportForms /> },
+  { path: "/super-adviser-portal/students", component: <SuperAdviserStudents /> },
+  { path: "/super-adviser-portal/performance-report", component: <SuperAdviserPerformanceReport /> },
+  { path: "/super-adviser-portal/monitoring", component: <SuperAdviserMonitoring /> },
+  { path: "/super-adviser-portal/salary", component: <SuperAdviserSalary /> },
+  { path: "/super-adviser-portal/answer-sheet/:formId", component: <SuperAdviserAnswerSheet /> },
+
+  // adviser portal
+  { path: "/adviser-calls", component: <AdviserPortalSchools /> },
+  { path: "/adviser-calls/schools/:schoolId", component: <AdviserPortalSupportForms /> },
+  { path: "/adviser-calls/forms/:formId", component: <AdviserPortalFormDetail /> },
+  { path: "/adviser-calls/forms/:formId/students/:studentId", component: <AdviserPortalStudentProfile /> },
+  { path: "/adviser-calls/logs", component: <AdviserPortalCallLogs /> },
+  { path: "/adviser-calls/stats", component: <AdviserPortalStats /> },
 
   //   //Email
   { path: "/email-inbox", component: <EmailInbox /> },

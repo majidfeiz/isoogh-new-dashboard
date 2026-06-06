@@ -25,23 +25,28 @@ const SidebarContent = (props) => {
   // ✅ اگر provider نبود هم اپ نپره (ولی با App.jsx که درست کردی باید OK باشه)
   const auth = useAuth?.() ?? null;
 
-  // ✅ normalize permissions از /auth/me: می‌تونه string[] یا object[] یا effectivePermissions باشه
+  // normalize permissions از /auth/me: می‌تونه string[] یا object[] یا effectivePermissions باشه
   const permissionList = useMemo(() => {
     if (!auth) return [];
 
-    if (Array.isArray(auth.permissions)) return auth.permissions;
+    const toStrings = (list) =>
+      (list || []).map((p) => (typeof p === "string" ? p.trim() : p?.name?.trim())).filter(Boolean);
 
-    if (Array.isArray(auth.user?.effectivePermissions)) {
-      return auth.user.effectivePermissions.filter((x) => typeof x === "string");
+    // همه منابع ممکن را جمع کن (context state + user object)
+    const sources = [
+      auth.permissions,
+      auth.user?.effectivePermissions,
+      auth.user?.permissions,
+    ];
+
+    const merged = new Set();
+    for (const src of sources) {
+      if (Array.isArray(src)) {
+        toStrings(src).forEach((p) => merged.add(p));
+      }
     }
 
-    if (Array.isArray(auth.user?.permissions)) {
-      return auth.user.permissions
-        .map((p) => (typeof p === "string" ? p : p?.name))
-        .filter(Boolean);
-    }
-
-    return [];
+    return Array.from(merged);
   }, [auth]);
 
   const hasPermission = useCallback(
@@ -55,6 +60,7 @@ const SidebarContent = (props) => {
   );
 
   const permissionsReady =
+    permissionList.length > 0 ||
     Array.isArray(auth?.permissions) ||
     Array.isArray(auth?.user?.effectivePermissions) ||
     Array.isArray(auth?.user?.permissions);
@@ -163,29 +169,6 @@ const SidebarContent = (props) => {
 
     if (matchingMenuItem) activateParentDropdown(matchingMenuItem);
   }, [path?.pathname, activateParentDropdown]);
-
-  // ✅ MetisMenu init (safe)
-  useEffect(() => {
-    const ul = document.getElementById("side-menu");
-    if (!ul) return;
-
-    let menuInstance = null;
-    try {
-      menuInstance = new MetisMenu("#side-menu");
-    } catch (e) {
-      console.error("MetisMenu init error:", e);
-    }
-
-    activeMenu();
-
-    return () => {
-      if (menuInstance?.dispose) menuInstance.dispose();
-    };
-  }, [activeMenu, permissionsReady]);
-
-  useEffect(() => {
-    activeMenu();
-  }, [activeMenu]);
 
   function scrollElement(item) {
     if (!item) return;
@@ -325,6 +308,24 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "اعلانات",
+        icon: "bx bx-bell",
+        permissionAny: ["notifications.index", "notifications.send", "notifications.broadcast"],
+        children: [
+          {
+            label: "همه اعلانات",
+            to: "/notifications",
+            permission: "notifications.index",
+          },
+          {
+            label: "ارسال پیام",
+            to: "/notifications/compose",
+            permission: "notifications.send",
+          },
+        ],
+      },
+      {
+        type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
         permissionAny: ["voip.outbound.index"],
@@ -338,6 +339,86 @@ const SidebarContent = (props) => {
             label: "تماس خروجی آنلاین",
             to: "/voip/outbound-call-histories/online",
             permission: "voip.outbound.index",
+          },
+        ],
+      },
+      {
+        type: "group",
+        label: "تماس مشاوران",
+        icon: "bx bx-headphone",
+        permissionAny: ["adviser-portal.schools.index"],
+        children: [
+          {
+            label: "مجموعه‌ها",
+            to: "/adviser-calls",
+            permission: "adviser-portal.schools.index",
+          },
+          {
+            label: "لاگ تماس‌های من",
+            to: "/adviser-calls/logs",
+            permission: "adviser-portal.schools.index",
+          },
+          {
+            label: "آمار",
+            to: "/adviser-calls/stats",
+            permission: "adviser-portal.schools.index",
+          },
+        ],
+      },
+      {
+        type: "group",
+        label: "سر مشاور",
+        icon: "bx bx-crown",
+        permissionAny: [
+          "super-adviser-portal.schools.index",
+          "super-adviser-portal.advisers.index",
+          "super-adviser-portal.support-forms.index",
+          "super-adviser-portal.students.index",
+          "super-adviser-portal.performance-report.index",
+          "super-adviser-portal.monitoring.index",
+          "super-adviser-portal.salary.index",
+          "super-adviser-portal.answer-sheet.index",
+        ],
+        children: [
+          {
+            label: "مدارس",
+            to: "/super-adviser-portal/schools",
+            permission: "super-adviser-portal.schools.index",
+          },
+          {
+            label: "مشاوران",
+            to: "/super-adviser-portal/advisers",
+            permission: "super-adviser-portal.advisers.index",
+          },
+          {
+            label: "فرم‌های تماس",
+            to: "/super-adviser-portal/support-forms",
+            permission: "super-adviser-portal.support-forms.index",
+          },
+          {
+            label: "دانش‌آموزان",
+            to: "/super-adviser-portal/students",
+            permission: "super-adviser-portal.students.index",
+          },
+          {
+            label: "گزارش عملکرد",
+            to: "/super-adviser-portal/performance-report",
+            permission: "super-adviser-portal.performance-report.index",
+          },
+          {
+            label: "نظارت",
+            to: "/super-adviser-portal/monitoring",
+            permission: "super-adviser-portal.monitoring.index",
+          },
+          {
+            label: "حقوق",
+            to: "/super-adviser-portal/salary",
+            permission: "super-adviser-portal.salary.index",
+          },
+          {
+            label: "پاسخنامه فرم‌ها",
+            to: "/super-adviser-portal/support-forms",
+            permission: "super-adviser-portal.answer-sheet.index",
           },
         ],
       },
@@ -371,6 +452,39 @@ const SidebarContent = (props) => {
       })
       .filter(Boolean);
   }, [menuItems, permissionsReady, hasPermission, hasAnyPermission]);
+
+  // نگه داشتن instance در ref تا dispose همیشه درست انجام بشه
+  const menuInstanceRef = useRef(null);
+
+  // MetisMenu فقط وقتی ساختار منو عوض میشه (filteredMenu) init میشه
+  useEffect(() => {
+    // setTimeout(0) ضروری است: React DOM را commit می‌کند، بعد MetisMenu bind می‌کند
+    // بدون این تاخیر، در render بعد از login آخرین آیتم‌ها bind نمی‌شوند
+    const timer = setTimeout(() => {
+      const ul = document.getElementById("side-menu");
+      if (!ul) return;
+
+      if (menuInstanceRef.current?.dispose) {
+        try { menuInstanceRef.current.dispose(); } catch {}
+        menuInstanceRef.current = null;
+      }
+
+      try {
+        menuInstanceRef.current = new MetisMenu("#side-menu");
+      } catch (e) {
+        console.error("MetisMenu init error:", e);
+      }
+
+      activeMenu();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [filteredMenu]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // active item رو روی هر navigation آپدیت کن بدون re-init کردن MetisMenu
+  useEffect(() => {
+    activeMenu();
+  }, [activeMenu]);
 
   return (
     <React.Fragment>

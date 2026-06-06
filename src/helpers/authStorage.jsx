@@ -8,10 +8,18 @@ const USER_KEY = "isoogh_user";
 const PERMISSIONS_KEY = "isoogh_permissions";
 
 function normalizePermissions(user) {
+  // effectivePermissions = direct + role-based, already string[]
+  const effective = user?.effectivePermissions;
+  if (Array.isArray(effective)) {
+    return effective
+      .map((x) => (typeof x === "string" ? x.trim() : null))
+      .filter((x) => x && x.length > 0);
+  }
+  // fallback: derive from direct permissions objects
   const list = user?.permissions;
   if (!Array.isArray(list)) return [];
   return list
-    .map((p) => p?.name)
+    .map((p) => (typeof p === "string" ? p.trim() : p?.name?.trim()))
     .filter((x) => typeof x === "string" && x.length > 0);
 }
 
