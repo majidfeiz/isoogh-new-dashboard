@@ -52,9 +52,12 @@ const Login = (props) => {
       try {
         const result = await loginApi(values.username, values.password);
 
-        const perms = Array.isArray(result?.user?.permissions)
-          ? result.user.permissions.map((p) => p?.name).filter(Boolean)
-          : [];
+        // effectivePermissions = direct + role-based (string[]), همیشه اول اینو بخون
+        const perms = Array.isArray(result?.user?.effectivePermissions)
+          ? result.user.effectivePermissions.filter((x) => typeof x === "string" && x.length > 0)
+          : Array.isArray(result?.user?.permissions)
+            ? result.user.permissions.map((p) => (typeof p === "string" ? p : p?.name)).filter(Boolean)
+            : [];
 
         setUser(result?.user ?? null);
         setPermissions(perms);

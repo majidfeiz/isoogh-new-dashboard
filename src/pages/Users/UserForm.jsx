@@ -37,7 +37,7 @@ const UserForm = () => {
     ssn: "",
     phone: "",
     password: "",
-    password_confirmation: "",
+    confirmPassword: "",
     status: "active",
   });
   const [errors, setErrors] = useState({});
@@ -61,7 +61,7 @@ const UserForm = () => {
           phone: user.phone || user.mobile || "",
           status: user.status || "active",
           password: "",
-          password_confirmation: "",
+          confirmPassword: "",
         }));
       } catch (e) {
         console.error(e);
@@ -84,14 +84,18 @@ const UserForm = () => {
     setAlert(null);
     setLoading(true);
 
+    if (form.password && form.password !== form.confirmPassword) {
+      setErrors({ confirmPassword: ["تکرار رمز عبور با رمز عبور مطابقت ندارد"] });
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isEdit) {
         const payload = { ...form };
-        if (!payload.password) {
-          delete payload.password;
-          delete payload.password_confirmation;
-        }
-        // حذف فیلد mobile قدیمی اگر وجود داشت
+        delete payload.confirmPassword;
+        delete payload.status;
+        if (!payload.password) delete payload.password;
         delete payload.mobile;
         await updateUser(id, payload);
         setAlert({
@@ -100,6 +104,7 @@ const UserForm = () => {
         });
       } else {
         const payload = { ...form };
+        delete payload.confirmPassword;
         delete payload.mobile;
         await createUser(payload);
         setAlert({
@@ -266,17 +271,17 @@ const UserForm = () => {
 
                     <Col md="6">
                       <FormGroup>
-                        <Label for="password_confirmation">
+                        <Label for="confirmPassword">
                           تکرار رمز عبور
                         </Label>
                         <Input
-                          id="password_confirmation"
-                          name="password_confirmation"
+                          id="confirmPassword"
+                          name="confirmPassword"
                           type="password"
-                          value={form.password_confirmation}
+                          value={form.confirmPassword}
                           onChange={handleChange}
                         />
-                        {renderError("password_confirmation")}
+                        {renderError("confirmPassword")}
                       </FormGroup>
                     </Col>
                   </Row>

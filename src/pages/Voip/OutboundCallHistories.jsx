@@ -10,11 +10,11 @@ import {
   Button,
   Form,
   Label,
-  InputGroup,
   Progress,
   Modal,
   ModalHeader,
   ModalBody,
+  Badge,
 } from "reactstrap";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -30,7 +30,7 @@ import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 
 const INITIAL_EXPORT_STATE = {
-  status: "idle", // idle | preparing | downloading | success | error | cancelled
+  status: "idle",
   receivedBytes: 0,
   totalBytes: null,
   percent: null,
@@ -41,12 +41,7 @@ const OutboundCallHistories = () => {
   document.title = "تماس‌های خروجی | داشبورد آیسوق";
 
   const [data, setData] = useState([]);
-  const [meta, setMeta] = useState({
-    page: 1,
-    limit: 15,
-    total: 0,
-    lastPage: 1,
-  });
+  const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
 
   const [type, setType] = useState("");
   const [q, setQ] = useState("");
@@ -194,7 +189,6 @@ const OutboundCallHistories = () => {
       headers.get("content-length");
 
     if (!raw) return null;
-
     const n = Number(String(raw).replace(/[^\d]/g, ""));
     return Number.isFinite(n) && n > 0 ? n : null;
   };
@@ -250,13 +244,7 @@ const OutboundCallHistories = () => {
     const perPage = meta?.total && meta.total > 0 ? meta.total : meta.limit;
 
     setSearchError("");
-    setExportState({
-      status: "preparing",
-      receivedBytes: 0,
-      totalBytes: null,
-      percent: null,
-      errorMessage: null,
-    });
+    setExportState({ status: "preparing", receivedBytes: 0, totalBytes: null, percent: null, errorMessage: null });
 
     try {
       const params = new URLSearchParams();
@@ -275,9 +263,7 @@ const OutboundCallHistories = () => {
       exportAbortRef.current = controller;
 
       const res = await fetch(url, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         signal: controller.signal,
       });
 
@@ -287,12 +273,7 @@ const OutboundCallHistories = () => {
       }
 
       const totalBytes = parseTotalBytes(res.headers);
-      setExportState((prev) => ({
-        ...prev,
-        status: "downloading",
-        totalBytes,
-        percent: totalBytes ? 0 : null,
-      }));
+      setExportState((prev) => ({ ...prev, status: "downloading", totalBytes, percent: totalBytes ? 0 : null }));
 
       const reader = res.body.getReader();
       const chunks = [];
@@ -305,49 +286,23 @@ const OutboundCallHistories = () => {
         if (chunkSize > 0) {
           chunks.push(value);
           receivedBytes += chunkSize;
-
-          const percent = totalBytes
-            ? Math.min(99, Math.floor((receivedBytes / totalBytes) * 100))
-            : null;
-
-          setExportState((prev) => ({
-            ...prev,
-            status: "downloading",
-            receivedBytes,
-            totalBytes,
-            percent,
-            errorMessage: null,
-          }));
+          const percent = totalBytes ? Math.min(99, Math.floor((receivedBytes / totalBytes) * 100)) : null;
+          setExportState((prev) => ({ ...prev, status: "downloading", receivedBytes, totalBytes, percent, errorMessage: null }));
         }
       }
 
-      const csvBlob = new Blob(chunks, {
-        type: "text/csv;charset=utf-8",
-      });
-
+      const csvBlob = new Blob(chunks, { type: "text/csv;charset=utf-8" });
       const filename = parseFilename(res.headers.get("Content-Disposition"));
       downloadBlob(csvBlob, filename || "outbound-call-histories.csv");
 
-      setExportState((prev) => ({
-        ...prev,
-        status: "success",
-        receivedBytes,
-        totalBytes,
-        percent: 100,
-        errorMessage: null,
-      }));
+      setExportState((prev) => ({ ...prev, status: "success", receivedBytes, totalBytes, percent: 100, errorMessage: null }));
     } catch (e) {
       if (e?.name === "AbortError") {
         setExportState(INITIAL_EXPORT_STATE);
         return;
       }
-
       console.error("خطا در خروجی CSV تماس خروجی", e);
-      setExportState((prev) => ({
-        ...prev,
-        status: "error",
-        errorMessage: e?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید.",
-      }));
+      setExportState((prev) => ({ ...prev, status: "error", errorMessage: e?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید." }));
     } finally {
       exportAbortRef.current = null;
     }
@@ -388,21 +343,19 @@ const OutboundCallHistories = () => {
     if (!unix || Number(unix) <= 0) return "-";
     const num = Number(unix);
     if (num >= 2147483647) return "-";
-
     const d = new Date(num * 1000);
     if (Number.isNaN(d.getTime())) return "-";
-
     return d.toLocaleString("fa-IR");
   };
 
   const dispositionFa = (val) => {
-    if (!val) return "-";
+    if (!val) return { label: "-", color: "secondary" };
     const v = String(val).toUpperCase();
-    if (v === "ANSWERED") return "پاسخ داده شد";
-    if (v === "NO ANSWER") return "بی‌پاسخ";
-    if (v === "BUSY") return "مشغول";
-    if (v === "FAILED") return "ناموفق";
-    return val;
+    if (v === "ANSWERED") return { label: "پاسخ داده شد", color: "success" };
+    if (v === "NO ANSWER") return { label: "بی‌پاسخ", color: "warning" };
+    if (v === "BUSY") return { label: "مشغول", color: "info" };
+    if (v === "FAILED") return { label: "ناموفق", color: "danger" };
+    return { label: val, color: "secondary" };
   };
 
   const columns = useMemo(
@@ -413,7 +366,11 @@ const OutboundCallHistories = () => {
         accessorKey: "id",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: (info) => (
+          <span className="text-muted fw-semibold" style={{ fontSize: "0.8rem" }}>
+            {info.getValue() ?? "-"}
+          </span>
+        ),
         meta: { sortKey: "id" },
       },
       {
@@ -422,7 +379,11 @@ const OutboundCallHistories = () => {
         accessorKey: "src",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: (info) => (
+          <span className="font-monospace" dir="ltr">
+            {info.getValue() ?? "-"}
+          </span>
+        ),
         meta: { sortKey: "src" },
       },
       {
@@ -431,7 +392,11 @@ const OutboundCallHistories = () => {
         accessorKey: "to_phone",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: (info) => (
+          <span className="font-monospace" dir="ltr">
+            {info.getValue() ?? "-"}
+          </span>
+        ),
         meta: { sortKey: "to_phone" },
       },
       {
@@ -440,7 +405,15 @@ const OutboundCallHistories = () => {
         accessorKey: "disposition",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: ({ row }) => dispositionFa(row.original?.disposition),
+        cell: ({ row }) => {
+          const { label, color } = dispositionFa(row.original?.disposition);
+          if (label === "-") return <span className="text-muted">-</span>;
+          return (
+            <Badge color={color} pill className="px-2 py-1" style={{ fontSize: "0.78rem" }}>
+              {label}
+            </Badge>
+          );
+        },
         meta: { sortKey: "disposition" },
       },
       {
@@ -452,15 +425,20 @@ const OutboundCallHistories = () => {
           const disposition = String(row.original?.disposition || "").toUpperCase();
           const files = Array.isArray(row.original?.files) ? row.original.files : [];
 
-          if (disposition !== "ANSWERED" || files.length === 0) return "-";
+          if (disposition !== "ANSWERED" || files.length === 0)
+            return <span className="text-muted">-</span>;
 
           return (
             <Button
-              color="link"
-              className="p-0 text-decoration-underline text-break"
+              color="primary"
+              size="sm"
+              outline
+              className="d-flex align-items-center gap-1 py-0 px-2"
+              style={{ fontSize: "0.78rem", whiteSpace: "nowrap" }}
               onClick={() => openFilesModal(row.original)}
             >
-              {`مشاهده فایل‌ها (${files.length})`}
+              <i className="mdi mdi-paperclip" />
+              {`فایل‌ها (${files.length})`}
             </Button>
           );
         },
@@ -472,7 +450,14 @@ const OutboundCallHistories = () => {
         accessorKey: "wait",
         enableSorting: false,
         enableColumnFilter: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: (info) => {
+          const val = info.getValue();
+          return val != null ? (
+            <span className="badge bg-light text-dark border">{val}</span>
+          ) : (
+            <span className="text-muted">-</span>
+          );
+        },
         meta: { sortKey: null },
       },
       {
@@ -482,15 +467,19 @@ const OutboundCallHistories = () => {
         enableColumnFilter: false,
         cell: ({ row }) => {
           const p = row.original?.playtime_string;
-          if (p) return p;
+          if (p) return <span className="fw-semibold text-success">{p}</span>;
 
           const dur = row.original?.duration;
-          if (dur == null) return "-";
+          if (dur == null) return <span className="text-muted">-</span>;
 
           const seconds = Number(dur);
           if (Number.isNaN(seconds)) return String(dur);
 
-          return `${seconds} ثانیه`;
+          return seconds > 0 ? (
+            <span className="fw-semibold text-success">{`${seconds} ثانیه`}</span>
+          ) : (
+            <span className="text-muted">{`${seconds} ثانیه`}</span>
+          );
         },
         meta: { sortKey: "duration" },
       },
@@ -500,7 +489,16 @@ const OutboundCallHistories = () => {
         accessorKey: "support_form_title",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: ({ row }) => row.original?.support_form_title ?? "-",
+        cell: ({ row }) => {
+          const val = row.original?.support_form_title;
+          return val ? (
+            <span className="text-truncate d-block" style={{ maxWidth: 180 }} title={val}>
+              {val}
+            </span>
+          ) : (
+            <span className="text-muted">-</span>
+          );
+        },
         meta: { sortKey: "support_form_title" },
       },
       {
@@ -509,7 +507,14 @@ const OutboundCallHistories = () => {
         accessorKey: "adviser_name",
         enableSorting: false,
         enableColumnFilter: false,
-        cell: ({ row }) => row.original?.adviser_name ?? "-",
+        cell: ({ row }) => {
+          const val = row.original?.adviser_name;
+          return val ? (
+            <span className="fw-medium">{val}</span>
+          ) : (
+            <span className="text-muted">-</span>
+          );
+        },
         meta: { sortKey: null },
       },
       {
@@ -518,7 +523,10 @@ const OutboundCallHistories = () => {
         accessorKey: "student_full_name",
         enableSorting: false,
         enableColumnFilter: false,
-        cell: ({ row }) => row.original?.student_full_name ?? row.original?.student_name ?? "-",
+        cell: ({ row }) => {
+          const val = row.original?.student_full_name ?? row.original?.student_name;
+          return val ? val : <span className="text-muted">-</span>;
+        },
         meta: { sortKey: null },
       },
       {
@@ -527,7 +535,16 @@ const OutboundCallHistories = () => {
         accessorKey: "student_username",
         enableSorting: false,
         enableColumnFilter: false,
-        cell: ({ row }) => row.original?.student_username ?? "-",
+        cell: ({ row }) => {
+          const val = row.original?.student_username;
+          return val ? (
+            <span className="font-monospace text-muted" style={{ fontSize: "0.85rem" }}>
+              {val}
+            </span>
+          ) : (
+            <span className="text-muted">-</span>
+          );
+        },
         meta: { sortKey: null },
       },
       {
@@ -535,7 +552,10 @@ const OutboundCallHistories = () => {
         header: "شروع",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: ({ row }) => formatUnixFa(row.original?.starttime_unix),
+        cell: ({ row }) => {
+          const val = formatUnixFa(row.original?.starttime_unix);
+          return <span style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{val}</span>;
+        },
         meta: { sortKey: "starttime_unix" },
       },
       {
@@ -543,7 +563,10 @@ const OutboundCallHistories = () => {
         header: "پایان",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: ({ row }) => formatUnixFa(row.original?.endtime_unix),
+        cell: ({ row }) => {
+          const val = formatUnixFa(row.original?.endtime_unix);
+          return <span style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{val}</span>;
+        },
         meta: { sortKey: "endtime_unix" },
       },
     ],
@@ -552,10 +575,7 @@ const OutboundCallHistories = () => {
 
   const columnSortKeyMap = useMemo(() => {
     const map = {};
-    columns.forEach((col) => {
-      const key = col.meta?.sortKey;
-      map[col.id] = key || null;
-    });
+    columns.forEach((col) => { map[col.id] = col.meta?.sortKey || null; });
     return map;
   }, [columns]);
 
@@ -568,13 +588,7 @@ const OutboundCallHistories = () => {
       if (!sortKey) {
         setSorting([]);
         setSort({ by: null, order: null });
-        fetchData({
-          page: 1,
-          currentType: type,
-          currentQ: q,
-          currentSortBy: "",
-          currentSortOrder: "",
-        });
+        fetchData({ page: 1, currentType: type, currentQ: q, currentSortBy: "", currentSortOrder: "" });
         return;
       }
 
@@ -584,21 +598,21 @@ const OutboundCallHistories = () => {
       const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
       const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
 
-      fetchData({
-        page: 1,
-        currentType: type,
-        currentQ: q,
-        currentSortBy: sortKey,
-        currentSortOrder: sortDirection,
-        currentStart: start,
-        currentEnd: end,
-      });
+      fetchData({ page: 1, currentType: type, currentQ: q, currentSortBy: sortKey, currentSortOrder: sortDirection, currentStart: start, currentEnd: end });
     },
     [columnSortKeyMap, fetchData, q, type, startDate, endDate]
   );
 
   const isExportBusy = exportState.status === "preparing" || exportState.status === "downloading";
   const showExportPanel = exportState.status !== "idle";
+
+  const exportStatusLabel = {
+    preparing: "در حال آماده‌سازی...",
+    downloading: "در حال دانلود...",
+    success: "دانلود موفق",
+    error: "خطا",
+    cancelled: "لغو شد",
+  };
 
   return (
     <div className="page-content">
@@ -607,156 +621,239 @@ const OutboundCallHistories = () => {
 
         <Row>
           <Col lg={12}>
-            <Card>
-              <CardHeader>
-                <div className="d-flex flex-column gap-2">
-                  <h4 className="card-title mb-0">لیست تماس‌های خروجی</h4>
-                  <Form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      handleSearch();
-                    }}
+            <Card className="shadow-sm">
+              <CardHeader className="bg-white border-bottom pb-0">
+                <div className="d-flex align-items-center gap-2 mb-3">
+                  <div
+                    className="rounded-2 d-flex align-items-center justify-content-center text-white"
+                    style={{ width: 36, height: 36, backgroundColor: "#556ee6", flexShrink: 0 }}
                   >
-                    <div className="p-3 bg-light rounded-3 shadow-sm">
-                      <Row className="g-3 align-items-end">
-                        <Col md="3" sm="6">
-                          <Label className="form-label text-muted mb-1">فیلد جستجو</Label>
-                          <Input type="select" value={type} onChange={(e) => setType(e.target.value)}>
-                            {searchTypes.map((opt) => (
-                              <option key={opt.value || "empty"} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </Input>
-                        </Col>
-
-                        <Col md="4" sm="6">
-                          <Label className="form-label text-muted mb-1">عبارت</Label>
-                          <InputGroup>
-                            <Input
-                              type="text"
-                              value={q}
-                              onChange={(e) => setQ(e.target.value)}
-                              onKeyDown={onKeyDown}
-                              placeholder="مثلاً نام مشاور یا دانش‌آموز..."
-                            />
-                            {q && (
-                              <Button color="light" onClick={handleResetFilters} type="button">
-                                پاک کردن
-                              </Button>
-                            )}
-                            <Button color="primary" type="submit" disabled={loading}>
-                              جستجو
-                            </Button>
-                          </InputGroup>
-                        </Col>
-
-                        <Col md="5">
-                          <Label className="form-label text-muted mb-1">بازه زمانی (شمسی)</Label>
-                          <Row className="g-2">
-                            <Col sm="6">
-                              <DatePicker
-                                calendar={persian}
-                                locale={persian_fa}
-                                value={startDate}
-                                onChange={(date) => setStartDate(date || null)}
-                                format="YYYY/MM/DD"
-                                placeholder="تاریخ شروع"
-                                className="form-control"
-                                inputClass="form-control"
-                                calendarPosition="bottom-right"
-                              />
-                            </Col>
-                            <Col sm="6">
-                              <div className="d-flex gap-2">
-                                <DatePicker
-                                  calendar={persian}
-                                  locale={persian_fa}
-                                  value={endDate}
-                                  onChange={(date) => setEndDate(date || null)}
-                                  format="YYYY/MM/DD"
-                                  placeholder="تاریخ پایان"
-                                  className="form-control"
-                                  inputClass="form-control"
-                                  calendarPosition="bottom-right"
-                                />
-                                <Button color="success" type="button" onClick={handleExport} disabled={isExportBusy || loading}>
-                                  {isExportBusy ? "در حال دریافت..." : "خروجی CSV"}
-                                </Button>
-                                <Button
-                                  color="danger"
-                                  outline
-                                  type="button"
-                                  onClick={handleCancelExport}
-                                  disabled={!isExportBusy}
-                                >
-                                  لغو
-                                </Button>
-                              </div>
-                            </Col>
-                          </Row>
-                        </Col>
-
-                        <Col md="12" className="d-flex justify-content-between flex-wrap gap-2">
-                          {searchError ? (
-                            <div className="text-danger small">{searchError}</div>
-                          ) : (
-                            <div className="text-muted small">سورت روی عناوین جدول فعال است.</div>
-                          )}
-                          <div className="text-muted small">
-                            <span className="me-2">برای پاکسازی سریع، روی "پاک کردن" بزن.</span>
-                            <Button color="secondary" size="sm" outline onClick={handleResetFilters} disabled={loading}>
-                              ریست فیلترها
-                            </Button>
-                          </div>
-                        </Col>
-                      </Row>
-
-                      {showExportPanel && (
-                        <div className="mt-3">
-                          <div className="d-flex align-items-center gap-3 flex-wrap">
-                            <div className="text-muted small">
-                              وضعیت:
-                              <span className="ms-1">
-                                {exportState.status === "preparing" && "در حال آماده‌سازی"}
-                                {exportState.status === "downloading" && "در حال دانلود"}
-                                {exportState.status === "success" && "موفق"}
-                                {exportState.status === "error" && "خطا"}
-                                {exportState.status === "cancelled" && "لغو شد"}
-                              </span>
-                              <span className="ms-2">
-                                {exportState.totalBytes
-                                  ? `${formatBytes(exportState.receivedBytes)} / ${formatBytes(exportState.totalBytes)}${
-                                      exportState.percent != null ? ` (${exportState.percent}%)` : ""
-                                    }`
-                                  : `${formatBytes(exportState.receivedBytes)} downloaded`}
-                              </span>
-                            </div>
-
-                            <div className="flex-grow-1" style={{ minWidth: 240 }}>
-                              <Progress
-                                animated={exportState.percent === null && isExportBusy}
-                                striped
-                                color="success"
-                                style={{ height: 10 }}
-                                value={exportState.percent ?? 30}
-                              >
-                                {exportState.percent != null ? `%${exportState.percent}` : ""}
-                              </Progress>
-                            </div>
-
-                            {exportState.errorMessage ? (
-                              <div className="text-danger small">{exportState.errorMessage}</div>
-                            ) : null}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </Form>
+                    <i className="mdi mdi-phone-outgoing fs-5" />
+                  </div>
+                  <h5 className="card-title mb-0 fw-semibold">لیست تماس‌های خروجی</h5>
+                  {meta.total > 0 && (
+                    <Badge color="primary" pill className="ms-1">
+                      {meta.total.toLocaleString("fa-IR")}
+                    </Badge>
+                  )}
                 </div>
+
+                <Form
+                  onSubmit={(e) => { e.preventDefault(); handleSearch(); }}
+                  className="mb-3"
+                >
+                  <div className="p-3 rounded-3" style={{ background: "#f8f9fa", border: "1px solid #e9ecef" }}>
+                    {/* Row 1: Search type + query */}
+                    <Row className="g-3 mb-3">
+                      <Col md="3" sm="6">
+                        <Label className="form-label fw-medium mb-1" style={{ fontSize: "0.85rem" }}>
+                          <i className="mdi mdi-filter-variant me-1 text-muted" />
+                          فیلد جستجو
+                        </Label>
+                        <Input
+                          type="select"
+                          bsSize="sm"
+                          value={type}
+                          onChange={(e) => setType(e.target.value)}
+                          className="border-0 shadow-sm"
+                        >
+                          {searchTypes.map((opt) => (
+                            <option key={opt.value || "empty"} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </Input>
+                      </Col>
+
+                      <Col md="5" sm="6">
+                        <Label className="form-label fw-medium mb-1" style={{ fontSize: "0.85rem" }}>
+                          <i className="mdi mdi-magnify me-1 text-muted" />
+                          عبارت جستجو
+                        </Label>
+                        <div className="d-flex gap-2">
+                          <Input
+                            type="text"
+                            bsSize="sm"
+                            value={q}
+                            onChange={(e) => setQ(e.target.value)}
+                            onKeyDown={onKeyDown}
+                            placeholder="مثلاً نام مشاور یا دانش‌آموز..."
+                            className="border-0 shadow-sm"
+                          />
+                          <Button
+                            color="primary"
+                            size="sm"
+                            type="submit"
+                            disabled={loading}
+                            className="px-3 d-flex align-items-center gap-1"
+                            style={{ whiteSpace: "nowrap" }}
+                          >
+                            <i className="mdi mdi-magnify" />
+                            جستجو
+                          </Button>
+                        </div>
+                      </Col>
+
+                      <Col md="4" className="d-flex align-items-end">
+                        <div className="d-flex gap-2 w-100 justify-content-end">
+                          <Button
+                            color="success"
+                            size="sm"
+                            type="button"
+                            onClick={handleExport}
+                            disabled={isExportBusy || loading}
+                            className="d-flex align-items-center gap-1 px-3"
+                            style={{ whiteSpace: "nowrap" }}
+                          >
+                            <i className={`mdi ${isExportBusy ? "mdi-loading mdi-spin" : "mdi-file-download-outline"}`} />
+                            {isExportBusy ? "در حال دریافت..." : "خروجی CSV"}
+                          </Button>
+                          {isExportBusy && (
+                            <Button
+                              color="danger"
+                              size="sm"
+                              outline
+                              type="button"
+                              onClick={handleCancelExport}
+                              className="d-flex align-items-center gap-1"
+                              style={{ whiteSpace: "nowrap" }}
+                            >
+                              <i className="mdi mdi-close" />
+                              لغو
+                            </Button>
+                          )}
+                        </div>
+                      </Col>
+                    </Row>
+
+                    {/* Row 2: Date range */}
+                    <Row className="g-3 align-items-end">
+                      <Col md="12">
+                        <Label className="form-label fw-medium mb-2" style={{ fontSize: "0.85rem" }}>
+                          <i className="mdi mdi-calendar-range me-1 text-muted" />
+                          بازه زمانی (شمسی)
+                        </Label>
+                        <div className="d-flex gap-2 align-items-center flex-wrap">
+                          <div style={{ flex: "1 1 180px", maxWidth: 240 }}>
+                            <DatePicker
+                              calendar={persian}
+                              locale={persian_fa}
+                              value={startDate}
+                              onChange={(date) => setStartDate(date || null)}
+                              format="YYYY/MM/DD"
+                              placeholder="تاریخ شروع"
+                              className="form-control"
+                              inputClass="form-control form-control-sm border-0 shadow-sm"
+                              calendarPosition="bottom-right"
+                            />
+                          </div>
+                          <span className="text-muted" style={{ fontSize: "0.85rem" }}>تا</span>
+                          <div style={{ flex: "1 1 180px", maxWidth: 240 }}>
+                            <DatePicker
+                              calendar={persian}
+                              locale={persian_fa}
+                              value={endDate}
+                              onChange={(date) => setEndDate(date || null)}
+                              format="YYYY/MM/DD"
+                              placeholder="تاریخ پایان"
+                              className="form-control"
+                              inputClass="form-control form-control-sm border-0 shadow-sm"
+                              calendarPosition="bottom-right"
+                            />
+                          </div>
+                          <Button
+                            color="secondary"
+                            size="sm"
+                            outline
+                            type="button"
+                            onClick={handleResetFilters}
+                            disabled={loading}
+                            className="d-flex align-items-center gap-1"
+                            style={{ whiteSpace: "nowrap" }}
+                          >
+                            <i className="mdi mdi-refresh" />
+                            ریست فیلترها
+                          </Button>
+                        </div>
+                      </Col>
+                    </Row>
+
+                    {/* Status / error row */}
+                    {(searchError || !searchError) && (
+                      <div className="mt-2">
+                        {searchError ? (
+                          <div className="d-flex align-items-center gap-1 text-danger" style={{ fontSize: "0.82rem" }}>
+                            <i className="mdi mdi-alert-circle-outline" />
+                            {searchError}
+                          </div>
+                        ) : (
+                          <div className="text-muted" style={{ fontSize: "0.8rem" }}>
+                            <i className="mdi mdi-information-outline me-1" />
+                            برای سورت روی عناوین جدول کلیک کنید.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Export progress panel */}
+                    {showExportPanel && (
+                      <div
+                        className="mt-3 p-2 rounded-2 d-flex align-items-center gap-3 flex-wrap"
+                        style={{ background: "#fff", border: "1px solid #dee2e6" }}
+                      >
+                        <div className="d-flex align-items-center gap-2" style={{ fontSize: "0.82rem" }}>
+                          <i
+                            className={`mdi ${
+                              exportState.status === "success"
+                                ? "mdi-check-circle text-success"
+                                : exportState.status === "error"
+                                ? "mdi-alert-circle text-danger"
+                                : "mdi-loading mdi-spin text-primary"
+                            } fs-5`}
+                          />
+                          <span className="text-muted">
+                            {exportStatusLabel[exportState.status] || ""}
+                          </span>
+                          {exportState.receivedBytes > 0 && (
+                            <span className="text-muted">
+                              {exportState.totalBytes
+                                ? `${formatBytes(exportState.receivedBytes)} / ${formatBytes(exportState.totalBytes)}`
+                                : formatBytes(exportState.receivedBytes)}
+                              {exportState.percent != null && ` (${exportState.percent}%)`}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-grow-1" style={{ minWidth: 180 }}>
+                          <Progress
+                            animated={exportState.percent === null && isExportBusy}
+                            striped={isExportBusy}
+                            color={exportState.status === "error" ? "danger" : exportState.status === "success" ? "success" : "primary"}
+                            style={{ height: 8, borderRadius: 4 }}
+                            value={exportState.percent ?? 30}
+                          />
+                        </div>
+                        {exportState.errorMessage && (
+                          <div className="text-danger" style={{ fontSize: "0.8rem" }}>
+                            {exportState.errorMessage}
+                          </div>
+                        )}
+                        {exportState.status === "success" && (
+                          <Button
+                            color="link"
+                            size="sm"
+                            className="p-0 text-muted"
+                            onClick={() => setExportState(INITIAL_EXPORT_STATE)}
+                          >
+                            <i className="mdi mdi-close" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Form>
               </CardHeader>
 
-              <CardBody>
+              <CardBody className="p-0">
                 <TableContainer
                   columns={columns}
                   data={data || []}
@@ -766,19 +863,23 @@ const OutboundCallHistories = () => {
                   manualSorting
                   sortingState={sorting}
                   onSortingChange={handleSortingChange}
-                  tableClass="table-bordered table-nowrap dt-responsive nowrap w-100 dataTable no-footer dtr-inline"
+                  theadClass="table-light"
+                  tableClass="table-bordered table-hover align-middle mb-0"
+                  divClassName="table-responsive"
                 />
 
-                <Paginations
-                  perPageData={meta.limit}
-                  data={data}
-                  totalRecords={meta.total}
-                  currentPage={meta.page}
-                  setCurrentPage={handlePageChange}
-                  isShowingPageLength={true}
-                  paginationDiv="col-sm-auto"
-                  paginationClass="pagination pagination-sm mb-0"
-                />
+                <div className="px-3 py-2 border-top bg-light">
+                  <Paginations
+                    perPageData={meta.limit}
+                    data={data}
+                    totalRecords={meta.total}
+                    currentPage={meta.page}
+                    setCurrentPage={handlePageChange}
+                    isShowingPageLength={true}
+                    paginationDiv="col-sm-auto"
+                    paginationClass="pagination pagination-sm mb-0"
+                  />
+                </div>
               </CardBody>
             </Card>
           </Col>
@@ -786,46 +887,67 @@ const OutboundCallHistories = () => {
       </div>
 
       <Modal isOpen={fileModalOpen} toggle={closeFilesModal} centered size="lg">
-        <ModalHeader toggle={closeFilesModal}>
-          {selectedCallId != null ? `فایل‌های تماس #${selectedCallId}` : "فایل‌های تماس"}
+        <ModalHeader toggle={closeFilesModal} className="bg-light">
+          <div className="d-flex align-items-center gap-2">
+            <i className="mdi mdi-paperclip text-primary fs-5" />
+            {selectedCallId != null ? `فایل‌های تماس #${selectedCallId}` : "فایل‌های تماس"}
+          </div>
         </ModalHeader>
         <ModalBody>
           {!selectedCallFiles.length ? (
-            <div className="text-muted">فایلی برای این تماس ثبت نشده است.</div>
+            <div className="text-center py-4 text-muted">
+              <i className="mdi mdi-folder-open-outline fs-1 d-block mb-2 opacity-50" />
+              فایلی برای این تماس ثبت نشده است.
+            </div>
           ) : (
             <div className="table-responsive">
-              <table className="table table-sm align-middle mb-0">
-                <thead>
+              <table className="table table-sm table-hover align-middle mb-0">
+                <thead className="table-light">
                   <tr>
                     <th>عنوان</th>
-                    <th>پخش</th>
+                    <th style={{ minWidth: 220 }}>پخش</th>
                     <th>حجم</th>
                     <th>مدت</th>
-                    <th>لینک</th>
+                    <th>دانلود</th>
                   </tr>
                 </thead>
                 <tbody>
                   {selectedCallFiles.map((file) => (
                     <tr key={file?.id ?? `${file?.url}-${file?.code}`}>
-                      <td className="text-break">{getFileLabel(file)}</td>
-                      <td style={{ minWidth: 220 }}>
+                      <td className="text-break fw-medium">{getFileLabel(file)}</td>
+                      <td>
                         {isAudioFile(file) ? (
-                          <audio controls preload="none" src={file?.url} style={{ width: "100%" }}>
+                          <audio controls preload="none" src={file?.url} style={{ width: "100%", height: 36 }}>
                             مرورگر شما پخش صوت را پشتیبانی نمی‌کند.
                           </audio>
                         ) : (
-                          <span className="text-muted small">فایل غیرصوتی</span>
+                          <span className="badge bg-light text-muted border">فایل غیرصوتی</span>
                         )}
                       </td>
-                      <td>{file?.size || "-"}</td>
-                      <td>{file?.time || "-"}</td>
+                      <td>
+                        <span className="text-muted" style={{ fontSize: "0.82rem" }}>
+                          {file?.size || "-"}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="text-muted" style={{ fontSize: "0.82rem" }}>
+                          {file?.time || "-"}
+                        </span>
+                      </td>
                       <td>
                         {file?.url ? (
-                          <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-break">
-                            {getFileLabel(file)}
+                          <a
+                            href={file.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1 py-0"
+                            style={{ fontSize: "0.78rem" }}
+                          >
+                            <i className="mdi mdi-download" />
+                            دانلود
                           </a>
                         ) : (
-                          "-"
+                          <span className="text-muted">-</span>
                         )}
                       </td>
                     </tr>

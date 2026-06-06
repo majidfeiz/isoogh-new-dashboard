@@ -155,6 +155,67 @@ export const API_ROUTES = {
     update: (id) => `/files/${id}`,
     delete: (id) => `/files/${id}`,
   },
+  adviserPortal: {
+    schools: "/adviser-portal/schools",
+    schoolsExport: "/adviser-portal/schools/export",
+    schoolDetail: (id) => `/adviser-portal/schools/${id}`,
+    schoolStats: (id) => `/adviser-portal/schools/${id}/stats`,
+    schoolSupportForms: (schoolId) => `/adviser-portal/schools/${schoolId}/support-forms`,
+    supportFormDetail: (id) => `/adviser-portal/support-forms/${id}`,
+    supportFormStudents: (id) => `/adviser-portal/support-forms/${id}/students`,
+    supportFormStats: (id) => `/adviser-portal/support-forms/${id}/stats`,
+    submitAnswers: (formId, studentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/answers`,
+    studentProfile: (formId, studentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/profile`,
+    studentCallLogs: (formId, studentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/call-logs`,
+    studentAnswers: (formId, studentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/answers`,
+    studentContacts: (formId, studentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/contacts`,
+    studentContactSetDefault: (formId, studentId, contactId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/contacts/${contactId}/set-default`,
+    studentContactDelete: (formId, studentId, contactId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/contacts/${contactId}`,
+    contactSubjects: "/adviser-portal/contact-subjects",
+    call: "/adviser-portal/call",
+    callLogs: "/adviser-portal/call-logs",
+    stats: "/adviser-portal/stats",
+  },
+  superAdviserPortal: {
+    schools: "/super-adviser-portal/schools",
+    advisers: "/super-adviser-portal/advisers",
+    supportForms: "/super-adviser-portal/support-forms",
+    students: "/super-adviser-portal/students",
+    performanceReport: "/super-adviser-portal/performance-report",
+    monitoring: "/super-adviser-portal/monitoring",
+    salary: "/super-adviser-portal/salary",
+    answerSheet: (formId) => `/super-adviser-portal/support-forms/${formId}/answer-sheet`,
+    answerSheetExport: (formId) => `/super-adviser-portal/support-forms/${formId}/answer-sheet/export`,
+    answerSheetStudentDetail: (formId, studentId) => `/super-adviser-portal/support-forms/${formId}/students/${studentId}/answers`,
+  },
+  notifications: {
+    unread: "/notifications/unread",
+    list: "/notifications",
+    markRead: (id) => `/notifications/${id}/read`,
+    markAllRead: "/notifications/read-all",
+    delete: (id) => `/notifications/${id}`,
+    sendUser: "/notifications/send/user",
+    sendSchoolAdvisers: (schoolId) => `/notifications/send/school/${schoolId}/advisers`,
+    sendSuperAdviser: (schoolId) => `/notifications/send/school/${schoolId}/super-adviser`,
+    sendBroadcast: "/notifications/send/broadcast",
+  },
+  dashboard: {
+    default: "/dashboard/default",
+    widgets: "/dashboard/widgets",
+    my: "/dashboard/my",
+    myWidgets: "/dashboard/my/widgets",
+    myWidget: (id) => `/dashboard/my/widgets/${id}`,
+    myReset: "/dashboard/my/reset",
+    widgetRoles: (widgetId) => `/dashboard/widgets/${widgetId}/roles`,
+    widgetRole: (widgetId, roleId) => `/dashboard/widgets/${widgetId}/roles/${roleId}`,
+  },
   // مثال برای بعداً:
   // users: {
   //   list: `${API_VERSION.v1}/users`,
