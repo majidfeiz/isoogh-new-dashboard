@@ -344,6 +344,47 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "وب‌هوک تماس",
+        icon: "bx bx-link-external",
+        permissionAny: ["voip-webhooks.index", "voip-webhooks.create", "voip-webhooks.logs"],
+        children: [
+          {
+            label: "لیست وب‌هوک‌ها",
+            to: "/voip-webhooks",
+            permission: "voip-webhooks.index",
+          },
+          {
+            label: "لاگ ارسال‌ها",
+            to: "/voip-webhooks/logs",
+            permission: "voip-webhooks.logs",
+          },
+        ],
+      },
+      {
+        type: "group",
+        label: "API خارجی",
+        icon: "bx bx-key",
+        permissionAny: ["external-api.index", "external-api.create", "external-api.logs"],
+        children: [
+          {
+            label: "کلاینت‌های API",
+            to: "/external-api-clients",
+            permission: "external-api.index",
+          },
+          {
+            label: "لاگ درخواست‌ها",
+            to: "/external-api-clients/logs",
+            permission: "external-api.logs",
+          },
+          {
+            label: "مستندات",
+            to: "/external-api-clients/docs",
+            permission: "external-api.index",
+          },
+        ],
+      },
+      {
+        type: "group",
         label: "تماس مشاوران",
         icon: "bx bx-headphone",
         permissionAny: ["adviser-portal.schools.index"],

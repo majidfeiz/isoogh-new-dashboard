@@ -237,6 +237,17 @@ import FileForm from "../pages/Files/FileForm.jsx";
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
 
+// external api clients
+import ExternalApiClientList from "../pages/ExternalApi/ExternalApiClientList.jsx";
+import ExternalApiClientDetail from "../pages/ExternalApi/ExternalApiClientDetail.jsx";
+import ExternalApiLogs from "../pages/ExternalApi/ExternalApiLogs.jsx";
+import ExternalApiDocs from "../pages/ExternalApi/ExternalApiDocs.jsx";
+
+// voip webhooks
+import VoipWebhookList from "../pages/VoipWebhooks/VoipWebhookList.jsx";
+import VoipWebhookForm from "../pages/VoipWebhooks/VoipWebhookForm.jsx";
+import VoipWebhookLogs from "../pages/VoipWebhooks/VoipWebhookLogs.jsx";
+
 // admin - dashboard widgets
 import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
 
@@ -370,6 +381,18 @@ const authProtectedRoutes = [
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
   { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
+
+  // external api clients
+  { path: "/external-api-clients", component: <ExternalApiClientList /> },
+  { path: "/external-api-clients/logs", component: <ExternalApiLogs /> },
+  { path: "/external-api-clients/docs", component: <ExternalApiDocs /> },
+  { path: "/external-api-clients/:id", component: <ExternalApiClientDetail /> },
+
+  // voip webhooks
+  { path: "/voip-webhooks", component: <VoipWebhookList /> },
+  { path: "/voip-webhooks/create", component: <VoipWebhookForm /> },
+  { path: "/voip-webhooks/logs", component: <VoipWebhookLogs /> },
+  { path: "/voip-webhooks/:id/edit", component: <VoipWebhookForm /> },
 
   // admin - dashboard widgets
   { path: "/admin/dashboard-widgets", component: <DashboardWidgetsAdmin /> },

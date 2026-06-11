@@ -206,6 +206,11 @@ export const API_ROUTES = {
     sendSuperAdviser: (schoolId) => `/notifications/send/school/${schoolId}/super-adviser`,
     sendBroadcast: "/notifications/send/broadcast",
   },
+  profile: {
+    me: "/profile",
+    update: "/profile",
+    changePassword: "/profile/password",
+  },
   dashboard: {
     default: "/dashboard/default",
     widgets: "/dashboard/widgets",
@@ -215,6 +220,33 @@ export const API_ROUTES = {
     myReset: "/dashboard/my/reset",
     widgetRoles: (widgetId) => `/dashboard/widgets/${widgetId}/roles`,
     widgetRole: (widgetId, roleId) => `/dashboard/widgets/${widgetId}/roles/${roleId}`,
+  },
+  // ------------------------
+  // 🔑 External API Clients
+  // ------------------------
+  externalApiClients: {
+    list: "/external-api-clients",
+    create: "/external-api-clients",
+    detail: (id) => `/external-api-clients/${id}`,
+    update: (id) => `/external-api-clients/${id}`,
+    delete: (id) => `/external-api-clients/${id}`,
+    regenerateKey: (id) => `/external-api-clients/${id}/regenerate-key`,
+    logs: "/external-api-clients/logs",
+    addIp: (id) => `/external-api-clients/${id}/ips`,
+    deleteIp: (id, ipId) => `/external-api-clients/${id}/ips/${ipId}`,
+  },
+  // ------------------------
+  // 🔔 VoIP Webhooks
+  // ------------------------
+  voipWebhooks: {
+    list: "/voip-webhooks",
+    create: "/voip-webhooks",
+    detail: (id) => `/voip-webhooks/${id}`,
+    update: (id) => `/voip-webhooks/${id}`,
+    delete: (id) => `/voip-webhooks/${id}`,
+    test: (id) => `/voip-webhooks/${id}/test`,
+    dispatch: (callHistoryId) => `/voip-webhooks/dispatch/${callHistoryId}`,
+    logs: "/voip-webhooks/logs",
   },
   // مثال برای بعداً:
   // users: {
