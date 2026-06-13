@@ -1,21 +1,16 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { clearAuthData } from "../../helpers/authStorage.jsx";
+import { logoutApi } from "../../services/authService.jsx";
 
 const Logout = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    try {
-      // پاک کردن تمام داده‌های احراز هویت و هر داده‌ی ذخیره‌شده
-      clearAuthData();
-      localStorage.clear();
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error("[Logout] failed to clear storage", e);
-    } finally {
-      navigate("/login", { replace: true });
-    }
+    logoutApi()
+      .catch(() => {})
+      .finally(() => {
+        navigate("/login", { replace: true });
+      });
   }, [navigate]);
 
   return null;

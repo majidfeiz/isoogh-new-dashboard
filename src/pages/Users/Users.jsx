@@ -32,9 +32,11 @@ import {
   getUsers,
   deleteUser,
 } from "../../services/userService.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const UserList = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   document.title = "کاربران | داشبورد آیسوق";
 
   const [data, setData] = useState([]);
@@ -249,13 +251,19 @@ const UserList = () => {
     [navigate]
   );
 
-const handleManagePermissions = useCallback(
+  const handleManagePermissions = useCallback(
     (id) => {
       navigate(`/users/${id}/permissions`);
     },
     [navigate]
   );
 
+  const handleManageSessions = useCallback(
+    (id) => {
+      navigate(`/admin/users/${id}/sessions`);
+    },
+    [navigate]
+  );
 
   const handleDelete = useCallback(
     async (id) => {
@@ -347,7 +355,19 @@ const handleManagePermissions = useCallback(
           const id = row.original.id;
 
           return (
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-2 flex-wrap">
+              {hasPermission("auth.sessions.index") && (
+                <Button
+                  color="secondary"
+                  size="sm"
+                  onClick={() => handleManageSessions(id)}
+                  title="مشاهده نشست‌های فعال"
+                >
+                  <i className="bx bx-devices me-1" />
+                  نشست‌ها
+                </Button>
+              )}
+
               <Button
                 color="info"
                 size="sm"

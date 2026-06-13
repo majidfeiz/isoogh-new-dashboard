@@ -1,17 +1,17 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
+import { getAccessToken } from "../helpers/authStorage.jsx";
 
 const Authmiddleware = ({ children }) => {
   const location = useLocation();
 
-  // چک کردن وجود توکن
-  const token = localStorage.getItem("isoogh_access_token");
+  const token = getAccessToken(); // localStorage یا sessionStorage
 
   if (!token) {
     return (
-      <Navigate 
-        to="/login" 
-        replace 
+      <Navigate
+        to="/login"
+        replace
         state={{ from: location }}
       />
     );

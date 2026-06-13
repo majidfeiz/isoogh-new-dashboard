@@ -16,6 +16,7 @@ import {
   ModalFooter,
   Spinner,
   Badge,
+  Alert,
 } from "reactstrap";
 import * as Yup from "yup";
 import { useFormik } from "formik";
@@ -24,6 +25,45 @@ import { toast } from "react-toastify";
 import Breadcrumb from "../../components/Common/Breadcrumb";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getProfile, updateProfile, changePassword } from "../../services/profileService.jsx";
+import { getMySessions, revokeMySession } from "../../services/sessionService.jsx";
+
+// تبدیل Unix timestamp یا ISO به تاریخ شمسی
+function toJalali(dateInput) {
+  if (!dateInput) return "—";
+  try {
+    const d = typeof dateInput === "number" ? new Date(dateInput * 1000) : new Date(dateInput);
+    return d.toLocaleString("fa-IR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return String(dateInput);
+  }
+}
+
+// تشخیص ساده مرورگر/دستگاه از user-agent
+function parseDevice(ua) {
+  if (!ua) return "نامشخص";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
+  if (/Android/i.test(ua)) return "Android";
+  if (/Windows/i.test(ua)) return "Windows";
+  if (/Macintosh|Mac OS/i.test(ua)) return "macOS";
+  if (/Linux/i.test(ua)) return "Linux";
+  return "نامشخص";
+}
+
+function parseBrowser(ua) {
+  if (!ua) return "";
+  if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) return "Chrome";
+  if (/Firefox/i.test(ua)) return "Firefox";
+  if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) return "Safari";
+  if (/Edg/i.test(ua)) return "Edge";
+  if (/OPR|Opera/i.test(ua)) return "Opera";
+  return "";
+}
 
 const UserProfile = () => {
   document.title = "پروفایل | ایسوق";
@@ -34,6 +74,11 @@ const UserProfile = () => {
   const [loading, setLoading] = useState(true);
   const [editModal, setEditModal] = useState(false);
   const [passwordModal, setPasswordModal] = useState(false);
+
+  // نشست‌های فعال
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [revokeId, setRevokeId] = useState(null);
 
   const canUpdate = profile?.effectivePermissions?.includes("profile.update");
   const canChangePassword = profile?.effectivePermissions?.includes("profile.change-password");
@@ -48,9 +93,35 @@ const UserProfile = () => {
     }
   }, []);
 
+  const fetchSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const data = await getMySessions();
+      setSessions(data);
+    } catch {
+      // خطا به صورت toast توسط httpClient نمایش داده می‌شود
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchProfile();
-  }, [fetchProfile]);
+    fetchSessions();
+  }, [fetchProfile, fetchSessions]);
+
+  const handleRevokeSession = async (sessionId) => {
+    setRevokeId(sessionId);
+    try {
+      await revokeMySession(sessionId);
+      toast.success("نشست با موفقیت پایان یافت");
+      fetchSessions();
+    } catch {
+      // خطا توسط httpClient نمایش داده می‌شود
+    } finally {
+      setRevokeId(null);
+    }
+  };
 
   // ── Edit form ─────────────────────────────────────────────
   const editForm = useFormik({
@@ -244,6 +315,106 @@ const UserProfile = () => {
                           </tbody>
                         </table>
                       </div>
+                    </CardBody>
+                  </Card>
+                </Col>
+              </Row>
+
+              {/* ── نشست‌های فعال ── */}
+              <Row className="mt-2">
+                <Col>
+                  <Card>
+                    <CardBody>
+                      <div className="d-flex justify-content-between align-items-center mb-3">
+                        <h5 className="card-title mb-0">
+                          <i className="bx bx-desktop me-2 text-primary" />
+                          نشست‌های فعال
+                        </h5>
+                        <Button
+                          color="secondary"
+                          outline
+                          size="sm"
+                          onClick={fetchSessions}
+                          disabled={sessionsLoading}
+                        >
+                          {sessionsLoading ? (
+                            <Spinner size="sm" />
+                          ) : (
+                            <i className="bx bx-refresh" />
+                          )}
+                        </Button>
+                      </div>
+
+                      {sessionsLoading && sessions.length === 0 ? (
+                        <div className="text-center py-3">
+                          <Spinner color="primary" />
+                        </div>
+                      ) : sessions.length === 0 ? (
+                        <Alert color="info" className="mb-0">
+                          نشست فعالی یافت نشد.
+                        </Alert>
+                      ) : (
+                        <div className="table-responsive">
+                          <table className="table table-hover table-nowrap mb-0">
+                            <thead className="table-light">
+                              <tr>
+                                <th>آدرس IP</th>
+                                <th>دستگاه / مرورگر</th>
+                                <th>زمان ورود</th>
+                                <th>مرا به خاطر بسپار</th>
+                                <th />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {sessions.map((s) => {
+                                const device = parseDevice(s.user_agent);
+                                const browser = parseBrowser(s.user_agent);
+                                return (
+                                  <tr key={s.id}>
+                                    <td>
+                                      <code className="text-dark">{s.ip_address || "—"}</code>
+                                    </td>
+                                    <td>
+                                      {device}
+                                      {browser ? ` / ${browser}` : ""}
+                                    </td>
+                                    <td>{toJalali(s.created_at)}</td>
+                                    <td>
+                                      {s.remember_me ? (
+                                        <Badge color="success" pill>
+                                          بله
+                                        </Badge>
+                                      ) : (
+                                        <Badge color="secondary" pill>
+                                          خیر
+                                        </Badge>
+                                      )}
+                                    </td>
+                                    <td className="text-end">
+                                      <Button
+                                        color="danger"
+                                        size="sm"
+                                        outline
+                                        onClick={() => handleRevokeSession(s.id)}
+                                        disabled={revokeId === s.id}
+                                      >
+                                        {revokeId === s.id ? (
+                                          <Spinner size="sm" />
+                                        ) : (
+                                          <>
+                                            <i className="bx bx-log-out me-1" />
+                                            پایان نشست
+                                          </>
+                                        )}
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </CardBody>
                   </Card>
                 </Col>
