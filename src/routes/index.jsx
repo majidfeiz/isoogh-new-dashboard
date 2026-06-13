@@ -248,8 +248,14 @@ import VoipWebhookList from "../pages/VoipWebhooks/VoipWebhookList.jsx";
 import VoipWebhookForm from "../pages/VoipWebhooks/VoipWebhookForm.jsx";
 import VoipWebhookLogs from "../pages/VoipWebhooks/VoipWebhookLogs.jsx";
 
+// reports
+import ReportsDashboard from "../pages/Reports/ReportsDashboard.jsx";
+
 // admin - dashboard widgets
 import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
+
+// admin - sessions
+import AdminUserSessions from "../pages/Sessions/AdminUserSessions.jsx";
 
 // super adviser portal
 import SuperAdviserSchools from "../pages/SuperAdviserPortal/Schools.jsx";
@@ -394,8 +400,14 @@ const authProtectedRoutes = [
   { path: "/voip-webhooks/logs", component: <VoipWebhookLogs /> },
   { path: "/voip-webhooks/:id/edit", component: <VoipWebhookForm /> },
 
+  // reports
+  { path: "/reports", component: <ReportsDashboard /> },
+
   // admin - dashboard widgets
   { path: "/admin/dashboard-widgets", component: <DashboardWidgetsAdmin /> },
+
+  // admin - user sessions
+  { path: "/admin/users/:userId/sessions", component: <AdminUserSessions /> },
 
   // super adviser portal
   { path: "/super-adviser-portal/schools", component: <SuperAdviserSchools /> },

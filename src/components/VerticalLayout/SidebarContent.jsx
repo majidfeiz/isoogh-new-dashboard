@@ -384,6 +384,13 @@ const SidebarContent = (props) => {
         ],
       },
       {
+        type: "item",
+        label: "گزارشات",
+        icon: "bx bx-bar-chart-alt-2",
+        to: "/reports",
+        permission: "reports.index",
+      },
+      {
         type: "group",
         label: "تماس مشاوران",
         icon: "bx bx-headphone",

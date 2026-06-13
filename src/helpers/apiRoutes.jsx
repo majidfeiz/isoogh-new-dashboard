@@ -23,9 +23,14 @@ export const API_VERSION = {
 export const API_ROUTES = {
   auth: {
     login: `${API_VERSION.v1}/auth/login`,
+    verifyOtp: `${API_VERSION.v1}/auth/verify-otp`,
     me: `${API_VERSION.v1}/auth/me`,
     refresh: `${API_VERSION.v1}/auth/refresh`,
     logout: `${API_VERSION.v1}/auth/logout`,
+    sessions: `${API_VERSION.v1}/auth/sessions`,
+    session: (id) => `${API_VERSION.v1}/auth/sessions/${id}`,
+    adminUserSessions: (userId) => `${API_VERSION.v1}/auth/admin/users/${userId}/sessions`,
+    adminSession: (id) => `${API_VERSION.v1}/auth/admin/sessions/${id}`,
   },
   // ------------------------
   // 🔐 Permissions
@@ -247,6 +252,21 @@ export const API_ROUTES = {
     test: (id) => `/voip-webhooks/${id}/test`,
     dispatch: (callHistoryId) => `/voip-webhooks/dispatch/${callHistoryId}`,
     logs: "/voip-webhooks/logs",
+  },
+  // ------------------------
+  // 📊 Reports
+  // ------------------------
+  reports: {
+    overview: "/reports/overview",
+    callsTrend: "/reports/calls-trend",
+    callsByAdviser: "/reports/calls-by-adviser",
+    callsByAdviserExport: "/reports/calls-by-adviser/export",
+    callsByHour: "/reports/calls-by-hour",
+    studentsCoverage: "/reports/students-coverage",
+    uncontactedStudents: "/reports/uncontacted-students",
+    uncontactedStudentsExport: "/reports/uncontacted-students/export",
+    formsStatus: "/reports/forms-status",
+    monthlyComparison: "/reports/monthly-comparison",
   },
   // مثال برای بعداً:
   // users: {
