@@ -197,3 +197,144 @@ export async function detachSupportFormAdviserStudents(id, adviserId) {
   const res = await apiDelete(url);
   return res.data;
 }
+
+export async function copySupportForm(id) {
+  const url = getApiUrl(API_ROUTES.supportForms.copy(id));
+  const res = await apiPost(url, {});
+  return res.data;
+}
+
+export async function getSupportFormQuestions(id, params = {}) {
+  const url = getApiUrl(API_ROUTES.supportForms.questions(id));
+  const response = await apiGet(url, { params });
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  return Array.isArray(data) ? data : data.items || data.data || [];
+}
+
+export async function upsertSupportFormQuestion(id, payload) {
+  const url = getApiUrl(API_ROUTES.supportForms.questions(id));
+  const res = await apiPost(url, payload);
+  return res.data;
+}
+
+export async function deleteSupportFormQuestion(id, qId) {
+  const url = getApiUrl(API_ROUTES.supportForms.question(id, qId));
+  const res = await apiDelete(url);
+  return res.data;
+}
+
+export async function toggleSupportFormAdviserActive(id, adviserId, isActive) {
+  const url = getApiUrl(API_ROUTES.supportForms.toggleAdviserActive(id, adviserId));
+  const res = await apiPost(url, { is_active: isActive });
+  return res.data;
+}
+
+export async function bulkAttachSupportFormAdvisers(id, adviserIds) {
+  const url = getApiUrl(API_ROUTES.supportForms.setAdvisers(id));
+  const res = await apiPost(url, { adviser_ids: adviserIds });
+  return res.data;
+}
+
+export async function detachSupportFormAdviserByBody(id, adviserId) {
+  const url = getApiUrl(API_ROUTES.supportForms.delAdvisers(id));
+  const res = await apiPost(url, { adviser_id: adviserId });
+  return res.data;
+}
+
+export async function getSupportFormAllStudents(id, params = {}) {
+  const url = getApiUrl(API_ROUTES.supportForms.formStudents(id));
+  const response = await apiGet(url, { params });
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  const items = data.items || data.data || [];
+  const pagination = data.meta || data.pagination || {};
+  return {
+    items,
+    pagination: {
+      page: pagination.page ?? params.page ?? 1,
+      limit: pagination.limit ?? params.limit ?? 10,
+      total: pagination.total ?? items.length,
+      lastPage:
+        pagination.lastPage ??
+        (pagination.total && (pagination.limit || params.limit)
+          ? Math.ceil((pagination.total || 0) / (pagination.limit || params.limit || 10))
+          : 1),
+    },
+  };
+}
+
+export async function getSupportFormInterruptedCalls(id, params = {}) {
+  const url = getApiUrl(API_ROUTES.supportForms.interruptedCalls(id));
+  const response = await apiGet(url, { params });
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  const items = data.items || data.data || [];
+  const pagination = data.meta || data.pagination || {};
+  return {
+    items,
+    pagination: {
+      page: pagination.page ?? params.page ?? 1,
+      limit: pagination.limit ?? params.limit ?? 10,
+      total: pagination.total ?? items.length,
+      lastPage:
+        pagination.lastPage ??
+        (pagination.total && (pagination.limit || params.limit)
+          ? Math.ceil((pagination.total || 0) / (pagination.limit || params.limit || 10))
+          : 1),
+    },
+  };
+}
+
+export async function changeStudentSupportFormStatus(payload) {
+  const url = getApiUrl(API_ROUTES.supportForms.changeStudentStatus);
+  const res = await apiPost(url, payload);
+  return res.data;
+}
+
+export async function getStudentSupportFormStatus(payload) {
+  const url = getApiUrl(API_ROUTES.supportForms.getStudentStatus);
+  const res = await apiPost(url, payload);
+  return res.data;
+}
+
+export async function getAdviserInterruptedCallsList(payload = {}) {
+  const url = getApiUrl(API_ROUTES.supportForms.adviserInterruptedCalls);
+  const res = await apiPost(url, payload);
+  const data = res?.data?.data ?? res?.data ?? {};
+  const items = data.items || data.data || [];
+  const pagination = data.meta || data.pagination || {};
+  return {
+    items,
+    pagination: {
+      page: pagination.page ?? payload.page ?? 1,
+      limit: pagination.limit ?? payload.limit ?? 10,
+      total: pagination.total ?? items.length,
+      lastPage:
+        pagination.lastPage ??
+        (pagination.total && (pagination.limit || payload.limit)
+          ? Math.ceil((pagination.total || 0) / (pagination.limit || payload.limit || 10))
+          : 1),
+    },
+  };
+}
+
+export async function autoImportAdviserStudents(id, adviserId) {
+  const url = getApiUrl(API_ROUTES.supportForms.setAdviserStudents(id, adviserId));
+  const res = await apiGet(url);
+  return res.data;
+}
+
+export async function getAllSupportForms() {
+  const url = getApiUrl(API_ROUTES.supportForms.allForms);
+  const res = await apiGet(url);
+  const data = res?.data?.data ?? res?.data ?? [];
+  return Array.isArray(data) ? data : data.items || data.data || [];
+}
+
+export async function getSupportFormQuestionsOrForms(params = {}) {
+  const url = getApiUrl(API_ROUTES.supportForms.questionsOrForms);
+  const res = await apiGet(url, { params });
+  const data = res?.data?.data ?? res?.data ?? [];
+  return Array.isArray(data) ? data : data.items || data.data || [];
+}

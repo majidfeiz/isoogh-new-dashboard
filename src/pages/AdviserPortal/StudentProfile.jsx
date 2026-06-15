@@ -134,9 +134,17 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
               {q.type !== 0 && !q.multiChoice && (
                 <div className="vstack gap-2 mt-1">
                   {q.options.map((opt) => (
-                    <div key={opt.id} className="form-check">
-                      <input className="form-check-input" type="radio" name={`q-${q.id}`} id={`opt-${q.id}-${opt.id}`} value={opt.id} checked={answers[q.id] === opt.id} onChange={() => setAnswer(q.id, opt.id)} />
-                      <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`}>{opt.label}</label>
+                    <div
+                      key={opt.id}
+                      className="form-check"
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setAnswer(q.id, opt.id)}
+                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setAnswer(q.id, opt.id); } }}
+                    >
+                      <input className="form-check-input" type="radio" name={`q-${q.id}`} id={`opt-${q.id}-${opt.id}`} value={opt.id} checked={answers[q.id] === opt.id} readOnly />
+                      <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`} style={{ pointerEvents: "none" }}>{opt.label}</label>
                     </div>
                   ))}
                 </div>
@@ -144,9 +152,17 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
               {q.type !== 0 && q.multiChoice && (
                 <div className="vstack gap-2 mt-1">
                   {q.options.map((opt) => (
-                    <div key={opt.id} className="form-check">
-                      <input className="form-check-input" type="checkbox" id={`opt-${q.id}-${opt.id}`} checked={(answers[q.id] || []).includes(opt.id)} onChange={() => toggleCheckbox(q.id, opt.id)} />
-                      <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`}>{opt.label}</label>
+                    <div
+                      key={opt.id}
+                      className="form-check"
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => toggleCheckbox(q.id, opt.id)}
+                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCheckbox(q.id, opt.id); } }}
+                    >
+                      <input className="form-check-input" type="checkbox" id={`opt-${q.id}-${opt.id}`} checked={(answers[q.id] || []).includes(opt.id)} readOnly />
+                      <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`} style={{ pointerEvents: "none" }}>{opt.label}</label>
                     </div>
                   ))}
                 </div>

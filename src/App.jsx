@@ -20,6 +20,7 @@ import NonAuthLayout from "./components/NonAuthLayout";
 
 // ✅ مهم: Provider
 import { AuthProvider } from "./context/AuthContext.jsx";
+import ImpersonationBanner from "./components/Common/ImpersonationBanner.jsx";
 
 // Import scss
 import "./assets/scss/theme.scss";
@@ -57,6 +58,7 @@ const App = (props) => {
   return (
     <AuthProvider>
       <>
+        <ImpersonationBanner />
         <Routes>
           {publicRoutes.map((route, idx) => (
             <Route

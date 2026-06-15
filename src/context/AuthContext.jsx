@@ -6,20 +6,26 @@ import {
   getAccessToken,
   setAuthData,
   clearAuthData,
+  getSwitchCallbackToken,
+  getOriginalUser,
+  setSwitchData,
+  clearSwitchData,
 } from "../helpers/authStorage.jsx";
 import { getMe } from "../services/authService.jsx";
+import {
+  switchToUser as switchToUserApi,
+  switchBack as switchBackApi,
+} from "../services/userSwitchService.jsx";
 
 const AuthContext = createContext(null);
 
 const toPermStrings = (user) => {
-  // effectivePermissions = direct + role-based, already string[]
   const effective = user?.effectivePermissions;
   if (Array.isArray(effective)) {
     return effective
       .map((x) => (typeof x === "string" ? x.trim() : null))
       .filter((x) => x && x.length > 0);
   }
-  // fallback: derive from direct permissions objects
   const list = user?.permissions;
   if (!Array.isArray(list)) return [];
   return list
@@ -31,6 +37,11 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => getAuthUser());
   const [permissions, setPermissions] = useState(() => getAuthPermissions());
   const [meLoading, setMeLoading] = useState(false);
+
+  // switch state — initialized from localStorage so it survives page refresh
+  const [isSwitched, setIsSwitched] = useState(() => !!getSwitchCallbackToken());
+  const [callbackToken, setCallbackToken] = useState(() => getSwitchCallbackToken());
+  const [originalUser, setOriginalUser] = useState(() => getOriginalUser());
 
   const refreshMe = async (reason = "manual") => {
     const token = getAccessToken();
@@ -50,7 +61,6 @@ export const AuthProvider = ({ children }) => {
       setUser(freshUser ?? null);
       setPermissions(perms);
 
-      // storage sync
       setAuthData({ accessToken: token, refreshToken: null, user: freshUser });
 
       return freshUser;
@@ -60,8 +70,12 @@ export const AuthProvider = ({ children }) => {
       const status = e?.response?.status;
       if (status === 401 || status === 403) {
         clearAuthData();
+        clearSwitchData();
         setUser(null);
         setPermissions([]);
+        setIsSwitched(false);
+        setCallbackToken(null);
+        setOriginalUser(null);
       }
       return null;
     } finally {
@@ -69,7 +83,37 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ فقط برای refresh صفحه: این باید همیشه وقتی رفرش می‌کنی اجرا بشه
+  const switchToUser = async (userId) => {
+    const currentUser = user;
+    const result = await switchToUserApi(userId);
+    // result: { accessToken, callbackToken, user }
+
+    setSwitchData({ callbackToken: result.callbackToken, originalUser: currentUser });
+    setAuthData({ accessToken: result.accessToken, user: result.user });
+
+    setIsSwitched(true);
+    setCallbackToken(result.callbackToken);
+    setOriginalUser(currentUser);
+    setUser(result.user);
+    setPermissions(toPermStrings(result.user));
+  };
+
+  const switchBack = async () => {
+    const cbToken = callbackToken;
+    const result = await switchBackApi(cbToken);
+    // result: { accessToken, user }
+
+    clearSwitchData();
+    setAuthData({ accessToken: result.accessToken, user: result.user });
+
+    setIsSwitched(false);
+    setCallbackToken(null);
+    setOriginalUser(null);
+    setUser(result.user);
+    setPermissions(toPermStrings(result.user));
+  };
+
+  // ✅ فقط برای refresh صفحه
   useEffect(() => {
     refreshMe("mount");
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,8 +159,15 @@ export const AuthProvider = ({ children }) => {
       hasPermission: (perm) => permissions.includes(perm),
       hasAnyPermission: (perms) => (perms || []).some((p) => permissions.includes(p)),
       hasAllPermissions: (perms) => (perms || []).every((p) => permissions.includes(p)),
+      // switch state
+      isSwitched,
+      callbackToken,
+      originalUser,
+      switchToUser,
+      switchBack,
     }),
-    [user, permissions, meLoading]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, permissions, meLoading, isSwitched, callbackToken, originalUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

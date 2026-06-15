@@ -21,6 +21,7 @@ export const API_VERSION = {
 
 // همه‌ی endpoint ها اینجا متمرکز می‌شن
 export const API_ROUTES = {
+  version: "/version",
   auth: {
     login: `${API_VERSION.v1}/auth/login`,
     verifyOtp: `${API_VERSION.v1}/auth/verify-otp`,
@@ -140,14 +141,29 @@ export const API_ROUTES = {
     detail: (id) => `/support-forms/${id}`,
     update: (id) => `/support-forms/${id}`,
     delete: (id) => `/support-forms/${id}`,
+    copy: (id) => `/support-forms/copy/${id}`,
+    allForms: "/support-forms/get-all-support-forms",
+    questionsOrForms: "/support-forms/get-support-form-questions",
+    changeStudentStatus: "/support-forms/change-student-support-form-status",
+    getStudentStatus: "/support-forms/get-student-support-form-status",
+    adviserInterruptedCalls: "/support-forms/get-students-support-form-interrupted-calls-list",
+    questions: (id) => `/support-forms/${id}/questions`,
+    question: (id, qId) => `/support-forms/${id}/questions/${qId}`,
     advisers: (id) => `/support-forms/${id}/advisers`,
     adviserCandidates: (id) => `/support-forms/${id}/adviser-candidates`,
+    setAdvisers: (id) => `/support-forms/${id}/set-advisers`,
+    delAdvisers: (id) => `/support-forms/${id}/del-advisers`,
+    toggleAdviserActive: (id, adviserId) => `/support-forms/${id}/${adviserId}/active`,
     detachAdviser: (id, adviserId) => `/support-forms/${id}/advisers/${adviserId}`,
+    formStudents: (id) => `/support-forms/${id}/form-students`,
+    interruptedCalls: (id) => `/support-forms/${id}/interrupted-calls`,
     adviserStudentCandidates: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/student-candidates`,
     adviserStudents: (id, adviserId) => `/support-forms/${id}/advisers/${adviserId}/students`,
     adviserStudentsByTag: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/students/by-tag`,
+    setAdviserStudents: (id, adviserId) =>
+      `/support-forms/${id}/advisers/${adviserId}/set-adviser-students`,
     detachAdviserStudent: (id, adviserId, studentId) =>
       `/support-forms/${id}/advisers/${adviserId}/students/${studentId}`,
     detachAdviserStudents: (id, adviserId) =>
@@ -268,11 +284,13 @@ export const API_ROUTES = {
     formsStatus: "/reports/forms-status",
     monthlyComparison: "/reports/monthly-comparison",
   },
-  // مثال برای بعداً:
-  // users: {
-  //   list: `${API_VERSION.v1}/users`,
-  //   detail: (id) => `${API_VERSION.v1}/users/${id}`,
-  // },
+  // ------------------------
+  // 🔀 User Switch
+  // ------------------------
+  userSwitch: {
+    switch: "/user-switch",
+    callback: "/user-switch/callback",
+  },
 };
 
 // کمک برای ساختن URL کامل

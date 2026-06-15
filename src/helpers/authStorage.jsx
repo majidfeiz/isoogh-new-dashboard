@@ -4,6 +4,9 @@ const TOKEN_KEY = "isoogh_access_token";
 const USER_KEY = "isoogh_user";
 const PERMISSIONS_KEY = "isoogh_permissions";
 
+const SWITCH_CALLBACK_TOKEN_KEY = "switchCallbackToken";
+const SWITCH_ORIGINAL_USER_KEY = "originalUser";
+
 function normalizePermissions(user) {
   const effective = user?.effectivePermissions;
   if (Array.isArray(effective)) {
@@ -74,4 +77,31 @@ export function clearAuthData() {
 
 export function isLoggedIn() {
   return !!getAccessToken();
+}
+
+export function setSwitchData({ callbackToken, originalUser }) {
+  if (callbackToken) {
+    localStorage.setItem(SWITCH_CALLBACK_TOKEN_KEY, callbackToken);
+  }
+  if (originalUser) {
+    localStorage.setItem(SWITCH_ORIGINAL_USER_KEY, JSON.stringify(originalUser));
+  }
+}
+
+export function getSwitchCallbackToken() {
+  return localStorage.getItem(SWITCH_CALLBACK_TOKEN_KEY) || null;
+}
+
+export function getOriginalUser() {
+  const raw = localStorage.getItem(SWITCH_ORIGINAL_USER_KEY);
+  try {
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSwitchData() {
+  localStorage.removeItem(SWITCH_CALLBACK_TOKEN_KEY);
+  localStorage.removeItem(SWITCH_ORIGINAL_USER_KEY);
 }

@@ -411,6 +411,11 @@ const SidebarContent = (props) => {
             to: "/adviser-calls/stats",
             permission: "adviser-portal.schools.index",
           },
+          {
+            label: "پاسخنامه — تماس‌های قطع‌شده",
+            to: "/adviser-calls/interrupted-calls",
+            permission: "adviser-portal.schools.index",
+          },
         ],
       },
       {

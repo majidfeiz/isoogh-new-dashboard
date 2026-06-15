@@ -184,7 +184,15 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
               {q.type === 1 && (
                 <div className="vstack gap-2 mt-1">
                   {q.options.map((opt) => (
-                    <div key={opt.id} className="form-check">
+                    <div
+                      key={opt.id}
+                      className="form-check"
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => setAnswer(q.id, opt.id)}
+                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setAnswer(q.id, opt.id); } }}
+                    >
                       <input
                         className="form-check-input"
                         type="radio"
@@ -192,11 +200,12 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
                         id={`opt-${q.id}-${opt.id}`}
                         value={opt.id}
                         checked={answers[q.id] === opt.id}
-                        onChange={() => setAnswer(q.id, opt.id)}
+                        readOnly
                       />
                       <label
                         className="form-check-label"
                         htmlFor={`opt-${q.id}-${opt.id}`}
+                        style={{ pointerEvents: "none" }}
                       >
                         {opt.label}
                       </label>
@@ -208,17 +217,26 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
               {q.type === 2 && (
                 <div className="vstack gap-2 mt-1">
                   {q.options.map((opt) => (
-                    <div key={opt.id} className="form-check">
+                    <div
+                      key={opt.id}
+                      className="form-check"
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={() => toggleCheckbox(q.id, opt.id)}
+                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCheckbox(q.id, opt.id); } }}
+                    >
                       <input
                         className="form-check-input"
                         type="checkbox"
                         id={`opt-${q.id}-${opt.id}`}
                         checked={(answers[q.id] || []).includes(opt.id)}
-                        onChange={() => toggleCheckbox(q.id, opt.id)}
+                        readOnly
                       />
                       <label
                         className="form-check-label"
                         htmlFor={`opt-${q.id}-${opt.id}`}
+                        style={{ pointerEvents: "none" }}
                       >
                         {opt.label}
                       </label>

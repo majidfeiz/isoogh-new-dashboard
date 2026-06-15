@@ -26,6 +26,7 @@ import {
   getSupportFormAdvisers,
   getSupportFormAdviserCandidates,
   upsertSupportFormAdviser,
+  toggleSupportFormAdviserActive,
   detachSupportFormAdviser,
 } from "../../services/supportFormService.jsx";
 
@@ -138,10 +139,7 @@ const SupportFormAdvisers = () => {
     if (!adviserId) return;
     setActionLoading(adviserId);
     try {
-      await upsertSupportFormAdviser(id, {
-        adviser_id: adviserId,
-        is_active: !row?.is_active,
-      });
+      await toggleSupportFormAdviserActive(id, adviserId, !row?.is_active);
       await fetchData(meta.page, filters, sort);
     } catch (e) {
       console.error("خطا در بروزرسانی وضعیت مشاور", e);

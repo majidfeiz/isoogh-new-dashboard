@@ -33,10 +33,19 @@ import {
   deleteUser,
 } from "../../services/userService.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import SwitchUserButton from "../../components/Common/SwitchUserButton.jsx";
 
 const UserList = () => {
   const navigate = useNavigate();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
+
+  const isAdmin = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r) => {
+      const name = (r?.name || r?.label || "").toLowerCase();
+      return ["admin", "super_admin", "super-admin", "super admin"].includes(name);
+    });
+  }, [user]);
   document.title = "کاربران | داشبورد آیسوق";
 
   const [data, setData] = useState([]);
@@ -356,6 +365,8 @@ const UserList = () => {
 
           return (
             <div className="d-flex gap-2 flex-wrap">
+              <SwitchUserButton userId={id} userName={row.original.name} />
+
               {hasPermission("auth.sessions.index") && (
                 <Button
                   color="secondary"
@@ -368,13 +379,15 @@ const UserList = () => {
                 </Button>
               )}
 
-              <Button
-                color="info"
-                size="sm"
-                onClick={() => handleManagePermissions(id)}
-              >
-                نقش‌ها / دسترسی‌ها
-              </Button>
+              {isAdmin && (
+                <Button
+                  color="info"
+                  size="sm"
+                  onClick={() => handleManagePermissions(id)}
+                >
+                  نقش‌ها / دسترسی‌ها
+                </Button>
+              )}
 
               <Button
                 color="warning"

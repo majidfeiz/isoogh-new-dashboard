@@ -82,18 +82,18 @@ const Login = (props) => {
   const validation = useFormik({
     enableReinitialize: false,
     initialValues: {
-      username: "",
+      identifier: "",
       password: "",
     },
     validationSchema: Yup.object({
-      username: Yup.string().required("لطفا نام کاربری را وارد کنید"),
+      identifier: Yup.string().required("لطفا نام کاربری یا شماره موبایل را وارد کنید"),
       password: Yup.string().required("لطفا رمز عبور خود را وارد کنید"),
     }),
     onSubmit: async (values) => {
       setServerErrors([]);
       setLoading(true);
       try {
-        const data = await loginApi(values.username, values.password, rememberMe);
+        const data = await loginApi(values.identifier, values.password, rememberMe);
 
         if (!data.otpRequired) {
           // OTP غیرفعال است — ورود مستقیم با JWT
@@ -154,7 +154,7 @@ const Login = (props) => {
     setLoading(true);
     try {
       const data = await loginApi(
-        validation.values.username,
+        validation.values.identifier,
         validation.values.password,
         rememberMe
       );
@@ -248,22 +248,22 @@ const Login = (props) => {
                         }}
                       >
                         <div className="mb-3">
-                          <Label className="form-label">نام کاربری</Label>
+                          <Label className="form-label">نام کاربری یا شماره موبایل</Label>
                           <Input
-                            name="username"
+                            name="identifier"
                             className="form-control"
-                            placeholder="نام کاربری را وارد کنید"
+                            placeholder="09xxxxxxxxx یا نام کاربری"
                             type="text"
                             onChange={validation.handleChange}
                             onBlur={validation.handleBlur}
-                            value={validation.values.username}
+                            value={validation.values.identifier}
                             invalid={
-                              validation.touched.username && !!validation.errors.username
+                              validation.touched.identifier && !!validation.errors.identifier
                             }
                           />
-                          {validation.touched.username && validation.errors.username && (
+                          {validation.touched.identifier && validation.errors.identifier && (
                             <FormFeedback type="invalid">
-                              {validation.errors.username}
+                              {validation.errors.identifier}
                             </FormFeedback>
                           )}
                         </div>
