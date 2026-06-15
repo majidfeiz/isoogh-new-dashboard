@@ -5,9 +5,7 @@ import {
   Button,
   Card,
   CardBody,
-  CardHeader,
   Col,
-  Form,
   Input,
   Label,
   Row,
@@ -20,38 +18,76 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import { API_BASE_URL } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
-import { getOutboundCallHistorySocketDocs } from "../../services/voipService.jsx";
 
-const AUTO_REFRESH_MS = 8000;
+const NAMESPACE = "voip/outbound-call-histories";
+const HIGHLIGHT_DURATION_MS = 5000;
+const AUTO_REFRESH_MS = 15000;
+
+// Safely extract list + meta from any common server response shape
+const extractListPayload = (payload) => {
+  if (!payload) return { data: null, meta: null };
+  if (Array.isArray(payload)) return { data: payload, meta: null };
+
+  const dataCandidates = [
+    payload.data,
+    payload.data?.data,
+    payload.data?.items,
+    payload.response?.data,
+    payload.response?.data?.data,
+    payload.items,
+    payload.result,
+  ];
+  const data = dataCandidates.find(Array.isArray) ?? null;
+  const meta =
+    payload.meta ??
+    payload.pagination ??
+    payload.data?.meta ??
+    payload.data?.pagination ??
+    payload.response?.data?.meta ??
+    null;
+  return { data, meta };
+};
 
 const OutboundCallHistoriesLive = () => {
   document.title = "تماس خروجی آنلاین | داشبورد آیسوق";
 
-  const [docsLoading, setDocsLoading] = useState(false);
-  const [socketDocs, setSocketDocs] = useState(null);
-  const [status, setStatus] = useState("idle"); // idle | connecting | connected
+  const [status, setStatus] = useState("connecting");
   const [socketError, setSocketError] = useState("");
-  const [selectedEvent, setSelectedEvent] = useState("");
   const [rows, setRows] = useState([]);
-  const [eventLog, setEventLog] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
   const [filters, setFilters] = useState({
     page: 1,
     per_page: 15,
+    disposition: "ALL",
     type: "",
     q: "",
-    disposition: "",
     sort_order: "DESC",
     sort_by: "id",
+    start_date: "",
+    end_date: "",
   });
 
   const socketRef = useRef(null);
   const highlightTimersRef = useRef(new Map());
-  const removeTimersRef = useRef(new Map());
   const refreshIntervalRef = useRef(null);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  const dispositions = useMemo(
+    () => [
+      { value: "ALL", label: "همه وضعیت‌ها" },
+      { value: "ANSWERED", label: "پاسخ داده شد" },
+      { value: "NO ANSWER", label: "بی‌پاسخ" },
+      { value: "BUSY", label: "اشغال" },
+      { value: "FAILED", label: "ناموفق" },
+    ],
+    []
+  );
 
   const searchTypes = useMemo(
     () => [
-      { value: "", label: "نوع جستجو..." },
+      { value: "", label: "جستجو در..." },
       { value: "StudentName", label: "نام دانش‌آموز" },
       { value: "ssn", label: "کد ملی" },
       { value: "AdviserName", label: "نام مشاور" },
@@ -61,16 +97,24 @@ const OutboundCallHistoriesLive = () => {
     []
   );
 
-  const dispositions = useMemo(
-    () => [
-      { value: "", label: "همه وضعیت‌ها" },
-      { value: "ANSWERED", label: "پاسخ داده شد" },
-      { value: "NO ANSWER", label: "بی‌پاسخ" },
-      { value: "BUSY", label: "مشغول" },
-      { value: "FAILED", label: "ناموفق" },
-    ],
-    []
-  );
+  const formatUnixFa = useCallback((unix) => {
+    if (!unix || Number(unix) <= 0) return "-";
+    const num = Number(unix);
+    if (num >= 2147483647) return "-";
+    const d = new Date(num * 1000);
+    if (Number.isNaN(d.getTime())) return "-";
+    return d.toLocaleString("fa-IR");
+  }, []);
+
+  const dispositionBadge = useCallback((val) => {
+    if (!val) return <span className="text-muted">-</span>;
+    const v = String(val).toUpperCase();
+    if (v === "ANSWERED") return <Badge color="success" pill>پاسخ داده شد</Badge>;
+    if (v === "NO ANSWER") return <Badge color="secondary" pill>بی‌پاسخ</Badge>;
+    if (v === "BUSY") return <Badge color="warning" pill>مشغول</Badge>;
+    if (v === "FAILED") return <Badge color="danger" pill>ناموفق</Badge>;
+    return <Badge color="light" pill className="text-dark">{val}</Badge>;
+  }, []);
 
   const columns = useMemo(
     () => [
@@ -79,32 +123,57 @@ const OutboundCallHistoriesLive = () => {
         header: "ID",
         accessorKey: "id",
         enableSorting: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: (info) => <span className="text-muted small">{info.getValue() ?? "-"}</span>,
       },
       {
-        id: "src",
-        header: "شماره مبدا",
-        accessorKey: "src",
+        id: "adviser",
+        header: "مشاور",
         enableSorting: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: ({ row }) => {
+          const name = row.original?.adviser_name;
+          const src = row.original?.src;
+          return (
+            <div>
+              {name ? <div className="fw-medium">{name}</div> : null}
+              {src ? <div className="text-muted small">{src}</div> : (!name ? <span className="text-muted">-</span> : null)}
+            </div>
+          );
+        },
       },
       {
-        id: "to_phone",
-        header: "شماره مقصد",
-        accessorKey: "to_phone",
+        id: "student",
+        header: "دانش‌آموز",
         enableSorting: false,
-        cell: (info) => info.getValue() ?? "-",
+        cell: ({ row }) => {
+          const name = row.original?.student_full_name || row.original?.student_name;
+          const phone = row.original?.to_phone;
+          return (
+            <div>
+              {name ? <div className="fw-medium">{name}</div> : null}
+              {phone ? <div className="text-muted small">{phone}</div> : (!name ? <span className="text-muted">-</span> : null)}
+            </div>
+          );
+        },
+      },
+      {
+        id: "support_form_title",
+        header: "فرم پشتیبانی",
+        accessorKey: "support_form_title",
+        enableSorting: false,
+        cell: (info) => info.getValue()
+          ? <span className="text-truncate d-block" style={{ maxWidth: 160 }}>{info.getValue()}</span>
+          : <span className="text-muted">-</span>,
       },
       {
         id: "disposition",
-        header: "وضعیت تماس",
+        header: "وضعیت",
         accessorKey: "disposition",
         enableSorting: false,
-        cell: ({ row }) => dispositionFa(row.original?.disposition),
+        cell: ({ row }) => dispositionBadge(row.original?.disposition),
       },
       {
         id: "playtime_string",
-        header: "مدت مکالمه",
+        header: "مدت",
         enableSorting: false,
         cell: ({ row }) => {
           const p = row.original?.playtime_string;
@@ -112,245 +181,60 @@ const OutboundCallHistoriesLive = () => {
           const dur = row.original?.duration;
           if (dur == null) return "-";
           const seconds = Number(dur);
-          if (Number.isNaN(seconds)) return dur;
-          return `${seconds} ثانیه`;
+          return Number.isNaN(seconds) ? dur : `${seconds} ثانیه`;
         },
       },
       {
         id: "starttime_unix",
-        header: "شروع",
+        header: "زمان شروع",
         enableSorting: false,
         cell: ({ row }) => formatUnixFa(row.original?.starttime_unix),
       },
       {
         id: "endtime_unix",
-        header: "پایان",
+        header: "زمان پایان",
         enableSorting: false,
         cell: ({ row }) => formatUnixFa(row.original?.endtime_unix),
       },
     ],
-    []
+    [dispositionBadge, formatUnixFa]
   );
 
-  const loadDocs = useCallback(async () => {
-    setDocsLoading(true);
-    setSocketError("");
-    try {
-      const res = await getOutboundCallHistorySocketDocs();
-      setSocketDocs(res);
-      if (res?.events?.[0]?.name) {
-        setSelectedEvent(res.events[0].name);
-      }
-    } catch (e) {
-      console.error("خطا در دریافت مستندات سوکت", e);
-      setSocketError("دریافت اطلاعات سوکت ناموفق بود.");
-    } finally {
-      setDocsLoading(false);
+  const buildPayload = useCallback((overrides = {}) => {
+    const f = { ...filtersRef.current, ...overrides };
+    const q = f.q?.trim() || "";
+    const payload = {
+      page: Number(f.page) || 1,
+      per_page: Number(f.per_page) || 15,
+      sort_by: f.sort_by || "id",
+      sort_order: f.sort_order || "DESC",
+    };
+    // type only sent alongside a non-empty q
+    if (q) {
+      payload.q = q;
+      if (f.type) payload.type = f.type;
     }
+    // ALL or empty → omit disposition (backend treats absence as ALL)
+    if (f.disposition && f.disposition !== "ALL") {
+      payload.disposition = f.disposition;
+    }
+    if (f.start_date) payload.start_date = f.start_date;
+    if (f.end_date) payload.end_date = f.end_date;
+    return payload;
   }, []);
 
-  const namespaceUrl = useMemo(() => {
-    const ns = socketDocs?.namespace || "voip/outbound-call-histories";
-    const cleaned = ns.startsWith("/") ? ns : `/${ns}`;
-    return `${API_BASE_URL}${cleaned}`;
-  }, [socketDocs]);
-
-  const formatUnixFa = (unix) => {
-    if (!unix || Number(unix) <= 0) return "-";
-    const num = Number(unix);
-    if (num >= 2147483647) return "-";
-    const d = new Date(num * 1000);
-    if (Number.isNaN(d.getTime())) return "-";
-    return d.toLocaleString("fa-IR");
-  };
-
-  const dispositionFa = (val) => {
-    if (!val) return "-";
-    const v = String(val).toUpperCase();
-    if (v === "ANSWERED") return "پاسخ داده شد";
-    if (v === "NO ANSWER") return "بی‌پاسخ";
-    if (v === "BUSY") return "مشغول";
-    if (v === "FAILED") return "ناموفق";
-    return val;
-  };
-
-  const normalizeRows = useCallback((payload) => {
-    if (!payload) return { items: [], meta: null };
-
-    const tryArrays = [
-      payload,
-      payload?.data,
-      payload?.data?.data,
-      payload?.data?.items,
-      payload?.response,
-      payload?.response?.data,
-      payload?.response?.data?.data,
-      payload?.response?.data?.items,
-      payload?.items,
-      payload?.result,
-    ];
-
-    let items = [];
-    for (const candidate of tryArrays) {
-      if (Array.isArray(candidate)) {
-        items = candidate;
-        break;
-      }
-    }
-
-    if (!items.length && payload && typeof payload === "object" && payload.id != null) {
-      items = [payload];
-    }
-
-    const meta =
-      payload?.meta ||
-      payload?.pagination ||
-      payload?.data?.meta ||
-      payload?.data?.pagination ||
-      payload?.response?.data?.meta ||
-      payload?.response?.data?.pagination ||
-      null;
-
-    return { items, meta };
-  }, []);
-
-  const pushLog = useCallback((eventName, payload) => {
-    setEventLog((prev) => {
-      const next = [
-        {
-          at: new Date().toISOString(),
-          event: eventName,
-          payload,
-        },
-        ...prev,
-      ];
-      return next.slice(0, 30);
-    });
-  }, []);
-
-  const scheduleClearHighlight = useCallback((id, type) => {
+  const scheduleClearHighlight = useCallback((id) => {
     const key = String(id);
     const timers = highlightTimersRef.current;
     if (timers.has(key)) clearTimeout(timers.get(key));
     const t = setTimeout(() => {
       setRows((prev) =>
-        prev.map((row) => (String(row.id) === key && row.__highlight === type ? { ...row, __highlight: undefined } : row))
+        prev.map((row) => String(row.id) === key ? { ...row, __highlight: undefined } : row)
       );
       timers.delete(key);
-    }, 3000);
+    }, HIGHLIGHT_DURATION_MS);
     timers.set(key, t);
   }, []);
-
-  const scheduleRemoveRow = useCallback((id) => {
-    const key = String(id);
-    const timers = removeTimersRef.current;
-    if (timers.has(key)) clearTimeout(timers.get(key));
-    const t = setTimeout(() => {
-      setRows((prev) => prev.filter((row) => String(row.id) !== key));
-      timers.delete(key);
-    }, 3000);
-    timers.set(key, t);
-  }, []);
-
-  const handleSocketEvent = useCallback(
-    (eventName, payload) => {
-      pushLog(eventName, payload);
-      const { items: incoming, meta } = normalizeRows(payload);
-      if (!incoming.length) return;
-
-      setRows((prev) => {
-        const prevMap = new Map();
-        prev.forEach((row) => {
-          if (row && row.id != null) prevMap.set(String(row.id), row);
-        });
-
-        const incomingMap = new Map();
-        incoming.forEach((row) => {
-          if (row && row.id != null) incomingMap.set(String(row.id), row);
-        });
-
-        incoming.forEach((row) => {
-          const key = row && row.id != null ? String(row.id) : null;
-          if (key && removeTimersRef.current.has(key)) {
-            clearTimeout(removeTimersRef.current.get(key));
-            removeTimersRef.current.delete(key);
-          }
-        });
-
-        const nextMap = new Map(prevMap);
-        incoming.forEach((row) => {
-          if (!row || row.id == null) return;
-          const key = String(row.id);
-          const existed = nextMap.has(key);
-          const existing = nextMap.get(key) || {};
-          const merged = { ...existing, ...row };
-          if (!existed) {
-            merged.__highlight = "added";
-            scheduleClearHighlight(key, "added");
-          } else if (existing.__highlight) {
-            merged.__highlight = existing.__highlight;
-          }
-          nextMap.set(key, merged);
-        });
-
-        if (meta) {
-          prev.forEach((row) => {
-            const key = row && row.id != null ? String(row.id) : null;
-            if (key && !incomingMap.has(key)) {
-              const removedRow = { ...row, __highlight: "removed" };
-              nextMap.set(key, removedRow);
-              scheduleRemoveRow(key);
-            }
-          });
-        }
-
-        const nextArr = Array.from(nextMap.values());
-
-        // مرتب‌سازی بر اساس فیلتر فعلی (پیش‌فرض: id DESC)
-        const sortBy = filters.sort_by || "id";
-        const sortOrder = (filters.sort_order || "DESC").toUpperCase();
-        const sorted = [...nextArr].sort((a, b) => {
-          const av = a?.[sortBy];
-          const bv = b?.[sortBy];
-          if (av == null && bv == null) return 0;
-          if (av == null) return 1;
-          if (bv == null) return -1;
-          // تلاش برای تبدیل به عدد، در غیر این صورت مقایسه رشته
-          const na = Number(av);
-          const nb = Number(bv);
-          if (!Number.isNaN(na) && !Number.isNaN(nb)) {
-            return sortOrder === "ASC" ? na - nb : nb - na;
-          }
-          const sa = String(av);
-          const sb = String(bv);
-          if (sa === sb) return 0;
-          return sortOrder === "ASC" ? (sa > sb ? 1 : -1) : sa < sb ? 1 : -1;
-        });
-
-        return sorted;
-      });
-    },
-    [normalizeRows, pushLog, scheduleClearHighlight, scheduleRemoveRow, filters.sort_by, filters.sort_order]
-  );
-
-  const buildPayload = useCallback(() => {
-    const cleanedQ = filters.q?.trim?.() || "";
-    return {
-      page: Number(filters.page) || 1,
-      per_page: Number(filters.per_page) || 15,
-      type: filters.type || undefined,
-      q: cleanedQ || undefined,
-      disposition: filters.disposition || undefined,
-      sort_by: filters.sort_by || undefined,
-      sort_order: filters.sort_order || undefined,
-    };
-  }, [filters]);
-
-  const emitRequest = useCallback(() => {
-    if (!socketRef.current || !selectedEvent) return;
-    const payload = buildPayload();
-    socketRef.current.emit(selectedEvent, payload);
-  }, [buildPayload, selectedEvent]);
 
   const stopAutoRefresh = useCallback(() => {
     if (refreshIntervalRef.current) {
@@ -362,331 +246,426 @@ const OutboundCallHistoriesLive = () => {
   const startAutoRefresh = useCallback(() => {
     stopAutoRefresh();
     refreshIntervalRef.current = setInterval(() => {
-      emitRequest();
+      if (socketRef.current?.connected) {
+        socketRef.current.emit("refresh", buildPayload());
+      }
     }, AUTO_REFRESH_MS);
-  }, [emitRequest, stopAutoRefresh]);
+  }, [buildPayload, stopAutoRefresh]);
+
+  // Handles outbound-call-histories.list and outbound-call-histories.updated
+  const handleListEvent = useCallback((payload) => {
+    const { data, meta: newMeta } = extractListPayload(payload);
+    if (!Array.isArray(data)) return;
+
+    // Collect new row IDs outside the updater to avoid side-effects inside pure function
+    let newRowIds = [];
+
+    setRows((prevRows) => {
+      newRowIds = []; // reset on each call (React StrictMode may call twice)
+      const prevIds = new Set(prevRows.map((r) => r.id != null ? String(r.id) : null).filter(Boolean));
+      return data.map((row) => {
+        if (row.id != null && !prevIds.has(String(row.id))) {
+          newRowIds.push(row.id);
+          return { ...row, __highlight: "added" };
+        }
+        const existing = prevRows.find((p) => p.id != null && String(p.id) === String(row.id));
+        if (existing?.__highlight) return { ...row, __highlight: existing.__highlight };
+        return row;
+      });
+    });
+
+    // Schedule highlight clearing after state commits
+    newRowIds.forEach((id) => scheduleClearHighlight(id));
+
+    if (newMeta) setMeta(newMeta);
+    setLastUpdate(new Date());
+  }, [scheduleClearHighlight]);
+
+  // Handles outbound-call-histories.created — prepend if matches filters
+  const handleCreatedEvent = useCallback((payload) => {
+    // Record may come as the object directly or wrapped in a response envelope
+    const record = payload?.id != null ? payload : (payload?.data ?? payload?.record ?? payload?.item);
+    if (!record || record.id == null) return;
+
+    const f = filtersRef.current;
+    // Client-side disposition check — skip only when a specific value is active (not ALL/empty)
+    const activeDisposition = f.disposition && f.disposition !== "ALL" ? f.disposition : null;
+    if (activeDisposition && record.disposition !== activeDisposition) return;
+
+    setRows((prev) => {
+      const perPage = Number(f.per_page) || 30;
+      const withHighlight = { ...record, __highlight: "added" };
+      const next = [withHighlight, ...prev].slice(0, perPage);
+      return next;
+    });
+
+    setMeta((prev) => prev ? { ...prev, total: (prev.total || 0) + 1 } : prev);
+    setLastUpdate(new Date());
+    scheduleClearHighlight(record.id);
+  }, [scheduleClearHighlight]);
+
+  const namespaceUrl = useMemo(() => {
+    const cleaned = NAMESPACE.startsWith("/") ? NAMESPACE : `/${NAMESPACE}`;
+    return `${API_BASE_URL}${cleaned}`;
+  }, []);
 
   const disconnectSocket = useCallback(() => {
+    stopAutoRefresh();
     if (socketRef.current) {
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
     }
     socketRef.current = null;
     setStatus("idle");
-    stopAutoRefresh();
   }, [stopAutoRefresh]);
 
   const connectSocket = useCallback(() => {
-    if (!selectedEvent) {
-      setSocketError("هیچ رویدادی برای دریافت داده مشخص نشده است.");
-      return;
-    }
     disconnectSocket();
     setStatus("connecting");
     setSocketError("");
 
     const token = getAccessToken();
-    const nextSocket = io(namespaceUrl, {
+    const sock = io(namespaceUrl, {
       transports: ["websocket"],
-      auth: token ? { token, Authorization: `Bearer ${token}` } : undefined,
-      query: token ? { token } : undefined,
+      auth: token ? { token } : undefined,
     });
 
-    nextSocket.on("connect", () => {
+    sock.on("connect", () => {
       setStatus("connected");
       setSocketError("");
-      emitRequest();
+      sock.emit("subscribe", buildPayload());
       startAutoRefresh();
     });
 
-    nextSocket.on("connect_error", (err) => {
-      console.error("Socket connect_error", err);
+    sock.on("connect_error", () => {
       setSocketError("اتصال به سوکت برقرار نشد.");
       setStatus("idle");
       stopAutoRefresh();
     });
 
-    nextSocket.on("disconnect", () => {
+    sock.on("disconnect", () => {
       setStatus("idle");
       stopAutoRefresh();
     });
 
-    nextSocket.onAny((eventName, ...args) => {
-      const payload = args.length === 1 ? args[0] : args;
-      handleSocketEvent(eventName, payload);
+    sock.on("outbound-call-histories.created", (payload) => {
+      handleCreatedEvent(payload);
     });
 
-    socketRef.current = nextSocket;
-  }, [disconnectSocket, emitRequest, handleSocketEvent, namespaceUrl, selectedEvent, startAutoRefresh, stopAutoRefresh]);
+    // Pass raw payload — handleListEvent extracts data/meta flexibly
+    sock.on("outbound-call-histories.updated", (payload) => {
+      handleListEvent(payload);
+    });
+
+    sock.on("outbound-call-histories.list", (payload) => {
+      handleListEvent(payload);
+    });
+
+    socketRef.current = sock;
+  }, [buildPayload, disconnectSocket, handleCreatedEvent, handleListEvent, namespaceUrl, startAutoRefresh, stopAutoRefresh]);
 
   useEffect(() => {
-    loadDocs();
+    connectSocket();
     return () => {
+      stopAutoRefresh();
       if (socketRef.current) {
         socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
       }
-      stopAutoRefresh();
-      // پاکسازی تایمرهای هایلایت
       highlightTimersRef.current.forEach((t) => clearTimeout(t));
-      removeTimersRef.current.forEach((t) => clearTimeout(t));
       highlightTimersRef.current.clear();
-      removeTimersRef.current.clear();
     };
-  }, [loadDocs, stopAutoRefresh]);
-
-  const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
-  const statusBadge = useMemo(() => {
-    if (status === "connected") return <Badge color="success">متصل</Badge>;
-    if (status === "connecting") return <Badge color="warning">در حال اتصال...</Badge>;
-    return <Badge color="secondary">قطع</Badge>;
-  }, [status]);
-
-  const rowStyle = useCallback((row) => {
-    const marker = row?.original?.__highlight;
-    if (marker === "added") return { backgroundColor: "rgba(25, 135, 84, 0.16)", transition: "background-color 0.4s ease" };
-    if (marker === "removed") return { backgroundColor: "rgba(220, 53, 69, 0.16)", transition: "background-color 0.4s ease" };
-    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleFilterChange = useCallback((field, value) => {
+    setFilters((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleApplyFilters = useCallback((e) => {
+    e?.preventDefault?.();
+    if (!socketRef.current?.connected) return;
+    // Always reset to page 1 on filter apply
+    setFilters((prev) => ({ ...prev, page: 1 }));
+    const payload = buildPayload({ page: 1 });
+    // subscribe joins a filtered room for future auto-updates;
+    // list forces an immediate fetch in case subscribe doesn't push updated right away
+    socketRef.current.emit("subscribe", payload);
+    socketRef.current.emit("list", payload);
+  }, [buildPayload]);
+
+  const handleRefresh = useCallback(() => {
+    if (!socketRef.current) return;
+    socketRef.current.emit("refresh", buildPayload());
+  }, [buildPayload]);
+
+  const rowStyle = useCallback(() => undefined, []);
 
   const rowClassName = useCallback((row) => {
-    const marker = row?.original?.__highlight;
-    if (marker === "added") return "table-success";
-    if (marker === "removed") return "table-danger";
+    if (row?.original?.__highlight === "added") return "live-row-added";
     return "";
   }, []);
+
+  const newRowsCount = rows.filter((r) => r.__highlight === "added").length;
 
   return (
     <div className="page-content">
       <div className="container-fluid">
-        <Breadcrumbs title="Voip" breadcrumbItem="تماس خروجی آنلاین" />
+        <Breadcrumbs title="VoIP" breadcrumbItem="تماس خروجی آنلاین" />
 
-        <Row>
-          <Col lg={12}>
-            <Card>
-              <CardHeader className="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <div>
-                  <h4 className="card-title mb-1">تماس خروجی آنلاین</h4>
-                  <p className="text-muted mb-0">
-                    اتصال به سوکت برای دریافت لحظه‌ای تماس‌های خروجی و مشاهده آنها در جدول.
-                  </p>
+        {/* Status Bar */}
+        <Card className="mb-3">
+          <CardBody className="py-3">
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+              <div className="d-flex align-items-center gap-3">
+                <div className="position-relative d-flex align-items-center justify-content-center" style={{ width: 18, height: 18 }}>
+                  {status === "connected" ? (
+                    <>
+                      <span
+                        className="rounded-circle bg-success position-absolute"
+                        style={{ width: 18, height: 18, animation: "livePulse 1.4s ease-in-out infinite", opacity: 0.3 }}
+                      />
+                      <span className="rounded-circle bg-success d-block position-relative" style={{ width: 10, height: 10 }} />
+                    </>
+                  ) : status === "connecting" ? (
+                    <Spinner size="sm" color="warning" style={{ width: 14, height: 14 }} />
+                  ) : (
+                    <span className="rounded-circle bg-secondary d-block" style={{ width: 10, height: 10 }} />
+                  )}
                 </div>
-                <div className="d-flex align-items-center gap-2">
-                  {statusBadge}
-                  <Button
-                    color="primary"
-                    onClick={connectSocket}
-                    disabled={status === "connecting" || docsLoading}
-                  >
-                    {status === "connecting" ? (
+
+                <div>
+                  <h5 className="mb-0 fw-semibold">تماس خروجی آنلاین</h5>
+                  <div className="text-muted small mt-1">
+                    {status === "connected" && (
                       <>
-                        <Spinner size="sm" className="me-2" />
-                        اتصال...
+                        <span className="text-success fw-medium">آنلاین</span>
+                        {lastUpdate && (
+                          <span className="ms-2 text-muted">
+                            · آخرین آپدیت: {moment(lastUpdate).format("HH:mm:ss")}
+                          </span>
+                        )}
+                        {newRowsCount > 0 && (
+                          <span className="ms-2">
+                            · <span className="text-success fw-medium">{newRowsCount} تماس جدید</span>
+                          </span>
+                        )}
                       </>
-                    ) : (
-                      "اتصال به سوکت"
                     )}
+                    {status === "connecting" && <span className="text-warning">در حال اتصال...</span>}
+                    {status === "idle" && (
+                      <span className="text-danger">
+                        اتصال قطع شد{socketError ? ` — ${socketError}` : ""}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="d-flex align-items-center gap-2">
+                {meta?.total != null && (
+                  <span className="text-muted small">
+                    {rows.length} از {meta.total.toLocaleString("fa-IR")} ردیف
+                  </span>
+                )}
+                {status === "connected" && (
+                  <Button color="light" size="sm" onClick={handleRefresh}>
+                    <i className="bx bx-refresh me-1" />
+                    رفرش
                   </Button>
-                  <Button color="danger" outline onClick={disconnectSocket} disabled={!socketRef.current}>
+                )}
+                {status === "connected" ? (
+                  <Button color="danger" size="sm" outline onClick={disconnectSocket}>
+                    <i className="bx bx-wifi-off me-1" />
                     قطع اتصال
                   </Button>
-                  <Button color="info" outline onClick={() => { emitRequest(); startAutoRefresh(); }} disabled={!socketRef.current}>
-                    درخواست مجدد
+                ) : (
+                  <Button
+                    color="success"
+                    size="sm"
+                    onClick={connectSocket}
+                    disabled={status === "connecting"}
+                  >
+                    {status === "connecting" ? (
+                      <><Spinner size="sm" className="me-1" />اتصال...</>
+                    ) : (
+                      <><i className="bx bx-wifi me-1" />اتصال مجدد</>
+                    )}
                   </Button>
-                  <Button color="info" outline onClick={loadDocs} disabled={docsLoading}>
-                    {docsLoading ? "در حال بروزرسانی..." : "بروزرسانی مستندات"}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardBody>
-                {/* <div className="text-muted small mb-3">
-                  ردیف‌های جدید با سبز و ردیف‌های حذف‌شده با قرمز (۳ ثانیه) نمایش داده می‌شوند. لیست هر {AUTO_REFRESH_MS / 1000} ثانیه روی سوکت رفرش می‌شود.
-                </div> */}
-                <Row className="g-3 mb-4">
-                  <Col lg={4} md={6}>
-                    {/* <Label className="form-label text-muted mb-1">namespace</Label>
-                    <div className="fw-semibold">{socketDocs?.namespace || "voip/outbound-call-histories"}</div> */}
-                    {/* <div className="text-muted small">
-                      هدر احراز هویت: {socketDocs?.auth_header || "Authorization: Bearer <jwt>"}
-                    </div>
-                    <div className="text-muted small">
-                      مجوز مورد نیاز: {socketDocs?.required_permission || "voip.outbound.index"}
-                    </div> */}
-                  </Col>
-                  <Col lg={4} md={6}>
-                    <Label className="form-label text-muted mb-1">رویداد</Label>
-                    <Input
-                      type="select"
-                      value={selectedEvent}
-                      onChange={(e) => setSelectedEvent(e.target.value)}
-                    >
-                      {(socketDocs?.events || []).map((ev) => (
-                        <option key={ev.name} value={ev.name}>
-                          {ev.name}
-                        </option>
-                      ))}
-                      {!socketDocs?.events?.length && <option value="">رویدادی ثبت نشده</option>}
-                    </Input>
-                    <div className="text-muted small mt-1">
-                      با تغییر رویداد، پس از اتصال درخواست جدید ارسال می‌شود.
-                    </div>
-                  </Col>
-                  <Col lg={4} md={12}>
-                    <Label className="form-label text-muted mb-1">وضعیت</Label>
-                    <div className="d-flex align-items-center gap-2 flex-wrap">
-                      {statusBadge}
-                      {socketError && <span className="text-danger small">{socketError}</span>}
-                    </div>
-                  </Col>
-                </Row>
+                )}
+              </div>
+            </div>
+          </CardBody>
+        </Card>
 
-                <Form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    emitRequest();
-                    startAutoRefresh();
-                  }}
-                  className="p-3 bg-light rounded-3 mb-4"
-                >
-                  <Row className="g-3 align-items-end">
-                    <Col md="2" sm="6">
-                      <Label className="form-label text-muted mb-1">صفحه</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={filters.page}
-                        onChange={(e) => handleFilterChange("page", e.target.value)}
-                      />
-                    </Col>
-                    <Col md="2" sm="6">
-                      <Label className="form-label text-muted mb-1">تعداد در صفحه</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={filters.per_page}
-                        onChange={(e) => handleFilterChange("per_page", e.target.value)}
-                      />
-                    </Col>
-                    <Col md="3" sm="6">
-                      <Label className="form-label text-muted mb-1">فیلد جستجو</Label>
-                      <Input
-                        type="select"
-                        value={filters.type}
-                        onChange={(e) => handleFilterChange("type", e.target.value)}
-                      >
-                        {searchTypes.map((opt) => (
-                          <option key={opt.value || "empty"} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </Input>
-                    </Col>
-                    <Col md="3" sm="6">
-                      <Label className="form-label text-muted mb-1">عبارت</Label>
-                      <Input
-                        type="text"
-                        value={filters.q}
-                        onChange={(e) => handleFilterChange("q", e.target.value)}
-                        placeholder="مثلاً نام مشاور یا دانش‌آموز..."
-                      />
-                    </Col>
-                    <Col md="2" sm="6">
-                      <Label className="form-label text-muted mb-1">وضعیت تماس</Label>
-                      <Input
-                        type="select"
-                        value={filters.disposition}
-                        onChange={(e) => handleFilterChange("disposition", e.target.value)}
-                      >
-                        {dispositions.map((opt) => (
-                          <option key={opt.value || "any"} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </Input>
-                    </Col>
-                    <Col md="2" sm="6">
-                      <Label className="form-label text-muted mb-1">سورت</Label>
-                      <Input
-                        type="select"
-                        value={filters.sort_by}
-                        onChange={(e) => handleFilterChange("sort_by", e.target.value)}
-                      >
-                        <option value="starttime_unix">زمان شروع</option>
-                        <option value="endtime_unix">زمان پایان</option>
-                        <option value="duration">مدت تماس</option>
-                        <option value="id">ID</option>
-                      </Input>
-                    </Col>
-                    <Col md="2" sm="6">
-                      <Label className="form-label text-muted mb-1">ترتیب</Label>
-                      <Input
-                        type="select"
-                        value={filters.sort_order}
-                        onChange={(e) => handleFilterChange("sort_order", e.target.value)}
-                      >
-                        <option value="DESC">نزولی</option>
-                        <option value="ASC">صعودی</option>
-                      </Input>
-                    </Col>
-                    <Col md="2" sm="6">
-                      <Button color="success" type="submit" className="w-100">
-                        ارسال به سوکت
-                      </Button>
-                    </Col>
-                  </Row>
-                  <div className="text-muted small mt-2">
-                    با تغییر فیلترها و زدن دکمه، درخواست جدید روی سوکت ارسال می‌شود.
-                  </div>
-                </Form>
-
-                <div className="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
-                  <h5 className="mb-0">جدول لحظه‌ای</h5>
-                  <div className="text-muted small">
-                    آخرین آپدیت:{" "}
-                    {eventLog?.[0]?.at
-                      ? moment(eventLog[0].at).format("jYYYY/jMM/jDD HH:mm:ss")
-                      : "داده‌ای دریافت نشده"}
-                  </div>
-                </div>
-
-                <TableContainer
-                  columns={columns}
-                  data={rows || []}
-                  isGlobalFilter={false}
-                  isPagination={false}
-                  isLoading={status === "connecting"}
-                  rowStyle={rowStyle}
-                  rowClassName={rowClassName}
-                  tableClass="table-bordered table-nowrap dt-responsive nowrap w-100 dataTable no-footer dtr-inline"
-                />
-
-                <div className="mt-4">
-                  <h6 className="mb-2">لاگ آخرین پیام‌ها (حداکثر ۳۰ آیتم)</h6>
-                  <div className="bg-light rounded-3 p-3" style={{ maxHeight: 260, overflowY: "auto" }}>
-                    {eventLog.length === 0 && <div className="text-muted">پیامی دریافت نشده است.</div>}
-                    {eventLog.map((item, idx) => (
-                      <div key={`log-${idx}`} className="mb-3 pb-3 border-bottom">
-                        <div className="text-muted small mb-1">
-                          {moment(item.at).format("jYYYY/jMM/jDD HH:mm:ss")} {item.event ? `| ${item.event}` : ""}
-                        </div>
-                        <pre className="mb-0" style={{ whiteSpace: "pre-wrap", direction: "ltr" }}>
-                          {JSON.stringify(item.payload, null, 2)}
-                        </pre>
-                      </div>
+        {/* Filters */}
+        <Card className="mb-3">
+          <CardBody className="py-2">
+            <form onSubmit={handleApplyFilters}>
+              <Row className="g-2 align-items-end">
+                <Col md={2} sm={6}>
+                  <Label className="form-label text-muted small mb-1">وضعیت تماس</Label>
+                  <Input
+                    type="select"
+                    bsSize="sm"
+                    value={filters.disposition}
+                    onChange={(e) => handleFilterChange("disposition", e.target.value)}
+                  >
+                    {dispositions.map((opt) => (
+                      <option key={opt.value || "any"} value={opt.value}>{opt.label}</option>
                     ))}
-                  </div>
-                </div>
-              </CardBody>
-            </Card>
-          </Col>
-        </Row>
+                  </Input>
+                </Col>
+                <Col md={2} sm={6}>
+                  <Label className="form-label text-muted small mb-1">جستجو در</Label>
+                  <Input
+                    type="select"
+                    bsSize="sm"
+                    value={filters.type}
+                    onChange={(e) => handleFilterChange("type", e.target.value)}
+                  >
+                    {searchTypes.map((opt) => (
+                      <option key={opt.value || "all"} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </Input>
+                </Col>
+                <Col md={2} sm={6}>
+                  <Label className="form-label text-muted small mb-1">عبارت جستجو</Label>
+                  <Input
+                    type="text"
+                    bsSize="sm"
+                    value={filters.q}
+                    onChange={(e) => handleFilterChange("q", e.target.value)}
+                    placeholder="نام، شماره..."
+                  />
+                </Col>
+                <Col md={2} sm={6}>
+                  <Label className="form-label text-muted small mb-1">از تاریخ</Label>
+                  <Input
+                    type="date"
+                    bsSize="sm"
+                    value={filters.start_date}
+                    onChange={(e) => handleFilterChange("start_date", e.target.value)}
+                  />
+                </Col>
+                <Col md={2} sm={6}>
+                  <Label className="form-label text-muted small mb-1">تا تاریخ</Label>
+                  <Input
+                    type="date"
+                    bsSize="sm"
+                    value={filters.end_date}
+                    onChange={(e) => handleFilterChange("end_date", e.target.value)}
+                  />
+                </Col>
+                <Col md={1} sm={4}>
+                  <Label className="form-label text-muted small mb-1">مرتب‌سازی</Label>
+                  <Input
+                    type="select"
+                    bsSize="sm"
+                    value={filters.sort_by}
+                    onChange={(e) => handleFilterChange("sort_by", e.target.value)}
+                  >
+                    <option value="id">ID</option>
+                    <option value="starttime_unix">زمان شروع</option>
+                    <option value="endtime_unix">زمان پایان</option>
+                    <option value="duration">مدت تماس</option>
+                    <option value="disposition">وضعیت</option>
+                    <option value="to_phone">شماره مقصد</option>
+                    <option value="src">شماره مبدا</option>
+                    <option value="support_form_title">عنوان فرم</option>
+                  </Input>
+                </Col>
+                <Col md={1} sm={4}>
+                  <Label className="form-label text-muted small mb-1">ترتیب</Label>
+                  <Input
+                    type="select"
+                    bsSize="sm"
+                    value={filters.sort_order}
+                    onChange={(e) => handleFilterChange("sort_order", e.target.value)}
+                  >
+                    <option value="DESC">نزولی</option>
+                    <option value="ASC">صعودی</option>
+                  </Input>
+                </Col>
+                <Col md={1} sm={4}>
+                  <Label className="form-label text-muted small mb-1">تعداد</Label>
+                  <Input
+                    type="select"
+                    bsSize="sm"
+                    value={filters.per_page}
+                    onChange={(e) => handleFilterChange("per_page", e.target.value)}
+                  >
+                    <option value={15}>۱۵</option>
+                    <option value={30}>۳۰</option>
+                    <option value={50}>۵۰</option>
+                    <option value={100}>۱۰۰</option>
+                  </Input>
+                </Col>
+                <Col md={1} sm={4}>
+                  <Button color="primary" size="sm" type="submit" className="w-100" disabled={status !== "connected"}>
+                    اعمال
+                  </Button>
+                </Col>
+              </Row>
+            </form>
+          </CardBody>
+        </Card>
+
+        {/* Table */}
+        <Card>
+          <CardBody>
+            {status === "idle" && rows.length === 0 ? (
+              <div className="text-center py-5">
+                <i className="bx bx-wifi-off display-4 text-muted mb-3 d-block" />
+                <p className="text-muted mb-3">اتصال برقرار نیست.</p>
+                <Button color="success" onClick={connectSocket}>
+                  <i className="bx bx-wifi me-1" />
+                  اتصال به سوکت
+                </Button>
+              </div>
+            ) : (
+              <TableContainer
+                columns={columns}
+                data={rows}
+                isGlobalFilter={false}
+                isPagination={false}
+                isLoading={status === "connecting" && rows.length === 0}
+                rowStyle={rowStyle}
+                rowClassName={rowClassName}
+                tableClass="table-bordered table-nowrap dt-responsive nowrap w-100 dataTable no-footer dtr-inline"
+              />
+            )}
+
+            {status === "connected" && rows.length === 0 && (
+              <div className="text-center py-4 text-muted">
+                <Spinner size="sm" className="me-2" />
+                در انتظار داده از سوکت...
+              </div>
+            )}
+          </CardBody>
+        </Card>
       </div>
+
+      <style>{`
+        @keyframes livePulse {
+          0%, 100% { transform: scale(1); opacity: 0.3; }
+          50% { transform: scale(2.4); opacity: 0; }
+        }
+
+        @property --live-row-color {
+          syntax: '<color>';
+          inherits: true;
+          initial-value: transparent;
+        }
+        @keyframes liveRowFade {
+          0%   { --live-row-color: rgba(25, 135, 84, 0.30); }
+          100% { --live-row-color: transparent; }
+        }
+        .live-row-added {
+          animation: liveRowFade ${HIGHLIGHT_DURATION_MS}ms ease-out forwards;
+          --bs-table-accent-bg: var(--live-row-color);
+        }
+      `}</style>
     </div>
   );
 };
