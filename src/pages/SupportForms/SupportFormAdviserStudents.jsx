@@ -29,6 +29,8 @@ import {
   getSupportFormAdviserStudentCandidates,
   attachSupportFormAdviserStudents,
   attachSupportFormAdviserStudentsByTag,
+  autoImportAdviserStudents,
+  changeStudentSupportFormStatus,
   detachSupportFormAdviserStudent,
   detachSupportFormAdviserStudents,
 } from "../../services/supportFormService.jsx";
@@ -251,6 +253,39 @@ const SupportFormAdviserStudents = () => {
     }
   };
 
+  const handleChangeStatus = useCallback(
+    async (row, status) => {
+      try {
+        await changeStudentSupportFormStatus({ row_id: row.id, status });
+        await fetchData(meta.page, filters, sort);
+      } catch (e) {
+        console.error("خطا در تغییر وضعیت", e);
+        setAlert({ type: "danger", message: "خطا در تغییر وضعیت دانش‌آموز." });
+      }
+    },
+    [fetchData, filters, meta.page, sort]
+  );
+
+  const handleAutoImport = useCallback(async () => {
+    setAttachLoading(true);
+    try {
+      const res = await autoImportAdviserStudents(id, adviserId);
+      const d = res?.data || res || {};
+      const added = d.added ?? "-";
+      const skipped = d.skipped ?? "-";
+      await fetchData(1, filters, sort);
+      setAlert({
+        type: "success",
+        message: `وارد شد: ${added} | رد شد: ${skipped}`,
+      });
+    } catch (e) {
+      console.error("خطا در وارد کردن دانش‌آموزان", e);
+      setAlert({ type: "danger", message: "خطا در وارد کردن دانش‌آموزان." });
+    } finally {
+      setAttachLoading(false);
+    }
+  }, [adviserId, fetchData, filters, id, sort]);
+
   const handleDetachAllStudents = async () => {
     setAttachLoading(true);
     try {
@@ -426,21 +461,36 @@ const SupportFormAdviserStudents = () => {
         header: "وضعیت",
         accessorKey: "status",
         enableSorting: true,
-        cell: ({ row }) =>
-          row.original?.status === 1 ? "فعال" : row.original?.status === 0 ? "غیرفعال" : "-",
+        cell: ({ row }) => {
+          const s = row.original?.status;
+          if (s === 2) return <span className="badge bg-warning">قطع‌شده</span>;
+          return <span className="badge bg-success">نرمال</span>;
+        },
       },
       {
         id: "actions",
         header: "عملیات",
         enableSorting: false,
-        cell: ({ row }) => (
-          <Button color="secondary" size="sm" onClick={() => openDeleteModal(row.original)}>
-            حذف
-          </Button>
-        ),
+        cell: ({ row }) => {
+          const isInt = row.original?.status === 2;
+          return (
+            <div className="d-flex gap-1">
+              <Button
+                size="sm"
+                color={isInt ? "success" : "warning"}
+                onClick={() => handleChangeStatus(row.original, isInt ? 0 : 2)}
+              >
+                {isInt ? "بازگشت به نرمال" : "قطع‌شده"}
+              </Button>
+              <Button color="secondary" size="sm" onClick={() => openDeleteModal(row.original)}>
+                حذف
+              </Button>
+            </div>
+          );
+        },
       },
     ],
-    []
+    [handleChangeStatus]
   );
 
   const candidateColumns = useMemo(
@@ -538,10 +588,18 @@ const SupportFormAdviserStudents = () => {
                       : `مشاور ${adviserId}`}
                   </p>
                 </div>
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex align-items-center gap-2 flex-wrap">
                   {loading && <Spinner size="sm" color="primary" />}
+                  <Button
+                    color="info"
+                    onClick={handleAutoImport}
+                    disabled={attachLoading}
+                  >
+                    <i className="mdi mdi-import me-1" />
+                    وارد کردن دانش‌آموزان من
+                  </Button>
                   <Button color="danger" onClick={() => setBulkDeleteModal(true)}>
-                    حذف همه دانش‌آموزان
+                    حذف همه
                   </Button>
                   <Button color="light" onClick={() => navigate(`/support-forms/${id}/advisers`)}>
                     بازگشت

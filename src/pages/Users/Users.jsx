@@ -32,9 +32,20 @@ import {
   getUsers,
   deleteUser,
 } from "../../services/userService.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+import SwitchUserButton from "../../components/Common/SwitchUserButton.jsx";
 
 const UserList = () => {
   const navigate = useNavigate();
+  const { hasPermission, user } = useAuth();
+
+  const isAdmin = useMemo(() => {
+    const roles = user?.roles || [];
+    return roles.some((r) => {
+      const name = (r?.name || r?.label || "").toLowerCase();
+      return ["admin", "super_admin", "super-admin", "super admin"].includes(name);
+    });
+  }, [user]);
   document.title = "کاربران | داشبورد آیسوق";
 
   const [data, setData] = useState([]);
@@ -249,13 +260,19 @@ const UserList = () => {
     [navigate]
   );
 
-const handleManagePermissions = useCallback(
+  const handleManagePermissions = useCallback(
     (id) => {
       navigate(`/users/${id}/permissions`);
     },
     [navigate]
   );
 
+  const handleManageSessions = useCallback(
+    (id) => {
+      navigate(`/admin/users/${id}/sessions`);
+    },
+    [navigate]
+  );
 
   const handleDelete = useCallback(
     async (id) => {
@@ -347,14 +364,30 @@ const handleManagePermissions = useCallback(
           const id = row.original.id;
 
           return (
-            <div className="d-flex gap-2">
-              <Button
-                color="info"
-                size="sm"
-                onClick={() => handleManagePermissions(id)}
-              >
-                نقش‌ها / دسترسی‌ها
-              </Button>
+            <div className="d-flex gap-2 flex-wrap">
+              <SwitchUserButton userId={id} userName={row.original.name} />
+
+              {hasPermission("auth.sessions.index") && (
+                <Button
+                  color="secondary"
+                  size="sm"
+                  onClick={() => handleManageSessions(id)}
+                  title="مشاهده نشست‌های فعال"
+                >
+                  <i className="bx bx-devices me-1" />
+                  نشست‌ها
+                </Button>
+              )}
+
+              {isAdmin && (
+                <Button
+                  color="info"
+                  size="sm"
+                  onClick={() => handleManagePermissions(id)}
+                >
+                  نقش‌ها / دسترسی‌ها
+                </Button>
+              )}
 
               <Button
                 color="warning"

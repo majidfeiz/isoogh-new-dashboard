@@ -21,11 +21,17 @@ export const API_VERSION = {
 
 // همه‌ی endpoint ها اینجا متمرکز می‌شن
 export const API_ROUTES = {
+  version: "/version",
   auth: {
     login: `${API_VERSION.v1}/auth/login`,
+    verifyOtp: `${API_VERSION.v1}/auth/verify-otp`,
     me: `${API_VERSION.v1}/auth/me`,
     refresh: `${API_VERSION.v1}/auth/refresh`,
     logout: `${API_VERSION.v1}/auth/logout`,
+    sessions: `${API_VERSION.v1}/auth/sessions`,
+    session: (id) => `${API_VERSION.v1}/auth/sessions/${id}`,
+    adminUserSessions: (userId) => `${API_VERSION.v1}/auth/admin/users/${userId}/sessions`,
+    adminSession: (id) => `${API_VERSION.v1}/auth/admin/sessions/${id}`,
   },
   // ------------------------
   // 🔐 Permissions
@@ -135,14 +141,29 @@ export const API_ROUTES = {
     detail: (id) => `/support-forms/${id}`,
     update: (id) => `/support-forms/${id}`,
     delete: (id) => `/support-forms/${id}`,
+    copy: (id) => `/support-forms/copy/${id}`,
+    allForms: "/support-forms/get-all-support-forms",
+    questionsOrForms: "/support-forms/get-support-form-questions",
+    changeStudentStatus: "/support-forms/change-student-support-form-status",
+    getStudentStatus: "/support-forms/get-student-support-form-status",
+    adviserInterruptedCalls: "/support-forms/get-students-support-form-interrupted-calls-list",
+    questions: (id) => `/support-forms/${id}/questions`,
+    question: (id, qId) => `/support-forms/${id}/questions/${qId}`,
     advisers: (id) => `/support-forms/${id}/advisers`,
     adviserCandidates: (id) => `/support-forms/${id}/adviser-candidates`,
+    setAdvisers: (id) => `/support-forms/${id}/set-advisers`,
+    delAdvisers: (id) => `/support-forms/${id}/del-advisers`,
+    toggleAdviserActive: (id, adviserId) => `/support-forms/${id}/${adviserId}/active`,
     detachAdviser: (id, adviserId) => `/support-forms/${id}/advisers/${adviserId}`,
+    formStudents: (id) => `/support-forms/${id}/form-students`,
+    interruptedCalls: (id) => `/support-forms/${id}/interrupted-calls`,
     adviserStudentCandidates: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/student-candidates`,
     adviserStudents: (id, adviserId) => `/support-forms/${id}/advisers/${adviserId}/students`,
     adviserStudentsByTag: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/students/by-tag`,
+    setAdviserStudents: (id, adviserId) =>
+      `/support-forms/${id}/advisers/${adviserId}/set-adviser-students`,
     detachAdviserStudent: (id, adviserId, studentId) =>
       `/support-forms/${id}/advisers/${adviserId}/students/${studentId}`,
     detachAdviserStudents: (id, adviserId) =>
@@ -206,6 +227,11 @@ export const API_ROUTES = {
     sendSuperAdviser: (schoolId) => `/notifications/send/school/${schoolId}/super-adviser`,
     sendBroadcast: "/notifications/send/broadcast",
   },
+  profile: {
+    me: "/profile",
+    update: "/profile",
+    changePassword: "/profile/password",
+  },
   dashboard: {
     default: "/dashboard/default",
     widgets: "/dashboard/widgets",
@@ -216,11 +242,55 @@ export const API_ROUTES = {
     widgetRoles: (widgetId) => `/dashboard/widgets/${widgetId}/roles`,
     widgetRole: (widgetId, roleId) => `/dashboard/widgets/${widgetId}/roles/${roleId}`,
   },
-  // مثال برای بعداً:
-  // users: {
-  //   list: `${API_VERSION.v1}/users`,
-  //   detail: (id) => `${API_VERSION.v1}/users/${id}`,
-  // },
+  // ------------------------
+  // 🔑 External API Clients
+  // ------------------------
+  externalApiClients: {
+    list: "/external-api-clients",
+    create: "/external-api-clients",
+    detail: (id) => `/external-api-clients/${id}`,
+    update: (id) => `/external-api-clients/${id}`,
+    delete: (id) => `/external-api-clients/${id}`,
+    regenerateKey: (id) => `/external-api-clients/${id}/regenerate-key`,
+    logs: "/external-api-clients/logs",
+    addIp: (id) => `/external-api-clients/${id}/ips`,
+    deleteIp: (id, ipId) => `/external-api-clients/${id}/ips/${ipId}`,
+  },
+  // ------------------------
+  // 🔔 VoIP Webhooks
+  // ------------------------
+  voipWebhooks: {
+    list: "/voip-webhooks",
+    create: "/voip-webhooks",
+    detail: (id) => `/voip-webhooks/${id}`,
+    update: (id) => `/voip-webhooks/${id}`,
+    delete: (id) => `/voip-webhooks/${id}`,
+    test: (id) => `/voip-webhooks/${id}/test`,
+    dispatch: (callHistoryId) => `/voip-webhooks/dispatch/${callHistoryId}`,
+    logs: "/voip-webhooks/logs",
+  },
+  // ------------------------
+  // 📊 Reports
+  // ------------------------
+  reports: {
+    overview: "/reports/overview",
+    callsTrend: "/reports/calls-trend",
+    callsByAdviser: "/reports/calls-by-adviser",
+    callsByAdviserExport: "/reports/calls-by-adviser/export",
+    callsByHour: "/reports/calls-by-hour",
+    studentsCoverage: "/reports/students-coverage",
+    uncontactedStudents: "/reports/uncontacted-students",
+    uncontactedStudentsExport: "/reports/uncontacted-students/export",
+    formsStatus: "/reports/forms-status",
+    monthlyComparison: "/reports/monthly-comparison",
+  },
+  // ------------------------
+  // 🔀 User Switch
+  // ------------------------
+  userSwitch: {
+    switch: "/user-switch",
+    callback: "/user-switch/callback",
+  },
 };
 
 // کمک برای ساختن URL کامل

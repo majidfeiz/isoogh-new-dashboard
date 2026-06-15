@@ -5,6 +5,19 @@ import { API_BASE_URL } from "./apiRoutes.jsx";
 import { getAccessToken, clearAuthData } from "./authStorage.jsx";
 import { toast } from "react-toastify";
 
+const PERSIAN_STATUS = {
+  400: "درخواست نامعتبر است",
+  401: "احراز هویت ناموفق بود",
+  403: "شما دسترسی کافی ندارید",
+  404: "منبع مورد نظر یافت نشد",
+  409: "تعارض در داده‌ها",
+  422: "اطلاعات ارسالی معتبر نیست",
+  429: "درخواست بیش از حد — لطفا کمی صبر کنید",
+  500: "خطای داخلی سرور",
+  502: "سرور موقتاً در دسترس نیست",
+  503: "سرویس موقتاً در دسترس نیست",
+};
+
 const http = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -12,7 +25,6 @@ const http = axios.create({
   },
 });
 
-// قبل از هر درخواست، توکن را در هدر بگذار
 http.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
@@ -24,16 +36,16 @@ http.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// مدیریت پاسخ‌ها (مثلاً اگر 401 شد، لاگ‌اوت کنیم)
 http.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error?.response?.status === 401) {
+    const status = error?.response?.status;
+
+    if (status === 401) {
       clearAuthData();
-      // اگر خواستی اینجا می‌تونی redirect به /login هم اضافه کنی
     }
 
-    // اگر پاسخ blob بود (مثلاً در export) و json دارد، تبدیلش کنیم تا message خوانده شود
+    // اگر پاسخ blob بود و json دارد، تبدیلش کنیم تا message خوانده شود
     const data = error?.response?.data;
     if (data instanceof Blob) {
       try {
@@ -41,47 +53,45 @@ http.interceptors.response.use(
         const parsed = JSON.parse(text);
         error.response.data = parsed;
       } catch {
-        // blob قابل خواندن نبود، همان را نگه دار
+        // blob قابل خواندن نبود
       }
     }
 
     const extractMessage = () => {
-      const data = error?.response?.data;
-      if (!data) return null;
-      if (typeof data === "string") return data;
+      const d = error?.response?.data;
+      if (!d) return null;
+      if (typeof d === "string") return d;
 
-      // اگر message آرایه بود، join کن
-      if (Array.isArray(data?.message)) {
-        return data.message.filter(Boolean).join("، ");
+      if (Array.isArray(d?.message)) {
+        return d.message.filter(Boolean).join("، ");
       }
 
       return (
-        data?.message ||
-        data?.error ||
-        data?.errors?.[0]?.message ||
-        data?.errors?.[0] ||
+        d?.message ||
+        d?.error ||
+        d?.errors?.[0]?.message ||
+        d?.errors?.[0] ||
         null
       );
     };
 
     const msg =
       extractMessage() ||
-      error?.response?.statusText ||
-      error?.message ||
+      PERSIAN_STATUS[status] ||
+      (error?.code === "ERR_NETWORK" ? "خطا در اتصال به سرور" : null) ||
       "خطای نامشخص از سرور";
 
-    // toast فقط برای جلوگیری از تکرار در بعضی درخواست‌های silent
-    toast.error(msg, { autoClose: 4000 });
+    // config.silent = true باعث می‌شود toast نمایش داده نشود (مثلاً در فرم لاگین)
+    if (!error.config?.silent) {
+      toast.error(msg, { autoClose: 4000 });
+    }
 
-    // لاگ توسعه‌دهنده
     // eslint-disable-next-line no-console
     console.error("[API ERROR]", msg, error);
 
     return Promise.reject(error);
   }
 );
-
-// توابع کمکی get/post/put/patch/delete
 
 export const apiGet = (url, config = {}) => http.get(url, config);
 export const apiPost = (url, data = {}, config = {}) =>

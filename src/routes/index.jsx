@@ -222,6 +222,7 @@ import ParentTagUsers from "../pages/ParentTags/ParentTagUsers.jsx";
 // support forms
 import SupportFormList from "../pages/SupportForms/SupportFormList.jsx";
 import SupportFormForm from "../pages/SupportForms/SupportFormForm.jsx";
+import SupportFormDetail from "../pages/SupportForms/SupportFormDetail.jsx";
 import SupportFormAdvisers from "../pages/SupportForms/SupportFormAdvisers.jsx";
 import SupportFormAdviserStudents from "../pages/SupportForms/SupportFormAdviserStudents.jsx";
 
@@ -237,8 +238,25 @@ import FileForm from "../pages/Files/FileForm.jsx";
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
 
+// external api clients
+import ExternalApiClientList from "../pages/ExternalApi/ExternalApiClientList.jsx";
+import ExternalApiClientDetail from "../pages/ExternalApi/ExternalApiClientDetail.jsx";
+import ExternalApiLogs from "../pages/ExternalApi/ExternalApiLogs.jsx";
+import ExternalApiDocs from "../pages/ExternalApi/ExternalApiDocs.jsx";
+
+// voip webhooks
+import VoipWebhookList from "../pages/VoipWebhooks/VoipWebhookList.jsx";
+import VoipWebhookForm from "../pages/VoipWebhooks/VoipWebhookForm.jsx";
+import VoipWebhookLogs from "../pages/VoipWebhooks/VoipWebhookLogs.jsx";
+
+// reports
+import ReportsDashboard from "../pages/Reports/ReportsDashboard.jsx";
+
 // admin - dashboard widgets
 import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
+
+// admin - sessions
+import AdminUserSessions from "../pages/Sessions/AdminUserSessions.jsx";
 
 // super adviser portal
 import SuperAdviserSchools from "../pages/SuperAdviserPortal/Schools.jsx";
@@ -257,6 +275,7 @@ import AdviserPortalFormDetail from "../pages/AdviserPortal/FormDetail.jsx";
 import AdviserPortalCallLogs from "../pages/AdviserPortal/CallLogs.jsx";
 import AdviserPortalStats from "../pages/AdviserPortal/Stats.jsx";
 import AdviserPortalStudentProfile from "../pages/AdviserPortal/StudentProfile.jsx";
+import AdviserPortalInterruptedCalls from "../pages/AdviserPortal/InterruptedCalls.jsx";
 
 
 const authProtectedRoutes = [
@@ -352,6 +371,7 @@ const authProtectedRoutes = [
   { path: "/support-forms", component: <SupportFormList /> },
   { path: "/support-forms/create", component: <SupportFormForm /> },
   { path: "/support-forms/:id/edit", component: <SupportFormForm /> },
+  { path: "/support-forms/:id", component: <SupportFormDetail /> },
   { path: "/support-forms/:id/advisers", component: <SupportFormAdvisers /> },
   {
     path: "/support-forms/:id/advisers/:adviserId/students",
@@ -371,8 +391,26 @@ const authProtectedRoutes = [
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
   { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
 
+  // external api clients
+  { path: "/external-api-clients", component: <ExternalApiClientList /> },
+  { path: "/external-api-clients/logs", component: <ExternalApiLogs /> },
+  { path: "/external-api-clients/docs", component: <ExternalApiDocs /> },
+  { path: "/external-api-clients/:id", component: <ExternalApiClientDetail /> },
+
+  // voip webhooks
+  { path: "/voip-webhooks", component: <VoipWebhookList /> },
+  { path: "/voip-webhooks/create", component: <VoipWebhookForm /> },
+  { path: "/voip-webhooks/logs", component: <VoipWebhookLogs /> },
+  { path: "/voip-webhooks/:id/edit", component: <VoipWebhookForm /> },
+
+  // reports
+  { path: "/reports", component: <ReportsDashboard /> },
+
   // admin - dashboard widgets
   { path: "/admin/dashboard-widgets", component: <DashboardWidgetsAdmin /> },
+
+  // admin - user sessions
+  { path: "/admin/users/:userId/sessions", component: <AdminUserSessions /> },
 
   // super adviser portal
   { path: "/super-adviser-portal/schools", component: <SuperAdviserSchools /> },
@@ -391,6 +429,7 @@ const authProtectedRoutes = [
   { path: "/adviser-calls/forms/:formId/students/:studentId", component: <AdviserPortalStudentProfile /> },
   { path: "/adviser-calls/logs", component: <AdviserPortalCallLogs /> },
   { path: "/adviser-calls/stats", component: <AdviserPortalStats /> },
+  { path: "/adviser-calls/interrupted-calls", component: <AdviserPortalInterruptedCalls /> },
 
   //   //Email
   { path: "/email-inbox", component: <EmailInbox /> },

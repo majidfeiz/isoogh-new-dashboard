@@ -6,6 +6,7 @@ import withRouter from "../Common/withRouter";
 //i18n
 import { withTranslation } from "react-i18next";
 import SidebarContent from "./SidebarContent";
+import AppVersionBadge from "../Common/AppVersionBadge";
 
 import { Link } from "react-router-dom";
 import Can from "../../components/Access/Can";
@@ -40,6 +41,10 @@ const Sidebar = (props) => {
         </div>
         <div data-simplebar className="h-100">
           {props.type !== "condensed" ? <SidebarContent /> : <SidebarContent />}
+        </div>
+
+        <div style={{ position: "absolute", bottom: "12px", left: 0, right: 0, zIndex: 1 }}>
+          <AppVersionBadge />
         </div>
 
         <div className="sidebar-background"></div>

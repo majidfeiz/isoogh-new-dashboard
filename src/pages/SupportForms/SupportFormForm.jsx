@@ -432,7 +432,6 @@ const SupportFormForm = () => {
 
       if (step === 1) {
         if (!form.title?.trim()) nextErrors.title = "عنوان الزامی است.";
-        if (!form.phone_number?.trim()) nextErrors.phone_number = "شماره تماس الزامی است.";
         if (!form.grade_id) nextErrors.grade_id = "پایه الزامی است.";
         const nextHeadingErrors = headings.map((item) => ({
           headings_title: !item.headings_title?.trim() ? "عنوان الزامی است." : null,
@@ -459,9 +458,6 @@ const SupportFormForm = () => {
           };
         });
 
-        if (!headings.length) nextErrors.headings = "حداقل یک تیتر وارد کنید.";
-        if (!problems.length) nextErrors.problems = "حداقل یک مشکل وارد کنید.";
-
         setListErrors((prev) => ({
           ...prev,
           headings: nextHeadingErrors,
@@ -476,15 +472,8 @@ const SupportFormForm = () => {
       }
 
       if (step === 2) {
-        if (toUnixSeconds(form.start_at) === null) nextErrors.start_at = "شروع الزامی است.";
-        if (toUnixSeconds(form.end_at) === null) nextErrors.end_at = "پایان الزامی است.";
-        if (toNumberOrNull(form.stop_time) === null) nextErrors.stop_time = "زمان توقف الزامی است.";
         if (toNumberOrNull(form.call_duration) === null)
           nextErrors.call_duration = "مدت تماس الزامی است.";
-        if (toNumberOrNull(form.concurrent_calls) === null)
-          nextErrors.concurrent_calls = "تعداد تماس همزمان الزامی است.";
-        if (toNumberOrNull(form.waiting_call_duration) === null)
-          nextErrors.waiting_call_duration = "مدت انتظار الزامی است.";
       }
 
       if (step === 3) {
@@ -585,15 +574,15 @@ const SupportFormForm = () => {
 
       const payload = {
         title: form.title.trim(),
-        phone_number: form.phone_number.trim(),
+        phone_number: form.phone_number?.trim() || null,
         start_at: toUnixSeconds(form.start_at),
         end_at: toUnixSeconds(form.end_at),
         stop_time: toNumberOrNull(form.stop_time),
         call_duration: toNumberOrNull(form.call_duration),
-        headings: JSON.stringify(cleanedHeadings),
+        headings: cleanedHeadings.length ? JSON.stringify(cleanedHeadings) : null,
         concurrent_calls: toNumberOrNull(form.concurrent_calls),
         waiting_call_duration: toNumberOrNull(form.waiting_call_duration),
-        problems: JSON.stringify(cleanedProblems),
+        problems: cleanedProblems.length ? JSON.stringify(cleanedProblems) : null,
         priorities: JSON.stringify(cleanedPriorities),
         school_id: toNumberOrNull(form.school_id),
         grade_id: toNumberOrNull(form.grade_id),
@@ -608,7 +597,6 @@ const SupportFormForm = () => {
         parent_tag_question_answer: JSON.stringify(cleanedParentTagQuestionAnswer),
         questions: questions.map((q) => ({
           ...(q.id ? { id: q.id } : {}),
-          code: q.code || null,
           question: q.question,
           answer: q.answer || null,
           score: toNumberOrNull(q.score) ?? 0,
@@ -774,16 +762,14 @@ const SupportFormForm = () => {
                             </Col>
                             <Col md="6">
                               <FormGroup>
-                                <Label for="phone_number">شماره تماس</Label>
+                                <Label for="phone_number">شماره تماس <span className="text-muted">(اختیاری)</span></Label>
                                 <Input
                                   id="phone_number"
                                   name="phone_number"
                                   value={form.phone_number}
                                   onChange={handleChange}
                                   placeholder="021xxxx"
-                                  invalid={!!errors.phone_number}
                                 />
-                                {renderError("phone_number")}
                               </FormGroup>
                             </Col>
 
@@ -840,11 +826,6 @@ const SupportFormForm = () => {
                                   افزودن تیتر
                                 </Button>
                               </div>
-                              {errors.headings && (
-                                <Alert color="danger" className="py-2">
-                                  {errors.headings}
-                                </Alert>
-                              )}
                               {headings.map((item, idx) => (
                                 <Row key={`heading-${idx}`} className="g-2 align-items-end mb-2">
                                   <Col md="4">
@@ -919,11 +900,6 @@ const SupportFormForm = () => {
                                   افزودن مشکل
                                 </Button>
                               </div>
-                              {errors.problems && (
-                                <Alert color="danger" className="py-2">
-                                  {errors.problems}
-                                </Alert>
-                              )}
                               {problems.map((item, idx) => (
                                 <Row key={`problem-${idx}`} className="g-2 align-items-end mb-2">
                                   <Col md="4">
@@ -1318,7 +1294,7 @@ const SupportFormForm = () => {
                           <Row className="g-3">
                             <Col md="4">
                               <FormGroup>
-                                <Label for="start_at">تاریخ شروع</Label>
+                                <Label for="start_at">تاریخ شروع <span className="text-muted">(اختیاری)</span></Label>
                                 <DatePicker
                                   calendar={persian}
                                   locale={persian_fa}
@@ -1335,12 +1311,12 @@ const SupportFormForm = () => {
                                   inputClass="form-control"
                                   calendarPosition="bottom-right"
                                 />
-                                {renderError("start_at")}
+
                               </FormGroup>
                             </Col>
                             <Col md="4">
                               <FormGroup>
-                                <Label for="end_at">تاریخ پایان</Label>
+                                <Label for="end_at">تاریخ پایان <span className="text-muted">(اختیاری)</span></Label>
                                 <DatePicker
                                   calendar={persian}
                                   locale={persian_fa}
@@ -1357,21 +1333,18 @@ const SupportFormForm = () => {
                                   inputClass="form-control"
                                   calendarPosition="bottom-right"
                                 />
-                                {renderError("end_at")}
                               </FormGroup>
                             </Col>
                             <Col md="4">
                               <FormGroup>
-                                <Label for="stop_time">زمان توقف</Label>
+                                <Label for="stop_time">زمان توقف <span className="text-muted">(اختیاری)</span></Label>
                                 <Input
                                   id="stop_time"
                                   name="stop_time"
                                   type="number"
                                   value={form.stop_time}
                                   onChange={handleChange}
-                                  invalid={!!errors.stop_time}
                                 />
-                                {renderError("stop_time")}
                               </FormGroup>
                             </Col>
 
@@ -1391,22 +1364,20 @@ const SupportFormForm = () => {
                             </Col>
                             <Col md="4">
                               <FormGroup>
-                                <Label for="concurrent_calls">تعداد تماس همزمان</Label>
+                                <Label for="concurrent_calls">تعداد تماس همزمان <span className="text-muted">(اختیاری)</span></Label>
                                 <Input
                                   id="concurrent_calls"
                                   name="concurrent_calls"
                                   type="number"
                                   value={form.concurrent_calls}
                                   onChange={handleChange}
-                                  invalid={!!errors.concurrent_calls}
                                 />
-                                {renderError("concurrent_calls")}
                               </FormGroup>
                             </Col>
                             <Col md="4">
                               <FormGroup>
                                 <Label for="waiting_call_duration">
-                                  مدت انتظار (ثانیه)
+                                  مدت انتظار (ثانیه) <span className="text-muted">(اختیاری)</span>
                                 </Label>
                                 <Input
                                   id="waiting_call_duration"
@@ -1414,9 +1385,7 @@ const SupportFormForm = () => {
                                   type="number"
                                   value={form.waiting_call_duration}
                                   onChange={handleChange}
-                                  invalid={!!errors.waiting_call_duration}
                                 />
-                                {renderError("waiting_call_duration")}
                               </FormGroup>
                             </Col>
 
@@ -1519,19 +1488,19 @@ const SupportFormForm = () => {
                                 </div>
 
                                 <Row className="g-3">
-                                  <Col md="4">
-                                    <FormGroup>
-                                      <Label>کد سوال</Label>
-                                      <Input
-                                        value={q.code}
-                                        onChange={(e) =>
-                                          handleQuestionChange(index, "code", e.target.value)
-                                        }
-                                        placeholder="مثلاً Q1"
-                                      />
-                                    </FormGroup>
-                                  </Col>
-                                  <Col md="8">
+                                  {q.id && q.code && (
+                                    <Col md="4">
+                                      <FormGroup>
+                                        <Label>کد سوال (auto)</Label>
+                                        <Input
+                                          value={q.code}
+                                          readOnly
+                                          className="bg-light font-monospace"
+                                        />
+                                      </FormGroup>
+                                    </Col>
+                                  )}
+                                  <Col md={q.id && q.code ? "8" : "12"}>
                                     <FormGroup>
                                       <Label>متن سوال</Label>
                                       <Input

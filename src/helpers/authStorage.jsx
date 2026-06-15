@@ -1,21 +1,19 @@
 // src/helpers/authStorage.jsx
 
 const TOKEN_KEY = "isoogh_access_token";
-const REFRESH_TOKEN_KEY = "isoogh_refresh_token";
 const USER_KEY = "isoogh_user";
-
-// ✅ new
 const PERMISSIONS_KEY = "isoogh_permissions";
 
+const SWITCH_CALLBACK_TOKEN_KEY = "switchCallbackToken";
+const SWITCH_ORIGINAL_USER_KEY = "originalUser";
+
 function normalizePermissions(user) {
-  // effectivePermissions = direct + role-based, already string[]
   const effective = user?.effectivePermissions;
   if (Array.isArray(effective)) {
     return effective
       .map((x) => (typeof x === "string" ? x.trim() : null))
       .filter((x) => x && x.length > 0);
   }
-  // fallback: derive from direct permissions objects
   const list = user?.permissions;
   if (!Array.isArray(list)) return [];
   return list
@@ -24,33 +22,34 @@ function normalizePermissions(user) {
 }
 
 // ذخیره توکن و اطلاعات کاربر بعد از لاگین
-export function setAuthData({ accessToken, refreshToken, user }) {
-  if (accessToken) localStorage.setItem(TOKEN_KEY, accessToken);
-  if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+// اگر rememberMe=true → localStorage (پایدار)، در غیر این صورت → sessionStorage (تا بستن مرورگر)
+export function setAuthData({ accessToken, user, rememberMe = true }) {
+  const primary = rememberMe ? localStorage : sessionStorage;
+  const other = rememberMe ? sessionStorage : localStorage;
+
+  if (accessToken) {
+    primary.setItem(TOKEN_KEY, accessToken);
+    other.removeItem(TOKEN_KEY);
+  }
 
   if (user) {
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
-
-    // ✅ store permissions as string[]
+    primary.setItem(USER_KEY, JSON.stringify(user));
     const permissions = normalizePermissions(user);
-    localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(permissions));
+    primary.setItem(PERMISSIONS_KEY, JSON.stringify(permissions));
+    other.removeItem(USER_KEY);
+    other.removeItem(PERMISSIONS_KEY);
   } else {
-    // ✅ prevent null issues
-    localStorage.setItem(PERMISSIONS_KEY, JSON.stringify([]));
+    primary.setItem(PERMISSIONS_KEY, JSON.stringify([]));
   }
 }
 
-// گرفتن توکن
+// گرفتن توکن — ابتدا localStorage، سپس sessionStorage
 export function getAccessToken() {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function getRefreshToken() {
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
+  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function getAuthUser() {
-  const raw = localStorage.getItem(USER_KEY);
+  const raw = localStorage.getItem(USER_KEY) || sessionStorage.getItem(USER_KEY);
   try {
     return raw ? JSON.parse(raw) : null;
   } catch {
@@ -58,9 +57,8 @@ export function getAuthUser() {
   }
 }
 
-// ✅ new
 export function getAuthPermissions() {
-  const raw = localStorage.getItem(PERMISSIONS_KEY);
+  const raw = localStorage.getItem(PERMISSIONS_KEY) || sessionStorage.getItem(PERMISSIONS_KEY);
   try {
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
@@ -70,12 +68,40 @@ export function getAuthPermissions() {
 }
 
 export function clearAuthData() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-  localStorage.removeItem(USER_KEY);
-  localStorage.removeItem(PERMISSIONS_KEY); // ✅ new
+  [localStorage, sessionStorage].forEach((s) => {
+    s.removeItem(TOKEN_KEY);
+    s.removeItem(USER_KEY);
+    s.removeItem(PERMISSIONS_KEY);
+  });
 }
 
 export function isLoggedIn() {
   return !!getAccessToken();
+}
+
+export function setSwitchData({ callbackToken, originalUser }) {
+  if (callbackToken) {
+    localStorage.setItem(SWITCH_CALLBACK_TOKEN_KEY, callbackToken);
+  }
+  if (originalUser) {
+    localStorage.setItem(SWITCH_ORIGINAL_USER_KEY, JSON.stringify(originalUser));
+  }
+}
+
+export function getSwitchCallbackToken() {
+  return localStorage.getItem(SWITCH_CALLBACK_TOKEN_KEY) || null;
+}
+
+export function getOriginalUser() {
+  const raw = localStorage.getItem(SWITCH_ORIGINAL_USER_KEY);
+  try {
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearSwitchData() {
+  localStorage.removeItem(SWITCH_CALLBACK_TOKEN_KEY);
+  localStorage.removeItem(SWITCH_ORIGINAL_USER_KEY);
 }

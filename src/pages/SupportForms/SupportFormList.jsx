@@ -22,6 +22,7 @@ import Paginations from "../../components/Common/Paginations.jsx";
 import {
   getSupportForms,
   deleteSupportForm,
+  copySupportForm,
 } from "../../services/supportFormService.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { getGrades } from "../../services/gradeService.jsx";
@@ -162,11 +163,33 @@ const SupportFormList = () => {
     [navigate]
   );
 
-  const handleAdvisers = useCallback(
+  const handleManage = useCallback(
     (id) => {
-      navigate(`/support-forms/${id}/advisers`);
+      navigate(`/support-forms/${id}`);
     },
     [navigate]
+  );
+
+  const handleCopy = useCallback(
+    async (id) => {
+      const confirmed = window.confirm("آیا از کپی این فرم تماس مطمئن هستید؟");
+      if (!confirmed) return;
+      try {
+        setLoading(true);
+        const res = await copySupportForm(id);
+        const newId = res?.data?.id || res?.id;
+        if (newId) {
+          navigate(`/support-forms/${newId}/edit`);
+        } else {
+          await fetchData(meta.page, filters, sort);
+        }
+      } catch (e) {
+        console.error("خطا در کپی فرم تماس", e);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [fetchData, filters, meta.page, navigate, sort]
   );
 
   const handleDelete = useCallback(
@@ -280,12 +303,15 @@ const SupportFormList = () => {
           const id = row.original.id;
 
           return (
-            <div className="d-flex gap-2">
-              <Button color="info" size="sm" onClick={() => handleAdvisers(id)}>
-                مشاوران
+            <div className="d-flex gap-2 flex-wrap">
+              <Button color="primary" size="sm" onClick={() => handleManage(id)}>
+                مدیریت
               </Button>
               <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
                 ویرایش
+              </Button>
+              <Button color="info" size="sm" onClick={() => handleCopy(id)} disabled={loading}>
+                کپی
               </Button>
               <Button
                 color="danger"
@@ -300,7 +326,7 @@ const SupportFormList = () => {
         },
       },
     ],
-    [gradeMap, handleAdvisers, handleDelete, handleEdit, loading, schoolMap]
+    [gradeMap, handleCopy, handleDelete, handleEdit, handleManage, loading, schoolMap]
   );
 
   const handleSortingChange = useCallback(
