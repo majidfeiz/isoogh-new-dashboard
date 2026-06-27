@@ -112,7 +112,7 @@ const Stats = () => {
         <Row className="g-3 mb-4">
           <Col xl={2} md={4} xs={6}>
             <StatCard
-              label="کل مدارس"
+              label="کل مجموعه‌ها"
               value={stats?.totalSchools}
               icon="bxs-school"
               color="primary"

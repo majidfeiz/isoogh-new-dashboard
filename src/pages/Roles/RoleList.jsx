@@ -4,6 +4,7 @@ import React, {
   useState,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import {
   Card,
@@ -15,6 +16,7 @@ import {
   Button,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
@@ -29,6 +31,8 @@ const RoleList = () => {
   const navigate = useNavigate();
   document.title = "نقش‌ها | داشبورد آیسوق";
 
+  const { saved, saveState } = useListState("roles");
+
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
     page: 1,
@@ -36,8 +40,9 @@ const RoleList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(saved?.search ?? "");
   const [loading, setLoading] = useState(false);
+  const initialPageRef = useRef(saved?.page ?? 1);
 
   const fetchData = useCallback(
     async (page = 1, currentSearch = "") => {
@@ -70,16 +75,21 @@ const RoleList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, "");
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, search);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData]);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearch(value);
+    saveState({ page: 1, search: value });
     fetchData(1, value);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, search });
     fetchData(page, search);
   };
 

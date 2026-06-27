@@ -93,7 +93,7 @@ const SchoolList = () => {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="جستجو بر اساس نام یا کد مدرسه..."
+                  placeholder="جستجو بر اساس نام یا کد مجموعه..."
                 />
                 <Button color="primary" type="submit" disabled={loading}>
                   جستجو

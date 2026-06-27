@@ -22,7 +22,7 @@ import Paginations from "../../components/Common/Paginations.jsx";
 import { getSuperAdviserSchools } from "../../services/superAdviserPortalService.jsx";
 
 const Schools = () => {
-  document.title = "مدارس | سر مشاور | داشبورد آیسوق";
+  document.title = "مجموعه‌ها | سر مشاور | داشبورد آیسوق";
 
   const navigate = useNavigate();
 
@@ -91,7 +91,7 @@ const Schools = () => {
       },
       {
         id: "name",
-        header: "نام مدرسه",
+        header: "نام مجموعه",
         accessorKey: "name",
         enableColumnFilter: false,
         enableSorting: false,
@@ -131,15 +131,15 @@ const Schools = () => {
   return (
     <div className="page-content">
       <div className="container-fluid">
-        <Breadcrumbs title="سر مشاور" breadcrumbItem="مدارس" />
+        <Breadcrumbs title="سر مشاور" breadcrumbItem="مجموعه‌ها" />
 
         <Row>
           <Col lg={12}>
             <Card>
               <CardHeader className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
-                  <h4 className="card-title mb-1">مدارس</h4>
-                  <p className="text-muted mb-0">لیست مدارس تحت نظارت سر مشاور</p>
+                  <h4 className="card-title mb-1">مجموعه‌ها</h4>
+                  <p className="text-muted mb-0">لیست مجموعه‌ها تحت نظارت سر مشاور</p>
                 </div>
                 {loading && <Spinner size="sm" color="primary" />}
               </CardHeader>
@@ -157,7 +157,7 @@ const Schools = () => {
                           name="search"
                           value={filters.search}
                           onChange={handleFilterChange}
-                          placeholder="نام یا کد مدرسه"
+                          placeholder="نام یا کد مجموعه"
                         />
                       </InputGroup>
                     </Col>

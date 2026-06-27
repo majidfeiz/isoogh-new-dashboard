@@ -96,6 +96,7 @@ export const API_ROUTES = {
     update: (id) => `/advisers/${id}`,
     delete: (id) => `/advisers/${id}`,
     export: "/advisers/export",
+    grades: (adviserId) => `/advisers/${adviserId}/grades`,
     studentCandidates: (adviserId) => `/advisers/${adviserId}/student-candidates`,
     students: (adviserId) => `/advisers/${adviserId}/students`,
     studentsBySearch: (adviserId) => `/advisers/${adviserId}/students/by-search`,

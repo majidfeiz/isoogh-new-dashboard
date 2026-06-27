@@ -452,7 +452,7 @@ const SupportFormAdvisers = () => {
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   {loading && <Spinner size="sm" color="primary" />}
-                  <Button color="light" onClick={() => navigate("/support-forms")}>
+                  <Button color="light" onClick={() => navigate(-1)}>
                     بازگشت
                   </Button>
                 </div>

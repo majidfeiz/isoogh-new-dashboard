@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Badge,
   Button,
@@ -15,6 +15,7 @@ import {
   Spinner,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
@@ -67,17 +68,17 @@ const FileList = () => {
 
   const canShow = hasPermission("files.show");
 
+  const { saved, saveState } = useListState("files");
+
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 });
-  const [filters, setFilters] = useState({
-    search: "",
-    fileable_type: "",
-    fileable_id: "",
-    status: "",
-  });
+  const [filters, setFilters] = useState(
+    saved?.filters ?? { search: "", fileable_type: "", fileable_id: "", status: "" }
+  );
   const [loading, setLoading] = useState(false);
-  const [sorting, setSorting] = useState([{ id: "id", desc: true }]);
-  const [sort, setSort] = useState({ by: "id", order: "DESC" });
+  const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
+  const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
+  const initialPageRef = useRef(saved?.page ?? 1);
 
   const fetchData = useCallback(
     async (page = 1, currentFilters = {}, currentSort = sort) => {
@@ -107,7 +108,10 @@ const FileList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, filters, sort);
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, filters, sort);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
 
   const handleFilterChange = (e) => {
@@ -117,16 +121,19 @@ const FileList = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    saveState({ page: 1, filters, sort, sorting });
     fetchData(1, filters, sort);
   };
 
   const handleResetFilters = () => {
     const reset = { search: "", fileable_type: "", fileable_id: "", status: "" };
     setFilters(reset);
+    saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, filters, sort, sorting });
     fetchData(page, filters, sort);
   };
 
@@ -338,15 +345,17 @@ const FileList = () => {
       if (!first) {
         const resetSort = { by: undefined, order: undefined };
         setSort(resetSort);
+        saveState({ page: 1, filters, sort: resetSort, sorting: nextSorting });
         fetchData(1, filters, resetSort);
         return;
       }
 
       const nextSort = { by: first.id, order: first.desc ? "DESC" : "ASC" };
       setSort(nextSort);
+      saveState({ page: 1, filters, sort: nextSort, sorting: nextSorting });
       fetchData(1, filters, nextSort);
     },
-    [fetchData, filters]
+    [fetchData, filters, saveState]
   );
 
   return (
@@ -370,7 +379,7 @@ const FileList = () => {
               <CardBody>
                 <Form className="mb-4" onSubmit={handleSearchSubmit}>
                   <Row className="g-3 align-items-end">
-                    <Col xl="4" lg="5" md="6">
+                    <Col xl="3" lg="5" md="6">
                       <Label className="form-label">جستجو</Label>
                       <InputGroup>
                         <InputGroupText>
@@ -424,7 +433,7 @@ const FileList = () => {
                       </Input>
                     </Col>
 
-                    <Col xl="1" lg="2" md="4" className="d-flex gap-2">
+                    <Col xl="2" lg="2" md="4" className="d-flex gap-2">
                       <Button color="primary" type="submit" className="w-100" disabled={loading}>
                         جستجو
                       </Button>

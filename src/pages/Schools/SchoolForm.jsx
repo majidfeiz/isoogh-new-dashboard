@@ -29,7 +29,7 @@ const SchoolForm = () => {
   const isEdit = !!id;
   const navigate = useNavigate();
 
-  document.title = (isEdit ? "ویرایش مدرسه" : "ایجاد مدرسه") + " | داشبورد آیسوق";
+  document.title = (isEdit ? "ویرایش مجموعه" : "ایجاد مجموعه") + " | داشبورد آیسوق";
 
   const [form, setForm] = useState({
     name: "",
@@ -67,10 +67,10 @@ const SchoolForm = () => {
             "",
         });
       } catch (e) {
-        console.error("خطا در دریافت مدرسه", e);
+        console.error("خطا در دریافت مجموعه", e);
         setAlert({
           type: "danger",
-          message: "خطا در دریافت اطلاعات مدرسه",
+          message: "خطا در دریافت اطلاعات مجموعه",
         });
       } finally {
         setLoading(false);
@@ -89,7 +89,7 @@ const SchoolForm = () => {
     setAlert(null);
 
     if (!form.name.trim()) {
-      setErrors({ name: ["نام مدرسه الزامی است"] });
+      setErrors({ name: ["نام مجموعه الزامی است"] });
       return;
     }
 
@@ -114,21 +114,21 @@ const SchoolForm = () => {
         await updateSchool(id, payload);
         setAlert({
           type: "success",
-          message: "مدرسه با موفقیت ویرایش شد.",
+          message: "مجموعه با موفقیت ویرایش شد.",
         });
       } else {
         await createSchool(payload);
         setAlert({
           type: "success",
-          message: "مدرسه جدید با موفقیت ایجاد شد.",
+          message: "مجموعه جدید با موفقیت ایجاد شد.",
         });
       }
 
       setTimeout(() => {
-        navigate("/schools");
+        navigate(-1);
       }, 700);
     } catch (e) {
-      console.error("خطا در ذخیره مدرسه", e);
+      console.error("خطا در ذخیره مجموعه", e);
       if (e.response && e.response.status === 422) {
         setErrors(e.response.data.errors || {});
       } else {
@@ -151,8 +151,8 @@ const SchoolForm = () => {
     <div className="page-content">
       <Container fluid>
         <Breadcrumbs
-          title="مدارس"
-          breadcrumbItem={isEdit ? "ویرایش مدرسه" : "ایجاد مدرسه"}
+          title="مجموعه‌ها"
+          breadcrumbItem={isEdit ? "ویرایش مجموعه" : "ایجاد مجموعه"}
         />
 
         <Row>
@@ -160,7 +160,7 @@ const SchoolForm = () => {
             <Card>
               <CardHeader>
                 <h4 className="card-title mb-0">
-                  {isEdit ? "ویرایش مدرسه" : "ایجاد مدرسه جدید"}
+                  {isEdit ? "ویرایش مجموعه" : "ایجاد مجموعه جدید"}
                 </h4>
               </CardHeader>
               <CardBody>
@@ -170,7 +170,7 @@ const SchoolForm = () => {
                   <Row className="g-3">
                     <Col md="6">
                       <FormGroup>
-                        <Label for="name">نام مدرسه</Label>
+                        <Label for="name">نام مجموعه</Label>
                         <Input
                           id="name"
                           name="name"
@@ -186,7 +186,7 @@ const SchoolForm = () => {
 
                     <Col md="6">
                       <FormGroup>
-                        <Label for="code">کد مدرسه</Label>
+                        <Label for="code">کد مجموعه</Label>
                         <Input
                           id="code"
                           name="code"
@@ -252,7 +252,7 @@ const SchoolForm = () => {
                           name="address"
                           value={form.address}
                           onChange={handleChange}
-                          placeholder="آدرس دقیق مدرسه"
+                          placeholder="آدرس دقیق مجموعه"
                           invalid={!!errors.address}
                         />
                         {renderError("address")}
@@ -278,9 +278,9 @@ const SchoolForm = () => {
 
                   <div className="d-flex gap-2 mt-3">
                     <Button type="submit" color="primary" className="w-md" disabled={loading}>
-                      {loading ? "در حال ذخیره..." : isEdit ? "ویرایش مدرسه" : "ثبت مدرسه"}
+                      {loading ? "در حال ذخیره..." : isEdit ? "ویرایش مجموعه" : "ثبت مجموعه"}
                     </Button>
-                    <Button type="button" color="secondary" onClick={() => navigate("/schools")}>
+                    <Button type="button" color="secondary" onClick={() => navigate(-1)}>
                       انصراف
                     </Button>
                   </div>

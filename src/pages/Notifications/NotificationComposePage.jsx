@@ -35,7 +35,7 @@ import {
 const ICON_OPTIONS = [
   { label: "پیام", value: "mail" },
   { label: "ناقوس", value: "bell" },
-  { label: "مدرسه", value: "school" },
+  { label: "مجموعه", value: "school" },
   { label: "هشدار", value: "alert" },
   { label: "اطلاعیه", value: "bullhorn" },
   { label: "اطلاعات", value: "information" },
@@ -64,7 +64,7 @@ const ROLES = [
 
 const SEND_TYPES = [
   { key: "user", label: "پیام تکی", icon: "bx bx-user", permission: "notifications.send" },
-  { key: "school-advisers", label: "مشاوران مدرسه", icon: "bx bx-group", permission: "notifications.send" },
+  { key: "school-advisers", label: "مشاوران مجموعه", icon: "bx bx-group", permission: "notifications.send" },
   { key: "super-adviser", label: "سرمشاور", icon: "bx bx-user-check", permission: "notifications.send" },
   { key: "broadcast", label: "همگانی", icon: "bx bx-broadcast", permission: "notifications.broadcast" },
 ];
@@ -269,7 +269,7 @@ function SchoolSelect({ value, onChange }) {
 
   return (
     <Input type="select" value={value || ""} onChange={(e) => onChange(e.target.value || null)} disabled={loading}>
-      <option value="">{loading ? "در حال بارگذاری..." : "انتخاب مدرسه..."}</option>
+      <option value="">{loading ? "در حال بارگذاری..." : "انتخاب مجموعه..."}</option>
       {schools.map((s) => (
         <option key={s.id} value={s.id}>
           {s.name}
@@ -288,9 +288,9 @@ function ConfirmModal({ isOpen, onConfirm, onCancel, sendType, schoolName, targe
       ? `پیام برای همه کاربران با نقش «${ROLES.find((r) => r.value === targetRole)?.label || targetRole}» ارسال خواهد شد.`
       : "پیام برای همه کاربران سیستم ارسال خواهد شد.";
   } else if (sendType === "school-advisers") {
-    description = `پیام برای همه مشاوران مدرسه «${schoolName || "انتخابی"}» ارسال خواهد شد.`;
+    description = `پیام برای همه مشاوران مجموعه «${schoolName || "انتخابی"}» ارسال خواهد شد.`;
   } else if (sendType === "super-adviser") {
-    description = `پیام برای سرمشاور مدرسه «${schoolName || "انتخابی"}» ارسال خواهد شد.`;
+    description = `پیام برای سرمشاور مجموعه «${schoolName || "انتخابی"}» ارسال خواهد شد.`;
   }
 
   return (
@@ -367,7 +367,7 @@ const NotificationComposePage = () => {
     if (!form.body.trim()) { toast.error("متن پیام الزامی است"); return false; }
     if (activeType === "user" && !form.selectedUser) { toast.error("لطفاً یک کاربر انتخاب کنید"); return false; }
     if ((activeType === "school-advisers" || activeType === "super-adviser") && !form.schoolId) {
-      toast.error("لطفاً یک مدرسه انتخاب کنید");
+      toast.error("لطفاً یک مجموعه انتخاب کنید");
       return false;
     }
     return true;
@@ -495,7 +495,7 @@ const NotificationComposePage = () => {
                 {(activeType === "school-advisers" || activeType === "super-adviser") && (
                   <FormGroup>
                     <Label>
-                      مدرسه <span className="text-danger">*</span>
+                      مجموعه <span className="text-danger">*</span>
                       {activeType === "school-advisers"
                         ? " — پیام به همه مشاوران ارسال می‌شود"
                         : " — پیام به سرمشاور ارسال می‌شود"}
@@ -667,7 +667,7 @@ const NotificationComposePage = () => {
                     {(activeType === "school-advisers" || activeType === "super-adviser") && selectedSchoolName && (
                       <li className="mb-1">
                         <i className="mdi mdi-arrow-left me-1" />
-                        <strong>مدرسه:</strong> {selectedSchoolName}
+                        <strong>مجموعه:</strong> {selectedSchoolName}
                       </li>
                     )}
                     {activeType === "broadcast" && (

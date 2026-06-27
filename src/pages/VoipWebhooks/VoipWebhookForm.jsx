@@ -98,7 +98,7 @@ const VoipWebhookForm = () => {
         await createVoipWebhook(payload);
         toast.success("وب‌هوک با موفقیت ایجاد شد");
       }
-      navigate("/voip-webhooks");
+      navigate(-1);
     } catch {
       toast.error("خطا در ذخیره وب‌هوک");
     } finally {
@@ -208,7 +208,7 @@ const VoipWebhookForm = () => {
                     <Button
                       color="secondary"
                       type="button"
-                      onClick={() => navigate("/voip-webhooks")}
+                      onClick={() => navigate(-1)}
                     >
                       انصراف
                     </Button>

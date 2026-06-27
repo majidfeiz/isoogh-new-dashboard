@@ -23,6 +23,7 @@ const normalizeSupportForm = (item = {}) => ({
   headings: item?.headings ?? item?.description ?? "",
   totalStudents: item?.total_students ?? item?.totalStudents ?? 0,
   stats: item?.stats ?? null,
+  grade: item?.grade ?? null,
   questions: (item?.questions ?? []).map(normalizeQuestion),
 });
 

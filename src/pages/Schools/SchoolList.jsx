@@ -1,5 +1,5 @@
 // src/pages/Schools/SchoolList.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardBody,
@@ -15,6 +15,7 @@ import {
   Spinner,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
@@ -23,7 +24,9 @@ import { getSchools, deleteSchool } from "../../services/schoolService.jsx";
 
 const SchoolList = () => {
   const navigate = useNavigate();
-  document.title = "مدارس | داشبورد آیسوق";
+  document.title = "مجموعه‌ها | داشبورد آیسوق";
+
+  const { saved, saveState } = useListState("schools");
 
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
@@ -32,16 +35,13 @@ const SchoolList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [filters, setFilters] = useState({
-    name: "",
-    code: "",
-    city: "",
-    managerName: "",
-    managerId: "",
-  });
+  const [filters, setFilters] = useState(
+    saved?.filters ?? { name: "", code: "", city: "", managerName: "", managerId: "" }
+  );
   const [loading, setLoading] = useState(false);
-  const [sorting, setSorting] = useState([{ id: "id", desc: true }]);
-  const [sort, setSort] = useState({ by: "id", order: "DESC" });
+  const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
+  const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
+  const initialPageRef = useRef(saved?.page ?? 1);
 
   const buildSearchQuery = useCallback((currentFilters) => {
     return Object.values(currentFilters || {})
@@ -75,7 +75,7 @@ const SchoolList = () => {
           }
         );
       } catch (e) {
-        console.error("خطا در دریافت مدارس", e);
+        console.error("خطا در دریافت مجموعه‌ها", e);
         setData([]);
         setMeta((prev) => ({ ...prev, total: 0 }));
       } finally {
@@ -86,7 +86,10 @@ const SchoolList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, filters, sort);
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, filters, sort);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
 
   const handleFilterChange = (e) => {
@@ -99,16 +102,19 @@ const SchoolList = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    saveState({ page: 1, filters, sort, sorting });
     fetchData(1, filters, sort);
   };
 
   const handleResetFilters = () => {
     const reset = { name: "", code: "", city: "", managerName: "", managerId: "" };
     setFilters(reset);
+    saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, filters, sort, sorting });
     fetchData(page, filters, sort);
   };
 
@@ -125,7 +131,7 @@ const SchoolList = () => {
 
   const handleDelete = useCallback(
     async (id) => {
-      const confirmed = window.confirm("آیا از حذف این مدرسه مطمئن هستید؟");
+      const confirmed = window.confirm("آیا از حذف این مجموعه مطمئن هستید؟");
       if (!confirmed) return;
 
       try {
@@ -133,7 +139,7 @@ const SchoolList = () => {
         await deleteSchool(id);
         await fetchData(meta.page, filters, sort);
       } catch (e) {
-        console.error("خطا در حذف مدرسه", e);
+        console.error("خطا در حذف مجموعه", e);
       } finally {
         setLoading(false);
       }
@@ -153,7 +159,7 @@ const SchoolList = () => {
       },
       {
         id: "code",
-        header: "کد مدرسه",
+        header: "کد مجموعه",
         accessorKey: "code",
         enableColumnFilter: false,
         enableSorting: false,
@@ -161,7 +167,7 @@ const SchoolList = () => {
       },
       {
         id: "name",
-        header: "نام مدرسه",
+        header: "نام مجموعه",
         accessorKey: "name",
         enableColumnFilter: false,
         enableSorting: true,
@@ -244,6 +250,7 @@ const SchoolList = () => {
       if (!first) {
         const resetSort = { by: undefined, order: undefined };
         setSort(resetSort);
+        saveState({ page: 1, filters, sort: resetSort, sorting: nextSorting });
         fetchData(1, filters, resetSort);
         return;
       }
@@ -253,24 +260,25 @@ const SchoolList = () => {
         order: first.desc ? "DESC" : "ASC",
       };
       setSort(nextSort);
+      saveState({ page: 1, filters, sort: nextSort, sorting: nextSorting });
       fetchData(1, filters, nextSort);
     },
-    [fetchData, filters]
+    [fetchData, filters, saveState]
   );
 
   return (
     <div className="page-content">
       <div className="container-fluid">
-        <Breadcrumbs title="مدیریت مدارس" breadcrumbItem="مدارس" />
+        <Breadcrumbs title="مدیریت مجموعه‌ها" breadcrumbItem="مجموعه‌ها" />
 
         <Row>
           <Col lg={12}>
             <Card>
               <CardHeader className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
-                  <h4 className="card-title mb-1">مدارس</h4>
+                  <h4 className="card-title mb-1">مجموعه‌ها</h4>
                   <p className="text-muted mb-0">
-                    جستجو، صفحه‌بندی و مدیریت مدارس
+                    جستجو، صفحه‌بندی و مدیریت مجموعه‌ها
                   </p>
                 </div>
 
@@ -278,7 +286,7 @@ const SchoolList = () => {
                   {loading && <Spinner size="sm" color="primary" />}
                   <Button color="primary" onClick={handleCreate}>
                     <i className="mdi mdi-plus me-1" />
-                    ایجاد مدرسه جدید
+                    ایجاد مجموعه جدید
                   </Button>
                 </div>
               </CardHeader>
@@ -288,7 +296,7 @@ const SchoolList = () => {
                   <Row className="g-3 align-items-end">
                     <Col xl="3" lg="4" md="6">
                       <Label className="form-label" htmlFor="name">
-                        نام مدرسه
+                        نام مجموعه
                       </Label>
                       <InputGroup>
                         <InputGroupText>
@@ -306,7 +314,7 @@ const SchoolList = () => {
 
                     <Col xl="3" lg="4" md="6">
                       <Label className="form-label" htmlFor="code">
-                        کد مدرسه
+                        کد مجموعه
                       </Label>
                       <InputGroup>
                         <InputGroupText>

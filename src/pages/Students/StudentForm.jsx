@@ -1,5 +1,5 @@
 // src/pages/Students/StudentForm.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import {
   Card,
   CardBody,
@@ -14,52 +14,34 @@ import {
   Input,
   Alert,
   FormText,
-} from "reactstrap";
-import { useNavigate, useParams } from "react-router-dom";
+  Badge,
+  Spinner,
+} from "reactstrap"
+import { useNavigate, useParams } from "react-router-dom"
 
-import Breadcrumbs from "../../components/Common/Breadcrumb";
-import {
-  getStudent,
-  createStudent,
-  updateStudent,
-} from "../../services/studentService.jsx";
+import Breadcrumbs from "../../components/Common/Breadcrumb"
+import { getStudent, createStudent, updateStudent } from "../../services/studentService.jsx"
+import { getUsers } from "../../services/userService.jsx"
+import { getSchools } from "../../services/schoolService.jsx"
+import { useAuth } from "../../context/AuthContext.jsx"
 
-const normalizeDate = (value) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-  return date.toISOString().slice(0, 10);
-};
-
-const toNumberOrUndefined = (value) => {
-  if (value === "" || value === null || typeof value === "undefined") return undefined;
-  const num = Number(value);
-  return Number.isNaN(num) ? undefined : num;
-};
-
-const parseSchoolIds = (value) => {
-  if (!value) return [];
-  return value
-    .split(/[, \n\r]+/)
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .map((v) => Number(v))
-    .filter((v) => !Number.isNaN(v));
-};
+const toNum = (v) => {
+  if (v === "" || v == null) return undefined
+  const n = Number(v)
+  return Number.isNaN(n) ? undefined : n
+}
 
 const StudentForm = () => {
-  const { id } = useParams();
-  const isEdit = !!id;
-  const navigate = useNavigate();
+  const { id } = useParams()
+  const isEdit = !!id
+  const navigate = useNavigate()
+  const auth = useAuth?.()
 
-  document.title = (isEdit ? "ویرایش دانش‌آموز" : "ایجاد دانش‌آموز") + " | داشبورد آیسوق";
+  document.title = (isEdit ? "ویرایش دانش‌آموز" : "ایجاد دانش‌آموز") + " | داشبورد آیسوق"
 
   const [form, setForm] = useState({
-    code: "",
-    user_id: "",
-    schoolIdsInput: "",
-    point: "",
     birthday: "",
+    point: "",
     phone_2: "",
     phone_3: "",
     emergency_phone: "",
@@ -75,31 +57,88 @@ const StudentForm = () => {
     religion: "",
     relationship: "",
     group_id: "",
-    work_shift_id: 1,
-  });
-  const [errors, setErrors] = useState({});
-  const [alert, setAlert] = useState(null);
-  const [loading, setLoading] = useState(false);
+    work_shift_id: "1",
+    name: "",
+    username: "",
+    ssn: "",
+  })
+  const [errors, setErrors] = useState({})
+  const [alert, setAlert] = useState(null)
+  const [loading, setLoading] = useState(false)
 
+  // User search autocomplete
+  const [userSearch, setUserSearch] = useState("")
+  const [userSearchResults, setUserSearchResults] = useState([])
+  const [userSearchLoading, setUserSearchLoading] = useState(false)
+  const [selectedUser, setSelectedUser] = useState(null)
+  const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const userSearchTimer = useRef(null)
+  const userSearchRef = useRef(null)
+
+  // Schools
+  const [schools, setSchools] = useState([])
+  const [schoolsLoading, setSchoolsLoading] = useState(false)
+  const [selectedSchoolId, setSelectedSchoolId] = useState("")
+
+  // Role detection
+  const isAdminLike = useMemo(() => {
+    const roles = auth?.user?.roles || []
+    return roles.some((r) => {
+      const name = (r?.name || r?.label || "").toLowerCase()
+      return ["admin", "super_admin", "super-admin", "super admin"].includes(name)
+    })
+  }, [auth])
+
+  const managedSchools = isAdminLike ? [] : schools
+  const managerAutoSchool = !isAdminLike && managedSchools.length === 1 ? managedSchools[0] : null
+  const needsSchoolSelect = isAdminLike || managedSchools.length > 1
+  const schoolsToShow = needsSchoolSelect ? (isAdminLike ? schools : managedSchools) : []
+
+  // Load schools on mount
   useEffect(() => {
-    if (!isEdit) return;
-
-    (async () => {
+    if (!auth?.user) return
+    const load = async () => {
+      setSchoolsLoading(true)
       try {
-        const data = await getStudent(id);
-        const student = data?.data || data;
-        const schoolIds =
-          Array.isArray(student?.schools) && student.schools.length > 0
-            ? student.schools.map((s) => s?.id).filter(Boolean)
-            : [];
+        if (isAdminLike) {
+          const res = await getSchools({ limit: 500, sortBy: "name", sortOrder: "ASC" })
+          setSchools(res.items || [])
+        } else {
+          const userId = auth.user.id
+          if (userId) {
+            const res = await getSchools({ managerId: userId, limit: 200 })
+            setSchools(res.items || [])
+          }
+        }
+      } catch (e) {
+        console.error("خطا در دریافت مجموعه‌ها", e)
+      } finally {
+        setSchoolsLoading(false)
+      }
+    }
+    load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminLike, auth?.user?.id])
 
+  // Auto-select manager's single school (create mode)
+  useEffect(() => {
+    if (managerAutoSchool && !isEdit) {
+      setSelectedSchoolId(String(managerAutoSchool.id))
+    }
+  }, [managerAutoSchool, isEdit])
+
+  // Load student data in edit mode
+  useEffect(() => {
+    if (!isEdit) return
+    ;(async () => {
+      try {
+        const student = await getStudent(id)
+        const firstSchoolId = (student?.schools || [])[0]?.id
+        setSelectedSchoolId(firstSchoolId ? String(firstSchoolId) : "")
         setForm((prev) => ({
           ...prev,
-          code: student.code || "",
-          user_id: student.user_id ?? "",
-          schoolIdsInput: schoolIds.join(","),
+          birthday: student.birthday || "",
           point: student.point ?? "",
-          birthday: normalizeDate(student.birthday),
           phone_2: student.phone_2 ?? "",
           phone_3: student.phone_3 ?? "",
           emergency_phone: student.emergency_phone ?? "",
@@ -115,99 +154,176 @@ const StudentForm = () => {
           religion: student.religion ?? "",
           relationship: student.relationship ?? "",
           group_id: student.group_id ?? "",
-          work_shift_id: student.work_shift_id ?? 1,
-        }));
+          work_shift_id: String(student.work_shift_id ?? "1"),
+          name: student.user?.name || student.name || "",
+          username: student.user?.username || student.username || "",
+          ssn: student.user?.ssn || student.ssn || "",
+        }))
+        if (student.user) {
+          setSelectedUser(student.user)
+          setUserSearch(student.user.name || student.user.username || "")
+        } else if (student.user_id) {
+          setSelectedUser({ id: student.user_id })
+          setUserSearch(`کاربر #${student.user_id}`)
+        }
       } catch (e) {
-        console.error(e);
-        setAlert({
-          type: "danger",
-          message: "خطا در دریافت اطلاعات دانش‌آموز",
-        });
+        console.error(e)
+        setAlert({ type: "danger", message: "خطا در دریافت اطلاعات دانش‌آموز" })
       }
-    })();
-  }, [id, isEdit]);
+    })()
+  }, [id, isEdit])
+
+  // User search
+  const searchUsers = useCallback(async (q) => {
+    if (!q || q.trim().length < 2) {
+      setUserSearchResults([])
+      setShowUserDropdown(false)
+      return
+    }
+    setUserSearchLoading(true)
+    try {
+      const res = await getUsers({ search: q.trim(), limit: 10 })
+      setUserSearchResults(res.items || [])
+      setShowUserDropdown(true)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setUserSearchLoading(false)
+    }
+  }, [])
+
+  const handleUserSearchChange = (e) => {
+    const val = e.target.value
+    setUserSearch(val)
+    if (selectedUser) setSelectedUser(null)
+    clearTimeout(userSearchTimer.current)
+    userSearchTimer.current = setTimeout(() => searchUsers(val), 400)
+  }
+
+  const handleSelectUser = (user) => {
+    setSelectedUser(user)
+    setUserSearch(user.name || user.username || `کاربر #${user.id}`)
+    setShowUserDropdown(false)
+    setUserSearchResults([])
+    if (isEdit) {
+      setForm((prev) => ({
+        ...prev,
+        name: user.name || prev.name,
+        username: user.username || prev.username,
+        ssn: user.ssn || prev.ssn,
+      }))
+    }
+  }
+
+  const handleClearUser = () => {
+    setSelectedUser(null)
+    setUserSearch("")
+    setUserSearchResults([])
+    setShowUserDropdown(false)
+  }
+
+  // Close user dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (userSearchRef.current && !userSearchRef.current.contains(e.target)) {
+        setShowUserDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+    const { name, value } = e.target
+    setForm((prev) => ({ ...prev, [name]: value }))
+  }
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrors({});
-    setAlert(null);
-    setLoading(true);
+    e.preventDefault()
+    setErrors({})
+    setAlert(null)
 
-    const schoolIds = parseSchoolIds(form.schoolIdsInput);
-    if (schoolIds.length === 0) {
-      setErrors({ schoolIds: ["شناسه مدرسه الزامی است"] });
-      setLoading(false);
-      return;
+    const newErrors = {}
+
+    if (!isEdit && !selectedUser) {
+      newErrors.user_id = ["انتخاب کاربر الزامی است"]
     }
 
-    const payload = {
-      code: form.code,
-      user_id: toNumberOrUndefined(form.user_id),
-      point: toNumberOrUndefined(form.point),
-      birthday: form.birthday || null,
-      phone_2: form.phone_2 || null,
-      phone_3: form.phone_3 || null,
-      emergency_phone: form.emergency_phone || null,
-      voip_phone: form.voip_phone || null,
-      shift: form.shift || null,
-      province: form.province || null,
-      city: form.city || null,
-      region: form.region || null,
-      institute_type: form.institute_type || null,
-      institute_name: form.institute_name || null,
-      gpa: form.gpa || null,
-      village: form.village || null,
-      religion: form.religion || null,
-      relationship: form.relationship || null,
-      group_id: toNumberOrUndefined(form.group_id),
-      work_shift_id: toNumberOrUndefined(form.work_shift_id) ?? 1,
-      schoolIds,
-    };
+    const effectiveSchoolId = needsSchoolSelect
+      ? selectedSchoolId
+      : managerAutoSchool
+      ? String(managerAutoSchool.id)
+      : ""
 
+    if (!effectiveSchoolId) {
+      newErrors.schoolIds = ["انتخاب مجموعه الزامی است"]
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      return
+    }
+
+    setLoading(true)
     try {
-      if (isEdit) {
-        await updateStudent(id, payload);
-        setAlert({
-          type: "success",
-          message: "دانش‌آموز با موفقیت ویرایش شد.",
-        });
-      } else {
-        await createStudent(payload);
-        setAlert({
-          type: "success",
-          message: "دانش‌آموز جدید با موفقیت ایجاد شد.",
-        });
+      const payload = {
+        schoolIds: [Number(effectiveSchoolId)],
+        birthday: form.birthday || null,
+        point: toNum(form.point),
+        phone_2: form.phone_2 || null,
+        phone_3: form.phone_3 || null,
+        emergency_phone: form.emergency_phone || null,
+        voip_phone: form.voip_phone || null,
+        shift: form.shift || null,
+        province: form.province || null,
+        city: form.city || null,
+        region: form.region || null,
+        institute_type: form.institute_type || null,
+        institute_name: form.institute_name || null,
+        gpa: form.gpa || null,
+        village: form.village || null,
+        religion: form.religion || null,
+        relationship: form.relationship || null,
+        group_id: form.group_id || null,
+        work_shift_id: toNum(form.work_shift_id) ?? 1,
       }
 
-      setTimeout(() => {
-        navigate("/students");
-      }, 800);
-    } catch (e) {
-      console.error(e);
-      if (e.response && e.response.status === 422) {
-        setErrors(e.response.data.errors || {});
+      if (!isEdit) {
+        payload.user_id = selectedUser.id
       } else {
-        setAlert({
-          type: "danger",
-          message: "خطایی رخ داد. لطفاً دوباره تلاش کنید.",
-        });
+        if (selectedUser?.id) payload.user_id = selectedUser.id
+        if (form.name) payload.name = form.name
+        if (form.username) payload.username = form.username
+        if (form.ssn) payload.ssn = form.ssn
+      }
+
+      if (isEdit) {
+        await updateStudent(id, payload)
+        setAlert({ type: "success", message: "دانش‌آموز با موفقیت ویرایش شد." })
+      } else {
+        await createStudent(payload)
+        setAlert({ type: "success", message: "دانش‌آموز جدید با موفقیت ایجاد شد." })
+      }
+      setTimeout(() => navigate(-1), 800)
+    } catch (e) {
+      console.error(e)
+      if (e.response?.status === 422) {
+        setErrors(e.response.data?.errors || {})
       }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  const renderError = (field) =>
-    errors[field] ? (
+  const renderError = (field) => {
+    const err = errors[field]
+    if (!err) return null
+    return (
       <div className="text-danger mt-1" style={{ fontSize: "0.85rem" }}>
-        {errors[field][0]}
+        {Array.isArray(err) ? err[0] : err}
       </div>
-    ) : null;
+    )
+  }
 
   return (
     <div className="page-content">
@@ -219,62 +335,228 @@ const StudentForm = () => {
 
         <Row>
           <Col lg="10">
-            <Card>
-              <CardHeader>
-                <h4 className="card-title mb-0">
-                  {isEdit ? "ویرایش دانش‌آموز" : "ایجاد دانش‌آموز جدید"}
-                </h4>
-              </CardHeader>
-              <CardBody>
-                {alert && <Alert color={alert.type}>{alert.message}</Alert>}
+            {alert && (
+              <Alert color={alert.type} className="mb-3">
+                {alert.message}
+              </Alert>
+            )}
 
-                <Form onSubmit={handleSubmit}>
+            <Form onSubmit={handleSubmit}>
+
+              {/* ── اطلاعات اصلی ── */}
+              <Card className="mb-3">
+                <CardHeader>
+                  <h5 className="card-title mb-0">اطلاعات اصلی</h5>
+                </CardHeader>
+                <CardBody>
                   <Row className="g-3">
-                    <Col md="4">
-                      <FormGroup>
-                        <Label for="code">کد دانش‌آموز</Label>
-                        <Input
-                          id="code"
-                          name="code"
-                          value={form.code}
-                          onChange={handleChange}
-                          placeholder="مثلاً STU-001"
-                          required
-                        />
-                        {renderError("code")}
-                      </FormGroup>
-                    </Col>
 
+                    {/* جستجوی کاربر */}
                     <Col md="4">
                       <FormGroup>
-                        <Label for="user_id">شناسه کاربر (users)</Label>
-                        <Input
-                          id="user_id"
-                          name="user_id"
-                          type="number"
-                          value={form.user_id}
-                          onChange={handleChange}
-                          placeholder="مثلاً 45"
-                          required
-                        />
+                        <Label>
+                          کاربر {!isEdit && <span className="text-danger">*</span>}
+                        </Label>
+                        <div ref={userSearchRef} className="position-relative">
+                          <div className="input-group">
+                            <Input
+                              value={userSearch}
+                              onChange={handleUserSearchChange}
+                              onFocus={() => userSearchResults.length > 0 && setShowUserDropdown(true)}
+                              placeholder="نام، نام کاربری یا کد ملی جستجو کنید..."
+                              invalid={!!errors.user_id}
+                            />
+                            {userSearchLoading && (
+                              <span className="input-group-text">
+                                <Spinner size="sm" />
+                              </span>
+                            )}
+                            {selectedUser && (
+                              <Button
+                                type="button"
+                                color="light"
+                                onClick={handleClearUser}
+                                title="حذف انتخاب"
+                              >
+                                <i className="bx bx-x" />
+                              </Button>
+                            )}
+                          </div>
+
+                          {showUserDropdown && userSearchResults.length > 0 && (
+                            <div
+                              className="border rounded bg-white shadow-sm position-absolute w-100"
+                              style={{ zIndex: 1050, maxHeight: 240, overflowY: "auto", top: "100%", left: 0 }}
+                            >
+                              {userSearchResults.map((u) => (
+                                <div
+                                  key={u.id}
+                                  className="px-3 py-2"
+                                  style={{ cursor: "pointer", borderBottom: "1px solid #f0f0f0" }}
+                                  onMouseDown={() => handleSelectUser(u)}
+                                  onMouseOver={(e) => (e.currentTarget.style.background = "#f8f9fa")}
+                                  onMouseOut={(e) => (e.currentTarget.style.background = "")}
+                                >
+                                  <div className="fw-semibold" style={{ fontSize: "0.9rem" }}>
+                                    {u.name || u.username}
+                                  </div>
+                                  <div className="text-muted" style={{ fontSize: "0.8rem" }}>
+                                    {[u.username, u.ssn].filter(Boolean).join(" • ")}
+                                    <span className="ms-2 text-secondary">#{u.id}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedUser && (
+                          <div className="mt-2">
+                            <Badge color="success" className="px-2 py-1" style={{ fontSize: "0.82rem" }}>
+                              <i className="bx bx-check me-1" />
+                              {selectedUser.name || selectedUser.username || `کاربر #${selectedUser.id}`}
+                              {selectedUser.ssn && <span className="ms-1 opacity-75">({selectedUser.ssn})</span>}
+                            </Badge>
+                          </div>
+                        )}
                         {renderError("user_id")}
                       </FormGroup>
                     </Col>
 
+                    {/* انتخاب مجموعه */}
                     <Col md="4">
                       <FormGroup>
-                        <Label for="schoolIdsInput">شناسه مدارس</Label>
-                        <Input
-                          id="schoolIdsInput"
-                          name="schoolIdsInput"
-                          value={form.schoolIdsInput}
-                          onChange={handleChange}
-                          placeholder="مثلاً 1,2,5"
-                        />
-                        <FormText className="text-muted">
-                          شناسه‌ها را با کاما یا فاصله جدا کنید.
-                        </FormText>
+                        <Label>
+                          مجموعه(ها) <span className="text-danger">*</span>
+                        </Label>
+
+                        {schoolsLoading ? (
+                          <div className="text-muted small py-2">
+                            <Spinner size="sm" className="me-1" />
+                            در حال بارگذاری مجموعه‌ها...
+                          </div>
+                        ) : managerAutoSchool ? (
+                          <div
+                            className="border rounded px-3 py-2"
+                            style={{ background: "rgba(var(--bs-success-rgb), 0.06)", fontSize: "0.9rem" }}
+                          >
+                            <i className="bx bxs-school me-1 text-success" />
+                            <strong>
+                              {managerAutoSchool.name || managerAutoSchool.title || `مجموعه ${managerAutoSchool.id}`}
+                            </strong>
+                            <div className="text-muted" style={{ fontSize: "0.78rem" }}>
+                              خودکار انتخاب می‌شود
+                            </div>
+                          </div>
+                        ) : (
+                          <Input
+                            type="select"
+                            value={selectedSchoolId}
+                            onChange={(e) => setSelectedSchoolId(e.target.value)}
+                            invalid={!!errors.schoolIds}
+                          >
+                            <option value="">انتخاب مجموعه...</option>
+                            {schoolsToShow.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.name || s.title || `مجموعه ${s.id}`}
+                                {s.code ? ` (${s.code})` : ""}
+                              </option>
+                            ))}
+                          </Input>
+                        )}
                         {renderError("schoolIds")}
+                      </FormGroup>
+                    </Col>
+                  </Row>
+                </CardBody>
+              </Card>
+
+              {/* ── اطلاعات حساب کاربری (فقط ویرایش) ── */}
+              {isEdit && (
+                <Card className="mb-3">
+                  <CardHeader>
+                    <h5 className="card-title mb-0">اطلاعات حساب کاربری</h5>
+                  </CardHeader>
+                  <CardBody>
+                    <Row className="g-3">
+                      <Col md="4">
+                        <FormGroup>
+                          <Label for="name">نام کامل</Label>
+                          <Input
+                            id="name"
+                            name="name"
+                            value={form.name}
+                            onChange={handleChange}
+                            placeholder="نام و نام خانوادگی"
+                          />
+                          {renderError("name")}
+                        </FormGroup>
+                      </Col>
+                      <Col md="4">
+                        <FormGroup>
+                          <Label for="username">نام کاربری</Label>
+                          <Input
+                            id="username"
+                            name="username"
+                            value={form.username}
+                            onChange={handleChange}
+                            placeholder="username"
+                          />
+                          {renderError("username")}
+                        </FormGroup>
+                      </Col>
+                      <Col md="4">
+                        <FormGroup>
+                          <Label for="ssn">کد ملی</Label>
+                          <Input
+                            id="ssn"
+                            name="ssn"
+                            value={form.ssn}
+                            onChange={handleChange}
+                            placeholder="0012345678"
+                          />
+                          {renderError("ssn")}
+                        </FormGroup>
+                      </Col>
+                    </Row>
+                  </CardBody>
+                </Card>
+              )}
+
+              {/* ── اطلاعات تکمیلی ── */}
+              <Card className="mb-3">
+                <CardHeader>
+                  <h5 className="card-title mb-0">اطلاعات تکمیلی</h5>
+                </CardHeader>
+                <CardBody>
+                  <Row className="g-3">
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="birthday">تاریخ تولد</Label>
+                        <Input
+                          id="birthday"
+                          name="birthday"
+                          value={form.birthday}
+                          onChange={handleChange}
+                          placeholder="مثلاً 1375-03-10"
+                        />
+                        {renderError("birthday")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="gpa">معدل</Label>
+                        <Input
+                          id="gpa"
+                          name="gpa"
+                          value={form.gpa}
+                          onChange={handleChange}
+                          placeholder="مثلاً 18.5"
+                        />
+                        <FormText>به‌صورت رشته وارد کنید</FormText>
+                        {renderError("gpa")}
                       </FormGroup>
                     </Col>
 
@@ -285,25 +567,12 @@ const StudentForm = () => {
                           id="point"
                           name="point"
                           type="number"
+                          min="0"
                           value={form.point}
                           onChange={handleChange}
-                          placeholder="مثلاً 0"
+                          placeholder="0"
                         />
                         {renderError("point")}
-                      </FormGroup>
-                    </Col>
-
-                    <Col md="4">
-                      <FormGroup>
-                        <Label for="birthday">تاریخ تولد</Label>
-                        <Input
-                          id="birthday"
-                          name="birthday"
-                          type="date"
-                          value={form.birthday}
-                          onChange={handleChange}
-                        />
-                        {renderError("birthday")}
                       </FormGroup>
                     </Col>
 
@@ -314,6 +583,7 @@ const StudentForm = () => {
                           id="work_shift_id"
                           name="work_shift_id"
                           type="number"
+                          min="1"
                           value={form.work_shift_id}
                           onChange={handleChange}
                         />
@@ -323,27 +593,27 @@ const StudentForm = () => {
 
                     <Col md="4">
                       <FormGroup>
-                        <Label for="voip_phone">شماره وویپ</Label>
+                        <Label for="shift">شیفت</Label>
                         <Input
-                          id="voip_phone"
-                          name="voip_phone"
-                          value={form.voip_phone}
+                          id="shift"
+                          name="shift"
+                          value={form.shift}
                           onChange={handleChange}
-                          placeholder="مثلاً داخلی یا شماره مخصوص"
+                          placeholder="مثلاً صبح / عصر"
                         />
-                        {renderError("voip_phone")}
+                        {renderError("shift")}
                       </FormGroup>
                     </Col>
 
                     <Col md="4">
                       <FormGroup>
-                        <Label for="phone_2">شماره تماس 2</Label>
+                        <Label for="phone_2">شماره تماس ۲</Label>
                         <Input
                           id="phone_2"
                           name="phone_2"
                           value={form.phone_2}
                           onChange={handleChange}
-                          placeholder="شماره دوم"
+                          placeholder="09..."
                         />
                         {renderError("phone_2")}
                       </FormGroup>
@@ -351,13 +621,13 @@ const StudentForm = () => {
 
                     <Col md="4">
                       <FormGroup>
-                        <Label for="phone_3">شماره تماس 3</Label>
+                        <Label for="phone_3">شماره تماس ۳</Label>
                         <Input
                           id="phone_3"
                           name="phone_3"
                           value={form.phone_3}
                           onChange={handleChange}
-                          placeholder="شماره سوم"
+                          placeholder="09..."
                         />
                         {renderError("phone_3")}
                       </FormGroup>
@@ -371,7 +641,7 @@ const StudentForm = () => {
                           name="emergency_phone"
                           value={form.emergency_phone}
                           onChange={handleChange}
-                          placeholder="شماره تماس اضطراری"
+                          placeholder="09..."
                         />
                         {renderError("emergency_phone")}
                       </FormGroup>
@@ -379,72 +649,14 @@ const StudentForm = () => {
 
                     <Col md="4">
                       <FormGroup>
-                        <Label for="shift">شیفت</Label>
+                        <Label for="voip_phone">شماره VoIP</Label>
                         <Input
-                          id="shift"
-                          name="shift"
-                          value={form.shift}
+                          id="voip_phone"
+                          name="voip_phone"
+                          value={form.voip_phone}
                           onChange={handleChange}
-                          placeholder="مثلاً صبح/عصر"
                         />
-                        {renderError("shift")}
-                      </FormGroup>
-                    </Col>
-
-                    <Col md="4">
-                      <FormGroup>
-                        <Label for="group_id">گروه</Label>
-                        <Input
-                          id="group_id"
-                          name="group_id"
-                          type="number"
-                          value={form.group_id}
-                          onChange={handleChange}
-                          placeholder="شناسه گروه"
-                        />
-                        {renderError("group_id")}
-                      </FormGroup>
-                    </Col>
-
-                    <Col md="4">
-                      <FormGroup>
-                        <Label for="gpa">معدل / نمره</Label>
-                        <Input
-                          id="gpa"
-                          name="gpa"
-                          value={form.gpa}
-                          onChange={handleChange}
-                          placeholder="مثلاً 19.25"
-                        />
-                        {renderError("gpa")}
-                      </FormGroup>
-                    </Col>
-
-                    <Col md="4">
-                      <FormGroup>
-                        <Label for="institute_type">نوع مدرسه/موسسه</Label>
-                        <Input
-                          id="institute_type"
-                          name="institute_type"
-                          value={form.institute_type}
-                          onChange={handleChange}
-                          placeholder="تیپ موسسه"
-                        />
-                        {renderError("institute_type")}
-                      </FormGroup>
-                    </Col>
-
-                    <Col md="4">
-                      <FormGroup>
-                        <Label for="institute_name">نام مدرسه/موسسه</Label>
-                        <Input
-                          id="institute_name"
-                          name="institute_name"
-                          value={form.institute_name}
-                          onChange={handleChange}
-                          placeholder="نام مدرسه"
-                        />
-                        {renderError("institute_name")}
+                        {renderError("voip_phone")}
                       </FormGroup>
                     </Col>
 
@@ -498,9 +710,34 @@ const StudentForm = () => {
                           name="village"
                           value={form.village}
                           onChange={handleChange}
-                          placeholder="روستا"
                         />
                         {renderError("village")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="institute_type">نوع موسسه</Label>
+                        <Input
+                          id="institute_type"
+                          name="institute_type"
+                          value={form.institute_type}
+                          onChange={handleChange}
+                        />
+                        {renderError("institute_type")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="institute_name">نام موسسه</Label>
+                        <Input
+                          id="institute_name"
+                          name="institute_name"
+                          value={form.institute_name}
+                          onChange={handleChange}
+                        />
+                        {renderError("institute_name")}
                       </FormGroup>
                     </Col>
 
@@ -512,7 +749,6 @@ const StudentForm = () => {
                           name="religion"
                           value={form.religion}
                           onChange={handleChange}
-                          placeholder="دین"
                         />
                         {renderError("religion")}
                       </FormGroup>
@@ -526,38 +762,60 @@ const StudentForm = () => {
                           name="relationship"
                           value={form.relationship}
                           onChange={handleChange}
-                          placeholder="مثلاً پدر/مادر"
+                          placeholder="مثلاً پدر / مادر"
                         />
                         {renderError("relationship")}
                       </FormGroup>
                     </Col>
-                  </Row>
 
-                  <div className="d-flex justify-content-end gap-2">
-                    <Button
-                      type="button"
-                      color="secondary"
-                      onClick={() => navigate("/students")}
-                    >
-                      انصراف
-                    </Button>
-                    <Button type="submit" color="primary" disabled={loading}>
-                      {loading
-                        ? "در حال ذخیره..."
-                        : isEdit
-                        ? "ذخیره تغییرات"
-                        : "ایجاد دانش‌آموز"}
-                    </Button>
-                  </div>
-                </Form>
-              </CardBody>
-            </Card>
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="group_id">شناسه گروه</Label>
+                        <Input
+                          id="group_id"
+                          name="group_id"
+                          value={form.group_id}
+                          onChange={handleChange}
+                        />
+                        {renderError("group_id")}
+                      </FormGroup>
+                    </Col>
+
+                  </Row>
+                </CardBody>
+              </Card>
+
+              {/* ── دکمه‌های عملیات ── */}
+              <div className="d-flex justify-content-end gap-2 mb-4">
+                <Button
+                  type="button"
+                  color="secondary"
+                  outline
+                  onClick={() => navigate(-1)}
+                  disabled={loading}
+                >
+                  انصراف
+                </Button>
+                <Button type="submit" color="primary" disabled={loading}>
+                  {loading ? (
+                    <>
+                      <Spinner size="sm" className="me-1" />
+                      در حال ذخیره...
+                    </>
+                  ) : isEdit ? (
+                    "ذخیره تغییرات"
+                  ) : (
+                    "ایجاد دانش‌آموز"
+                  )}
+                </Button>
+              </div>
+
+            </Form>
           </Col>
         </Row>
       </Container>
     </div>
-  );
-};
+  )
+}
 
-export default StudentForm;
-
+export default StudentForm

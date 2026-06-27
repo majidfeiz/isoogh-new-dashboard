@@ -577,7 +577,7 @@ const AdviserStudents = () => {
                   <Button color="danger" onClick={() => setBulkDeleteModal(true)}>
                     حذف همه دانش‌آموزان
                   </Button>
-                  <Button color="light" onClick={() => navigate("/advisers")}>
+                  <Button color="light" onClick={() => navigate(-1)}>
                     بازگشت
                   </Button>
                 </div>

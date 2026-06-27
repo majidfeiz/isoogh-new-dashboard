@@ -12,6 +12,9 @@ import {
   Spinner,
 } from "reactstrap";
 import moment from "moment-jalaali";
+import DatePicker from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
 import { io } from "socket.io-client";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
@@ -67,6 +70,9 @@ const OutboundCallHistoriesLive = () => {
     start_date: "",
     end_date: "",
   });
+
+  const [startDatePicker, setStartDatePicker] = useState(null);
+  const [endDatePicker, setEndDatePicker] = useState(null);
 
   const socketRef = useRef(null);
   const highlightTimersRef = useRef(new Map());
@@ -385,14 +391,40 @@ const OutboundCallHistoriesLive = () => {
   const handleApplyFilters = useCallback((e) => {
     e?.preventDefault?.();
     if (!socketRef.current?.connected) return;
-    // Always reset to page 1 on filter apply
-    setFilters((prev) => ({ ...prev, page: 1 }));
-    const payload = buildPayload({ page: 1 });
-    // subscribe joins a filtered room for future auto-updates;
-    // list forces an immediate fetch in case subscribe doesn't push updated right away
+    const start = startDatePicker ? moment(startDatePicker.toDate()).format("YYYY-MM-DD") : "";
+    const end = endDatePicker ? moment(endDatePicker.toDate()).format("YYYY-MM-DD") : "";
+    setFilters((prev) => ({ ...prev, page: 1, start_date: start, end_date: end }));
+    const payload = buildPayload({ page: 1, start_date: start, end_date: end });
     socketRef.current.emit("subscribe", payload);
     socketRef.current.emit("list", payload);
-  }, [buildPayload]);
+  }, [buildPayload, startDatePicker, endDatePicker]);
+
+  const defaultFilters = {
+    page: 1,
+    per_page: 15,
+    disposition: "ALL",
+    type: "",
+    q: "",
+    sort_order: "DESC",
+    sort_by: "id",
+    start_date: "",
+    end_date: "",
+  };
+
+  const handleResetFilters = useCallback(() => {
+    setFilters(defaultFilters);
+    setStartDatePicker(null);
+    setEndDatePicker(null);
+    if (!socketRef.current?.connected) return;
+    const payload = {
+      page: 1,
+      per_page: 15,
+      sort_by: "id",
+      sort_order: "DESC",
+    };
+    socketRef.current.emit("subscribe", payload);
+    socketRef.current.emit("list", payload);
+  }, []);
 
   const handleRefresh = useCallback(() => {
     if (!socketRef.current) return;
@@ -541,20 +573,28 @@ const OutboundCallHistoriesLive = () => {
                 </Col>
                 <Col md={2} sm={6}>
                   <Label className="form-label text-muted small mb-1">از تاریخ</Label>
-                  <Input
-                    type="date"
-                    bsSize="sm"
-                    value={filters.start_date}
-                    onChange={(e) => handleFilterChange("start_date", e.target.value)}
+                  <DatePicker
+                    calendar={persian}
+                    locale={persian_fa}
+                    value={startDatePicker}
+                    onChange={(date) => setStartDatePicker(date || null)}
+                    format="YYYY/MM/DD"
+                    placeholder="از تاریخ"
+                    inputClass="form-control form-control-sm"
+                    calendarPosition="bottom-right"
                   />
                 </Col>
                 <Col md={2} sm={6}>
                   <Label className="form-label text-muted small mb-1">تا تاریخ</Label>
-                  <Input
-                    type="date"
-                    bsSize="sm"
-                    value={filters.end_date}
-                    onChange={(e) => handleFilterChange("end_date", e.target.value)}
+                  <DatePicker
+                    calendar={persian}
+                    locale={persian_fa}
+                    value={endDatePicker}
+                    onChange={(date) => setEndDatePicker(date || null)}
+                    format="YYYY/MM/DD"
+                    placeholder="تا تاریخ"
+                    inputClass="form-control form-control-sm"
+                    calendarPosition="bottom-right"
                   />
                 </Col>
                 <Col md={1} sm={4}>
@@ -601,10 +641,15 @@ const OutboundCallHistoriesLive = () => {
                     <option value={100}>۱۰۰</option>
                   </Input>
                 </Col>
-                <Col md={1} sm={4}>
-                  <Button color="primary" size="sm" type="submit" className="w-100" disabled={status !== "connected"}>
-                    اعمال
-                  </Button>
+                <Col md={2} sm={4}>
+                  <div className="d-flex gap-1">
+                    <Button color="primary" size="sm" type="submit" className="flex-grow-1" disabled={status !== "connected"}>
+                      اعمال
+                    </Button>
+                    <Button color="secondary" size="sm" type="button" outline onClick={handleResetFilters}>
+                      <i className="bx bx-reset" />
+                    </Button>
+                  </div>
                 </Col>
               </Row>
             </form>

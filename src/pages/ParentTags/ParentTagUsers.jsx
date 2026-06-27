@@ -558,7 +558,7 @@ const ParentTagUsers = () => {
                     {exportLoading ? "در حال دریافت..." : "خروجی CSV"}
                   </Button>
                   {loadingUsers && <Spinner size="sm" color="primary" />}
-                  <Button color="secondary" onClick={() => navigate("/parent-tags")}>
+                  <Button color="secondary" onClick={() => navigate(-1)}>
                     بازگشت به لیست
                   </Button>
                 </div>
@@ -598,7 +598,7 @@ const ParentTagUsers = () => {
                       />
                     </Col>
                     <Col xl="2" lg="3" md="6">
-                      <Label className="form-label">شناسه مدرسه</Label>
+                      <Label className="form-label">شناسه مجموعه</Label>
                       <Input
                         name="schoolId"
                         type="number"

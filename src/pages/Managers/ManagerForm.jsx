@@ -119,7 +119,7 @@ const ManagerForm = () => {
       }
 
       setTimeout(() => {
-        navigate("/managers");
+        navigate(-1);
       }, 700);
     } catch (e) {
       console.error("خطا در ذخیره مدیر", e);
@@ -212,7 +212,7 @@ const ManagerForm = () => {
                     <Button
                       type="button"
                       color="secondary"
-                      onClick={() => navigate("/managers")}
+                      onClick={() => navigate(-1)}
                     >
                       انصراف
                     </Button>

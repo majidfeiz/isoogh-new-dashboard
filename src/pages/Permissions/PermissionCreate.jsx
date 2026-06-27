@@ -47,7 +47,7 @@ const PermissionCreate = () => {
       try {
         await createPermission(values);
         // بعد از ساخت موفق، برو به لیست
-        navigate("/permissions");
+        navigate(-1);
       } catch (err) {
         console.error("create permission error", err);
         const data = err?.response?.data;
@@ -180,7 +180,7 @@ const PermissionCreate = () => {
                       <Button
                         type="button"
                         color="secondary"
-                        onClick={() => navigate("/permissions")}
+                        onClick={() => navigate(-1)}
                       >
                         انصراف
                       </Button>

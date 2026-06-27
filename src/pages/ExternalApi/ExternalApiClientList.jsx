@@ -153,13 +153,13 @@ const ExternalApiClientList = () => {
       },
       {
         id: "school_id",
-        header: "مدرسه",
+        header: "مجموعه",
         accessorKey: "school_id",
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => {
           const sid = info.getValue();
-          if (!sid) return <span className="text-muted small">همه مدارس</span>;
+          if (!sid) return <span className="text-muted small">همه مجموعه‌ها</span>;
           const school = schools.find((s) => s.id === sid);
           return school ? school.name : `#${sid}`;
         },
@@ -252,7 +252,7 @@ const ExternalApiClientList = () => {
               <CardHeader className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <div>
                   <h4 className="card-title mb-1">کلاینت‌های API خارجی</h4>
-                  <p className="text-muted mb-0">مدیریت دسترسی ارگان‌ها و مدارس به API</p>
+                  <p className="text-muted mb-0">مدیریت دسترسی ارگان‌ها و مجموعه‌ها به API</p>
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   {loading && <Spinner size="sm" color="primary" />}
@@ -331,7 +331,7 @@ const ExternalApiClientList = () => {
                   name="name"
                   value={form.name}
                   onChange={handleFormChange}
-                  placeholder="مثلاً: مدرسه شهید بهشتی"
+                  placeholder="مثلاً: مجموعه شهید بهشتی"
                   required
                 />
               </FormGroup>
@@ -347,20 +347,20 @@ const ExternalApiClientList = () => {
                 />
               </FormGroup>
               <FormGroup>
-                <Label>مدرسه (اختیاری)</Label>
+                <Label>مجموعه (اختیاری)</Label>
                 <Input
                   type="select"
                   name="school_id"
                   value={form.school_id}
                   onChange={handleFormChange}
                 >
-                  <option value="">همه مدارس (بدون محدودیت)</option>
+                  <option value="">همه مجموعه‌ها (بدون محدودیت)</option>
                   {schools.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </Input>
                 <small className="text-muted">
-                  اگر انتخاب شود، کلاینت فقط داده‌های همان مدرسه را می‌بیند.
+                  اگر انتخاب شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند.
                 </small>
               </FormGroup>
               <FormGroup check>

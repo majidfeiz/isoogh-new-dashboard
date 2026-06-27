@@ -50,7 +50,7 @@ const STATS_CONFIG = {
   schools_total: {
     icon: "bx-buildings",
     bgClass: "bg-warning",
-    label: "تعداد کل مدارس",
+    label: "تعداد کل مجموعه‌ها",
     getValue: (s) => s?.schools?.total,
   },
   managers_total: {

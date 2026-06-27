@@ -349,7 +349,7 @@ const UserPermissions = () => {
                     <Button
                       color="secondary"
                       className="me-2"
-                      onClick={() => navigate("/users")}
+                      onClick={() => navigate(-1)}
                       disabled={saving}
                     >
                       بازگشت به لیست کاربران

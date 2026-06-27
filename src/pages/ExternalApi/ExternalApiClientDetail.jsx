@@ -197,7 +197,7 @@ const ExternalApiClientDetail = () => {
   };
 
   const schoolName = (sid) => {
-    if (!sid) return <span className="text-muted">همه مدارس (بدون محدودیت)</span>;
+    if (!sid) return <span className="text-muted">همه مجموعه‌ها (بدون محدودیت)</span>;
     const s = schools.find((x) => x.id === sid);
     return s ? s.name : `#${sid}`;
   };
@@ -217,7 +217,7 @@ const ExternalApiClientDetail = () => {
       <div className="page-content">
         <div className="container-fluid">
           <p className="text-danger">کلاینت یافت نشد.</p>
-          <Button color="secondary" onClick={() => navigate("/external-api-clients")}>بازگشت</Button>
+          <Button color="secondary" onClick={() => navigate(-1)}>بازگشت</Button>
         </div>
       </div>
     );
@@ -242,7 +242,7 @@ const ExternalApiClientDetail = () => {
                   ) : (
                     <Badge color="secondary" pill className="fs-6">غیرفعال</Badge>
                   )}
-                  <Button color="light" size="sm" onClick={() => navigate("/external-api-clients")}>
+                  <Button color="light" size="sm" onClick={() => navigate(-1)}>
                     <i className="bx bx-arrow-back me-1" />
                     بازگشت
                   </Button>
@@ -316,20 +316,20 @@ const ExternalApiClientDetail = () => {
                           />
                         </FormGroup>
                         <FormGroup>
-                          <Label>مدرسه (اختیاری)</Label>
+                          <Label>مجموعه (اختیاری)</Label>
                           <Input
                             type="select"
                             name="school_id"
                             value={editForm.school_id}
                             onChange={handleEditChange}
                           >
-                            <option value="">همه مدارس (بدون محدودیت)</option>
+                            <option value="">همه مجموعه‌ها (بدون محدودیت)</option>
                             {schools.map((s) => (
                               <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
                           </Input>
                           <small className="text-muted">
-                            اگر مدرسه انتخاب شود، کلاینت فقط داده‌های همان مدرسه را می‌بیند.
+                            اگر مجموعه انتخاب شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند.
                           </small>
                         </FormGroup>
                         <FormGroup check className="mb-3">
@@ -358,7 +358,7 @@ const ExternalApiClientDetail = () => {
                             <td>{client.description || "—"}</td>
                           </tr>
                           <tr>
-                            <th>مدرسه</th>
+                            <th>مجموعه</th>
                             <td>{schoolName(client.school_id)}</td>
                           </tr>
                           <tr>

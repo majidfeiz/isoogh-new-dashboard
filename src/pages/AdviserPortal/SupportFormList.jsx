@@ -207,6 +207,12 @@ const SupportFormList = () => {
                       </div>
 
                       <div className="d-flex flex-wrap gap-2 mb-3">
+                        {form.grade?.name && (
+                          <Badge color="light" className="text-dark border">
+                            <i className="bx bx-book me-1" />
+                            {form.grade.name}
+                          </Badge>
+                        )}
                         {form.callDuration > 0 && (
                           <Badge color="light" className="text-dark border">
                             <i className="bx bx-time me-1" />

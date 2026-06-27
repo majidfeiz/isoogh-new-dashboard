@@ -313,7 +313,7 @@ const RolePermissions = () => {
                   <Button
                     color="secondary"
                     type="button"
-                    onClick={() => navigate("/roles")}
+                    onClick={() => navigate(-1)}
                   >
                     بازگشت به لیست نقش‌ها
                   </Button>

@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Card, CardBody, CardHeader, Col, Row, Input, Button } from "reactstrap";
 import { useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
@@ -12,6 +13,8 @@ const PermissionList = () => {
   const navigate = useNavigate();
   document.title = "سطوح دسترسی | داشبورد آیسوق";
 
+  const { saved, saveState } = useListState("permissions");
+
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
     page: 1,
@@ -19,8 +22,9 @@ const PermissionList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(saved?.search ?? "");
   const [loading, setLoading] = useState(false);
+  const initialPageRef = useRef(saved?.page ?? 1);
 
   const fetchData = useCallback(
     async (page = 1, currentSearch = "") => {
@@ -48,16 +52,21 @@ const PermissionList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, "");
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, search);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData]);
 
   const handleSearchChange = (e) => {
     const value = e.target.value;
     setSearch(value);
+    saveState({ page: 1, search: value });
     fetchData(1, value);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, search });
     fetchData(page, search);
   };
 
@@ -65,10 +74,7 @@ const PermissionList = () => {
     navigate("/permissions/create");
   };
 
-  // 🔹 ویرایش
   const handleEdit = useCallback((id) => {
-    console.log("handleEdit called with id:", id);
-    alert("EDIT " + id); // برای تست واضح
     navigate(`/permissions/${id}/edit`);
   }, [navigate]);
 
