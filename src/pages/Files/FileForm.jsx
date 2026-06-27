@@ -140,7 +140,7 @@ const FileForm = () => {
         await createFile(payload);
         setAlert({ type: "success", message: "فایل جدید با موفقیت ایجاد شد." });
       }
-      setTimeout(() => navigate("/files"), 700);
+      setTimeout(() => navigate(-1), 700);
     } catch (e) {
       console.error("خطا در ذخیره فایل", e);
       if (e.response?.status === 422) {
@@ -405,7 +405,7 @@ const FileForm = () => {
                     <Button type="submit" color="primary" className="w-md" disabled={loading}>
                       {loading ? "در حال ذخیره..." : isEdit ? "ویرایش فایل" : "ثبت فایل"}
                     </Button>
-                    <Button type="button" color="secondary" onClick={() => navigate("/files")}>
+                    <Button type="button" color="secondary" onClick={() => navigate(-1)}>
                       انصراف
                     </Button>
                   </div>

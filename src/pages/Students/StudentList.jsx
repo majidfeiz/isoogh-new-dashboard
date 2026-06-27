@@ -20,12 +20,14 @@ import {
   ModalBody,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 
 import { getStudents, deleteStudent, importStudents } from "../../services/studentService.jsx";
+import { getSchools } from "../../services/schoolService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -35,6 +37,8 @@ const StudentList = () => {
   const auth = useAuth?.();
   document.title = "دانش‌آموزان | داشبورد آیسوق";
 
+  const { saved, saveState } = useListState("students");
+
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
     page: 1,
@@ -42,30 +46,29 @@ const StudentList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [filters, setFilters] = useState({
-    name: "",
-    username: "",
-    ssn: "",
-    tag: "",
-    tagId: "",
-  });
+  const [filters, setFilters] = useState(
+    saved?.filters ?? { name: "", username: "", ssn: "", tag: "", tagId: "" }
+  );
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(null);
-  const [sorting, setSorting] = useState([{ id: "id", desc: true }]);
-  const [sort, setSort] = useState({ by: "id", order: "DESC" });
+  const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
+  const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
+  const initialPageRef = useRef(saved?.page ?? 1);
   const approxTotalRef = useRef(null);
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState("");
   const [importSchoolId, setImportSchoolId] = useState("");
   const [importDefaultPassword, setImportDefaultPassword] = useState("");
   const [importError, setImportError] = useState(null);
-  const [importSuccess, setImportSuccess] = useState(null);
+  const [importResult, setImportResult] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importPreviewPage, setImportPreviewPage] = useState(1);
   const [importPreviewPageSize, setImportPreviewPageSize] = useState(200);
   const [virtualRange, setVirtualRange] = useState({ start: 0, end: 40 });
   const [importUploadProgress, setImportUploadProgress] = useState(null);
+  const [schools, setSchools] = useState([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(false);
   const ROW_HEIGHT = 44;
   const VIRTUAL_BUFFER = 10;
   const [tagModalOpen, setTagModalOpen] = useState(false);
@@ -83,17 +86,28 @@ const StudentList = () => {
 
   const baseImportColumns = useMemo(
     () => [
-      "code",
-      "name",
       "username",
-      "ssn",
-      "phone",
-      "email",
+      "name",
       "password",
-      "user_id",
+      "phone",
+      "ssn",
+      "email",
       "birthday",
+      "point",
       "phone_2",
       "phone_3",
+      "shift",
+      "city",
+      "province",
+      "region",
+      "institute_type",
+      "institute_name",
+      "gpa",
+      "emergency_phone",
+      "village",
+      "religion",
+      "relationship",
+      "group_id",
       "voip_phone",
       "work_shift_id",
     ],
@@ -107,6 +121,10 @@ const StudentList = () => {
       return ["admin", "super_admin", "super-admin", "super admin"].includes(name);
     });
   }, [auth]);
+
+  const managedSchools = isAdminLike ? [] : schools;
+  const managerAutoSchool = !isAdminLike && managedSchools.length === 1 ? managedSchools[0] : null;
+  const needsSchoolSelect = isAdminLike || managedSchools.length > 1;
 
   const previewColumns = useMemo(() => {
     const keys = new Set(baseImportColumns);
@@ -164,8 +182,36 @@ const StudentList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, filters, sort);
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, filters, sort);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
+
+  useEffect(() => {
+    if (!auth?.user) return;
+    const loadSchools = async () => {
+      setSchoolsLoading(true);
+      try {
+        if (isAdminLike) {
+          const res = await getSchools({ limit: 500, sortBy: "name", sortOrder: "ASC" });
+          setSchools(res.items || []);
+        } else {
+          const userId = auth.user.id;
+          if (userId) {
+            const res = await getSchools({ managerId: userId, limit: 200 });
+            setSchools(res.items || []);
+          }
+        }
+      } catch (e) {
+        console.error("خطا در دریافت مجموعه‌ها", e);
+      } finally {
+        setSchoolsLoading(false);
+      }
+    };
+    loadSchools();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminLike, auth?.user?.id]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -177,16 +223,19 @@ const StudentList = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    saveState({ page: 1, filters, sort, sorting });
     fetchData(1, filters, sort);
   };
 
   const handleResetFilters = () => {
     const reset = { name: "", username: "", ssn: "", tag: "", tagId: "" };
     setFilters(reset);
+    saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, filters, sort, sorting });
     fetchData(page, filters, sort);
   };
 
@@ -333,7 +382,7 @@ const StudentList = () => {
       if (!file) return;
       setImportLoading(true);
       setImportError(null);
-      setImportSuccess(null);
+      setImportResult(null);
       try {
         const XLSX = await import("xlsx");
         const buffer = await file.arrayBuffer();
@@ -358,9 +407,46 @@ const StudentList = () => {
     []
   );
 
+  const handleDownloadSample = async () => {
+    const XLSX = await import("xlsx")
+    const sampleRows = [
+      {
+        username: "09123456789", name: "علی احمدی", password: "Pass1234",
+        phone: "09123456789", ssn: "1234567890", email: "ali@example.com",
+        birthday: "1385/01/01", point: "", phone_2: "", phone_3: "",
+        shift: "", city: "تهران", province: "تهران", region: "",
+        institute_type: "", institute_name: "", gpa: "", emergency_phone: "",
+        village: "", religion: "", relationship: "", group_id: "",
+        voip_phone: "", work_shift_id: "",
+      },
+      {
+        username: "09198765432", name: "زهرا حسینی", password: "Pass5678",
+        phone: "09198765432", ssn: "0987654321", email: "zahra@example.com",
+        birthday: "1386/06/15", point: "", phone_2: "", phone_3: "",
+        shift: "", city: "اصفهان", province: "اصفهان", region: "",
+        institute_type: "", institute_name: "", gpa: "", emergency_phone: "",
+        village: "", religion: "", relationship: "", group_id: "",
+        voip_phone: "", work_shift_id: "",
+      },
+    ]
+    const ws = XLSX.utils.json_to_sheet(sampleRows)
+    ws["!cols"] = Object.keys(sampleRows[0]).map((k) => ({ wch: Math.max(k.length + 2, 14) }))
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "students")
+    XLSX.writeFile(wb, "students-import-sample.xlsx")
+  }
+
   const handleImportFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const MAX_SIZE = 15 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setImportError("حجم فایل نباید بیشتر از ۱۵ مگابایت باشد.");
+      e.target.value = "";
+      return;
+    }
+    setImportError(null);
+    setImportResult(null);
     parseExcelFile(file);
   };
 
@@ -370,14 +456,14 @@ const StudentList = () => {
       return;
     }
 
-    if (isAdminLike && !importSchoolId) {
-      setImportError("برای ادمین وارد کردن schoolId الزامی است.");
+    if (needsSchoolSelect && !importSchoolId) {
+      setImportError("انتخاب مجموعه الزامی است.");
       return;
     }
 
     setImportLoading(true);
     setImportError(null);
-    setImportSuccess(null);
+    setImportResult(null);
     setImportUploadProgress(0);
     try {
       const XLSX = await import("xlsx");
@@ -394,14 +480,15 @@ const StudentList = () => {
 
       const formData = new FormData();
       formData.append("file", blob, importFileName || "students-import.xlsx");
-      if (isAdminLike && importSchoolId) {
-        formData.append("schoolId", importSchoolId);
+      const effectiveSchoolId = importSchoolId || (managerAutoSchool ? String(managerAutoSchool.id) : null);
+      if (effectiveSchoolId) {
+        formData.append("schoolId", effectiveSchoolId);
       }
       if (importDefaultPassword) {
         formData.append("defaultPassword", importDefaultPassword);
       }
 
-      await importStudents(formData, {
+      const raw = await importStudents(formData, {
         onUploadProgress: (evt) => {
           const total = evt?.total;
           const loaded = evt?.loaded;
@@ -413,7 +500,8 @@ const StudentList = () => {
           }
         },
       });
-      setImportSuccess("ایمپورت با موفقیت ارسال شد. پردازش در بک‌اند انجام می‌شود.");
+      const result = raw?.logId != null ? raw : (raw?.data ?? raw ?? {});
+      setImportResult(result);
       setImportRows([]);
       setImportFileName("");
       setImportSchoolId("");
@@ -423,7 +511,8 @@ const StudentList = () => {
       setImportUploadProgress(100);
     } catch (err) {
       console.error("خطا در ارسال ایمپورت", err);
-      setImportError("ارسال ایمپورت ناموفق بود. دوباره تلاش کنید.");
+      const serverMsg = err?.response?.data?.message || err?.response?.data?.errorMessage;
+      setImportError(serverMsg || "ارسال ایمپورت ناموفق بود. دوباره تلاش کنید.");
     } finally {
       setImportLoading(false);
       setTimeout(() => setImportUploadProgress(null), 1000);
@@ -549,7 +638,7 @@ const StudentList = () => {
       },
       {
         id: "schools",
-        header: "مدارس",
+        header: "مجموعه‌ها",
         accessorKey: "schools",
         enableColumnFilter: false,
         enableSorting: false,
@@ -637,10 +726,7 @@ const StudentList = () => {
 
   const handleSortingChange = useCallback(
     (nextSorting) => {
-      const allowed = [
-        "id",
-        "name",
-      ];
+      const allowed = ["id", "name"];
       const first = nextSorting?.[0];
 
       if (first && !allowed.includes(first.id)) {
@@ -652,6 +738,7 @@ const StudentList = () => {
       if (!first) {
         const resetSort = { by: undefined, order: undefined };
         setSort(resetSort);
+        saveState({ page: 1, filters, sort: resetSort, sorting: nextSorting });
         fetchData(1, filters, resetSort);
         return;
       }
@@ -661,9 +748,10 @@ const StudentList = () => {
         order: first.desc ? "DESC" : "ASC",
       };
       setSort(nextSort);
+      saveState({ page: 1, filters, sort: nextSort, sorting: nextSorting });
       fetchData(1, filters, nextSort);
     },
-    [fetchData, filters]
+    [fetchData, filters, saveState]
   );
 
   return (
@@ -676,38 +764,102 @@ const StudentList = () => {
             <Card>
               <CardHeader className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <h4 className="card-title mb-0">ایمپورت اکسل دانش‌آموزان</h4>
-                <div className="text-muted small">
-                  هدرهای قابل قبول: code, name, username, password, phone, ssn, email, user_id, birthday و سایر فیلدهای سند.
-                </div>
+                <Button color="secondary" outline size="sm" onClick={handleDownloadSample}>
+                  <i className="bx bx-download me-1" />
+                  دانلود فایل نمونه
+                </Button>
               </CardHeader>
               <CardBody>
+                <Alert color="info" className="mb-4 py-2 small border-0" style={{ background: "rgba(var(--bs-info-rgb), 0.08)" }}>
+                  <div className="mb-1">
+                    <strong>ستون‌های پشتیبانی‌شده:</strong>{" "}
+                    <span className="text-muted">
+                      username (الزامی)، name، password، phone، ssn، email، birthday، point، phone_2، phone_3، shift، city، province، region، institute_type، institute_name، gpa، emergency_phone، village، religion، relationship، group_id، voip_phone، work_shift_id
+                    </span>
+                  </div>
+                  <div className="text-muted">
+                    ستون <code>code</code> خودکار از username ساخته می‌شود — نیازی به وارد کردن ندارد. حجم فایل: حداکثر ۱۵ مگابایت.
+                  </div>
+                </Alert>
+
                 {importError && (
                   <Alert color="danger" className="mb-3">
                     {importError}
                   </Alert>
                 )}
-                {importSuccess && (
-                  <Alert color="success" className="mb-3">
-                    {importSuccess}
+
+                {importResult && (
+                  <Alert
+                    color={
+                      importResult.status === "failed"
+                        ? "danger"
+                        : importResult.failedRows > 0
+                        ? "warning"
+                        : "success"
+                    }
+                    className="mb-3"
+                  >
+                    <div className="d-flex align-items-center gap-2 flex-wrap mb-2">
+                      <i
+                        className={`bx ${importResult.status === "failed" ? "bx-x-circle" : importResult.failedRows > 0 ? "bx-error" : "bx-check-circle"} fs-5`}
+                      />
+                      <strong>
+                        {importResult.status === "failed"
+                          ? "ایمپورت ناموفق بود"
+                          : importResult.failedRows > 0
+                          ? "ایمپورت با خطاهای جزئی انجام شد"
+                          : "ایمپورت با موفقیت انجام شد"}
+                      </strong>
+                      {importResult.logId != null && (
+                        <span className="text-muted small">شناسه لاگ: {importResult.logId}</span>
+                      )}
+                    </div>
+                    <div className="d-flex gap-4 flex-wrap">
+                      {importResult.totalRows != null && (
+                        <span>
+                          <span className="text-muted small d-block">کل ردیف‌ها</span>
+                          <strong>{importResult.totalRows.toLocaleString("fa-IR")}</strong>
+                        </span>
+                      )}
+                      {importResult.processedRows != null && (
+                        <span>
+                          <span className="text-muted small d-block">پردازش موفق</span>
+                          <strong className="text-success">{importResult.processedRows.toLocaleString("fa-IR")}</strong>
+                        </span>
+                      )}
+                      {importResult.failedRows > 0 && (
+                        <span>
+                          <span className="text-muted small d-block">ناموفق</span>
+                          <strong className="text-danger">{importResult.failedRows.toLocaleString("fa-IR")}</strong>
+                        </span>
+                      )}
+                    </div>
+                    {importResult.errorMessage && (
+                      <div className="mt-2 small text-muted">{importResult.errorMessage}</div>
+                    )}
                   </Alert>
                 )}
 
                 {(importLoading || importUploadProgress !== null) && (
                   <div className="mb-3">
                     <Label className="form-label d-flex justify-content-between">
-                      <span>در حال ارسال فایل</span>
+                      <span>
+                        {importUploadProgress !== null
+                          ? "در حال آپلود فایل..."
+                          : "در حال خواندن فایل..."}
+                      </span>
                       {importUploadProgress != null ? <span>%{importUploadProgress}</span> : null}
                     </Label>
                     <Progress
                       animated={importUploadProgress === null}
                       striped
-                      color="info"
-                      value={importUploadProgress ?? 35}
+                      color="primary"
+                      value={importUploadProgress ?? 50}
                     />
                   </div>
                 )}
 
-                <Row className="g-3 align-items-end mb-3">
+                <Row className="g-3 align-items-end mb-4">
                   <Col md="4">
                     <Label className="form-label">فایل اکسل (.xlsx)</Label>
                     <Input
@@ -716,70 +868,104 @@ const StudentList = () => {
                       onChange={handleImportFileChange}
                       disabled={importLoading}
                     />
-                    {importFileName ? (
+                    {importFileName && (
                       <div className="mt-1 text-muted" style={{ fontSize: "0.85rem" }}>
+                        <i className="bx bx-file me-1" />
                         {importFileName}
+                        {importRows.length > 0 && (
+                          <span className="ms-2 badge bg-secondary rounded-pill">
+                            {importRows.length.toLocaleString("fa-IR")} ردیف
+                          </span>
+                        )}
                       </div>
-                    ) : null}
+                    )}
                   </Col>
 
                   <Col md="3">
-                    <Label className="form-label">رمز عبور پیش‌فرض (اختیاری)</Label>
+                    <Label className="form-label">رمز عبور پیش‌فرض</Label>
                     <Input
                       type="text"
                       value={importDefaultPassword}
                       onChange={(e) => setImportDefaultPassword(e.target.value)}
-                      placeholder="در صورت خالی، از فایل خوانده می‌شود"
+                      placeholder="اختیاری — حداقل ۶ کاراکتر"
                       disabled={importLoading}
                     />
                   </Col>
 
-                  {isAdminLike && (
+                  {needsSchoolSelect && (
                     <Col md="3">
-                      <Label className="form-label">شناسه مدرسه (Admins لازم است)</Label>
+                      <Label className="form-label">
+                        مجموعه{" "}
+                        <span className="text-danger fw-bold">*</span>
+                      </Label>
                       <Input
-                        type="number"
+                        type="select"
                         value={importSchoolId}
                         onChange={(e) => setImportSchoolId(e.target.value)}
-                        placeholder="مثلاً 146"
-                        disabled={importLoading}
-                      />
+                        disabled={importLoading || schoolsLoading}
+                      >
+                        <option value="">
+                          {schoolsLoading ? "در حال بارگذاری..." : "انتخاب مجموعه..."}
+                        </option>
+                        {schools.map((s) => (
+                          <option key={s.id} value={String(s.id)}>
+                            {s.name || s.title || `مجموعه ${s.id}`}
+                          </option>
+                        ))}
+                      </Input>
                     </Col>
                   )}
 
-                  <Col md="2" className="d-flex gap-2">
+                  {managerAutoSchool && (
+                    <Col md="3">
+                      <Label className="form-label">مجموعه</Label>
+                      <div
+                        className="border rounded px-3 py-2"
+                        style={{ background: "rgba(var(--bs-success-rgb), 0.06)", fontSize: "0.9rem", minHeight: 38, display: "flex", flexDirection: "column", justifyContent: "center" }}
+                      >
+                        <div>
+                          <i className="bx bxs-school me-1 text-success" />
+                          <strong>{managerAutoSchool.name || managerAutoSchool.title || `مجموعه ${managerAutoSchool.id}`}</strong>
+                        </div>
+                        <div className="text-muted" style={{ fontSize: "0.78rem" }}>خودکار انتخاب می‌شود</div>
+                      </div>
+                    </Col>
+                  )}
+
+                  <Col md={needsSchoolSelect || managerAutoSchool ? 2 : 5} className="d-flex gap-2 align-items-end">
                     <Button
                       color="secondary"
                       outline
-                      className="w-100"
                       onClick={handleAddImportRow}
                       disabled={importLoading}
+                      title="افزودن ردیف دستی"
                     >
-                      افزودن ردیف دستی
+                      <i className="bx bx-plus me-1" />
+                      ردیف دستی
                     </Button>
                     <Button
                       color="danger"
                       outline
-                      className="w-100"
-                      onClick={() => setImportRows([])}
+                      onClick={() => {
+                        setImportRows([])
+                        setImportFileName("")
+                        setImportResult(null)
+                      }}
                       disabled={importLoading || importRows.length === 0}
+                      title="پاک‌کردن داده‌ها"
                     >
+                      <i className="bx bx-trash me-1" />
                       پاک‌کردن
                     </Button>
                   </Col>
                 </Row>
 
-                {importLoading && (
-                  <div className="mb-3">
-                    <Progress animated color="info" value={80} />
-                  </div>
-                )}
-
                 {importRows.length > 0 && (
                   <div className="table-responsive mb-3">
                     <div className="d-flex flex-wrap justify-content-between align-items-center mb-2 gap-2">
                       <div className="text-muted" style={{ fontSize: "0.9rem" }}>
-                        مجموع ردیف‌ها: {importRows.length.toLocaleString("fa-IR")}
+                        مجموع ردیف‌ها:{" "}
+                        <strong className="text-dark">{importRows.length.toLocaleString("fa-IR")}</strong>
                       </div>
                       <div className="d-flex align-items-center gap-2 flex-wrap">
                         <span className="text-muted" style={{ fontSize: "0.9rem" }}>
@@ -913,13 +1099,31 @@ const StudentList = () => {
                   </div>
                 )}
 
-                <div className="d-flex justify-content-end gap-2">
+                <div className="d-flex justify-content-between align-items-center mt-2">
+                  <div className="text-muted small">
+                    {importRows.length > 0 && !importLoading && (
+                      <span>
+                        <i className="bx bx-info-circle me-1" />
+                        {importRows.length.toLocaleString("fa-IR")} ردیف آماده آپلود
+                      </span>
+                    )}
+                  </div>
                   <Button
                     color="primary"
                     onClick={handleUploadImport}
                     disabled={importLoading || importRows.length === 0}
                   >
-                    {importLoading ? "در حال ارسال..." : "آپلود و ایمپورت"}
+                    {importLoading ? (
+                      <>
+                        <i className="bx bx-loader-alt bx-spin me-1" />
+                        در حال ارسال...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bx bx-upload me-1" />
+                        آپلود و ایمپورت
+                      </>
+                    )}
                   </Button>
                 </div>
               </CardBody>
@@ -1107,7 +1311,7 @@ const StudentList = () => {
                 <Badge key={t.id || t.name} color="info" pill className="px-3 py-2">
                   <div className="fw-semibold">{t.name || t.title || t.id}</div>
                   <div className="text-muted small">
-                    {t.school_id ? `مدرسه: ${t.school_id}` : ""}
+                    {t.school_id ? `مجموعه: ${t.school_id}` : ""}
                     {t.parent_id ? ` | والد: ${t.parent_id}` : ""}
                   </div>
                 </Badge>

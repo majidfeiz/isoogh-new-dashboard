@@ -288,14 +288,14 @@ const Monitoring = () => {
                       />
                     </Col>
                     <Col xl="3" lg="4" md="5">
-                      <Label className="form-label">مدرسه</Label>
+                      <Label className="form-label">مجموعه</Label>
                       <Input
                         type="select"
                         name="schoolId"
                         value={filters.schoolId}
                         onChange={handleFilterChange}
                       >
-                        <option value="">همه مدارس</option>
+                        <option value="">همه مجموعه‌ها</option>
                         {schools.map((s) => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}

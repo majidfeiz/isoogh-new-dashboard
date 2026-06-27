@@ -194,7 +194,7 @@ const SupportFormForm = () => {
       setSupportForms(supportFormsRes.items || []);
       setParentTags(parentTagsRes.items || []);
     } catch (e) {
-      console.error("خطا در دریافت مدارس/پایه‌ها", e);
+      console.error("خطا در دریافت مجموعه‌ها/پایه‌ها", e);
     }
   }, []);
 
@@ -622,7 +622,7 @@ const SupportFormForm = () => {
       }
 
       setTimeout(() => {
-        navigate("/support-forms");
+        navigate(-1);
       }, 800);
     } catch (e) {
       console.error(e);
@@ -640,7 +640,7 @@ const SupportFormForm = () => {
     () =>
       (schools || []).map((school) => ({
         value: school.id,
-        label: school.name || school.title || `مدرسه ${school.id}`,
+        label: school.name || school.title || `مجموعه ${school.id}`,
       })),
     [schools]
   );
@@ -775,7 +775,7 @@ const SupportFormForm = () => {
 
                             <Col md="6">
                               <FormGroup>
-                                <Label for="school_id">مدرسه</Label>
+                                <Label for="school_id">مجموعه</Label>
                                 <Input
                                   id="school_id"
                                   name="school_id"
@@ -783,7 +783,7 @@ const SupportFormForm = () => {
                                   value={form.school_id}
                                   onChange={handleChange}
                                 >
-                                  <option value="">انتخاب مدرسه</option>
+                                  <option value="">انتخاب مجموعه</option>
                                   {schoolOptions.map((opt) => (
                                     <option key={opt.value} value={opt.value}>
                                       {opt.label}
@@ -1775,7 +1775,7 @@ const SupportFormForm = () => {
                           <Button
                             type="button"
                             color="secondary"
-                            onClick={() => navigate("/support-forms")}
+                            onClick={() => navigate(-1)}
                           >
                             انصراف
                           </Button>

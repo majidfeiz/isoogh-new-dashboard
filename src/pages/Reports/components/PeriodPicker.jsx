@@ -82,7 +82,7 @@ const PeriodPicker = ({ onApply, schools = [], showSchoolFilter = false }) => {
           <Col md="3" sm="6">
             <Label className="form-label fw-medium mb-1" style={{ fontSize: "0.85rem" }}>
               <i className="mdi mdi-school-outline me-1 text-muted" />
-              مدرسه
+              مجموعه
             </Label>
             <Input
               type="select"
@@ -91,10 +91,10 @@ const PeriodPicker = ({ onApply, schools = [], showSchoolFilter = false }) => {
               onChange={(e) => setSchoolId(e.target.value)}
               className="border-0 shadow-sm"
             >
-              <option value="">همه مدارس</option>
+              <option value="">همه مجموعه‌ها</option>
               {schools.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name || s.title || `مدرسه ${s.id}`}
+                  {s.name || s.title || `مجموعه ${s.id}`}
                 </option>
               ))}
             </Input>

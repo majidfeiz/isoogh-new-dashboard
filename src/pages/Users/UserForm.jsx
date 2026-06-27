@@ -23,6 +23,11 @@ import {
   updateUser,
 } from "../../services/userService.jsx";
 
+const normalizeStatus = (val) => {
+  if (val === "inactive" || val === 0 || val === false || val === "0") return "inactive"
+  return "active"
+}
+
 const UserForm = () => {
   const { id } = useParams();
   const isEdit = !!id;
@@ -59,7 +64,7 @@ const UserForm = () => {
           username: user.username || "",
           ssn: user.ssn || "",
           phone: user.phone || user.mobile || "",
-          status: user.status || "active",
+          status: normalizeStatus(user.status),
           password: "",
           confirmPassword: "",
         }));
@@ -94,7 +99,6 @@ const UserForm = () => {
       if (isEdit) {
         const payload = { ...form };
         delete payload.confirmPassword;
-        delete payload.status;
         if (!payload.password) delete payload.password;
         delete payload.mobile;
         await updateUser(id, payload);
@@ -114,7 +118,7 @@ const UserForm = () => {
       }
 
       setTimeout(() => {
-        navigate("/users");
+        navigate(-1);
       }, 800);
     } catch (e) {
       console.error(e);
@@ -239,16 +243,17 @@ const UserForm = () => {
                     <Col md="6">
                       <FormGroup>
                         <Label for="status">وضعیت</Label>
-                        <Input
-                          type="select"
+                        <select
                           id="status"
                           name="status"
+                          className="form-select"
+                          style={{ width: "130px" }}
                           value={form.status}
                           onChange={handleChange}
                         >
                           <option value="active">فعال</option>
                           <option value="inactive">غیرفعال</option>
-                        </Input>
+                        </select>
                         {renderError("status")}
                       </FormGroup>
                     </Col>
@@ -290,7 +295,7 @@ const UserForm = () => {
                     <Button
                       type="button"
                       color="secondary"
-                      onClick={() => navigate("/users")}
+                      onClick={() => navigate(-1)}
                     >
                       انصراف
                     </Button>

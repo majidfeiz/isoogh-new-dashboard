@@ -227,14 +227,14 @@ const SupportForms = () => {
                       </Input>
                     </Col>
                     <Col xl="2" lg="3" md="4">
-                      <Label className="form-label">مدرسه</Label>
+                      <Label className="form-label">مجموعه</Label>
                       <Input
                         type="select"
                         name="schoolId"
                         value={filters.schoolId}
                         onChange={handleFilterChange}
                       >
-                        <option value="">همه مدارس</option>
+                        <option value="">همه مجموعه‌ها</option>
                         {schools.map((s) => (
                           <option key={s.id} value={s.id}>{s.name}</option>
                         ))}

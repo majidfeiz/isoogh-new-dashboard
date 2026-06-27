@@ -141,7 +141,7 @@ const ParentTagForm = () => {
       }
 
       setTimeout(() => {
-        navigate("/parent-tags");
+        navigate(-1);
       }, 700);
     } catch (e) {
       console.error("خطا در ذخیره تگ", e);
@@ -230,7 +230,7 @@ const ParentTagForm = () => {
                     <Button type="submit" color="primary" className="w-md" disabled={loading}>
                       {loading ? "در حال ذخیره..." : isEdit ? "ویرایش تگ" : "ثبت تگ"}
                     </Button>
-                    <Button type="button" color="secondary" onClick={() => navigate("/parent-tags")}>
+                    <Button type="button" color="secondary" onClick={() => navigate(-1)}>
                       انصراف
                     </Button>
                   </div>

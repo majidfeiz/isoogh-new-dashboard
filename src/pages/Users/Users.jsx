@@ -21,6 +21,7 @@ import {
   Progress,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
@@ -48,6 +49,8 @@ const UserList = () => {
   }, [user]);
   document.title = "کاربران | داشبورد آیسوق";
 
+  const { saved, saveState } = useListState("users");
+
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
     page: 1,
@@ -55,17 +58,15 @@ const UserList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [filters, setFilters] = useState({
-    name: "",
-    username: "",
-    ssn: "",
-    phone: "",
-  });
+  const [filters, setFilters] = useState(
+    saved?.filters ?? { name: "", username: "", ssn: "", phone: "" }
+  );
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(null);
-  const [sorting, setSorting] = useState([{ id: "id", desc: true }]);
-  const [sort, setSort] = useState({ by: "id", order: "DESC" });
+  const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
+  const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
+  const initialPageRef = useRef(saved?.page ?? 1);
   const approxTotalRef = useRef(null);
 
   const buildSearchQuery = useCallback((currentFilters) => {
@@ -107,7 +108,10 @@ const UserList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, filters, sort);
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, filters, sort);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
 
   const handleFilterChange = (e) => {
@@ -120,16 +124,19 @@ const UserList = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    saveState({ page: 1, filters, sort, sorting });
     fetchData(1, filters, sort);
   };
 
   const handleResetFilters = () => {
     const reset = { name: "", username: "", ssn: "", phone: "" };
     setFilters(reset);
+    saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, filters, sort, sorting });
     fetchData(page, filters, sort);
   };
 
@@ -292,6 +299,7 @@ const UserList = () => {
     [meta.page, filters, sort, fetchData]
   );
 
+
   const columns = useMemo(
     () => [
       {
@@ -317,6 +325,35 @@ const UserList = () => {
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => info.getValue() || "-",
+      },
+      {
+        id: "roles",
+        header: "نقش",
+        accessorKey: "roles",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => {
+          const roles = info.getValue();
+          if (!Array.isArray(roles) || roles.length === 0) {
+            return (
+              <span className="badge bg-secondary bg-opacity-25 text-secondary fw-normal">
+                بدون نقش
+              </span>
+            );
+          }
+          return (
+            <div className="d-flex flex-wrap gap-1">
+              {roles.map((role) => (
+                <span
+                  key={role.id}
+                  className="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 fw-normal"
+                >
+                  {role.label || role.name}
+                </span>
+              ))}
+            </div>
+          );
+        },
       },
       {
         id: "email",
@@ -417,7 +454,6 @@ const UserList = () => {
       const allowed = ["id", "name"];
       const first = nextSorting?.[0];
 
-      // اگر ستون قابل سورت نبود، نادیده بگیر
       if (first && !allowed.includes(first.id)) {
         return;
       }
@@ -427,6 +463,7 @@ const UserList = () => {
       if (!first) {
         const resetSort = { by: undefined, order: undefined };
         setSort(resetSort);
+        saveState({ page: 1, filters, sort: resetSort, sorting: nextSorting });
         fetchData(1, filters, resetSort);
         return;
       }
@@ -436,9 +473,10 @@ const UserList = () => {
         order: first.desc ? "DESC" : "ASC",
       };
       setSort(nextSort);
+      saveState({ page: 1, filters, sort: nextSort, sorting: nextSorting });
       fetchData(1, filters, nextSort);
     },
-    [fetchData, filters]
+    [fetchData, filters, saveState]
   );
 
   return (

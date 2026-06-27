@@ -1,5 +1,5 @@
 // src/services/adviserService.jsx
-import { apiGet, apiPost, apiPatch, apiDelete } from "../helpers/httpClient.jsx";
+import { apiGet, apiPost, apiPatch, apiDelete, apiPut } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
 export async function getAdvisers({
@@ -12,6 +12,7 @@ export async function getAdvisers({
   userId,
   parentId,
   isSuper,
+  gradeId,
 } = {}) {
   const url = getApiUrl(API_ROUTES.advisers.list);
   const response = await apiGet(url, {
@@ -26,6 +27,7 @@ export async function getAdvisers({
       parentId: parentId ?? undefined,
       isSuper:
         typeof isSuper === "boolean" ? isSuper : isSuper === "1" ? true : isSuper === "0" ? false : undefined,
+      gradeId: gradeId || undefined,
     },
   });
 
@@ -136,4 +138,16 @@ export async function detachAdviserStudents(adviserId) {
   const url = getApiUrl(API_ROUTES.advisers.students(adviserId));
   const response = await apiDelete(url);
   return response.data;
+}
+
+export async function getAdviserGrades(adviserId) {
+  const url = getApiUrl(API_ROUTES.advisers.grades(adviserId));
+  const res = await apiGet(url);
+  return res?.data?.data || [];
+}
+
+export async function syncAdviserGrades(adviserId, gradeIds) {
+  const url = getApiUrl(API_ROUTES.advisers.grades(adviserId));
+  const res = await apiPut(url, { gradeIds });
+  return res?.data?.data || [];
 }

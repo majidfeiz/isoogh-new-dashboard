@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 import {
   Badge,
   Button,
@@ -19,6 +20,10 @@ import {
   InputGroup,
   InputGroupText,
   Label,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
   Progress,
   Row,
   Spinner,
@@ -26,7 +31,8 @@ import {
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
-import { getAdvisers } from "../../services/adviserService.jsx";
+import { getAdvisers, syncAdviserGrades } from "../../services/adviserService.jsx";
+import { getGrades } from "../../services/gradeService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 
@@ -42,6 +48,8 @@ const AdviserList = () => {
   document.title = "مشاوران | داشبورد آیسوق";
   const navigate = useNavigate();
 
+  const { saved, saveState } = useListState("advisers");
+
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
     page: 1,
@@ -49,19 +57,21 @@ const AdviserList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [filters, setFilters] = useState({
-    code: "",
-    name: "",
-    username: "",
-    phone: "",
-    parentId: "",
-    isSuper: "",
-  });
+  const [filters, setFilters] = useState(
+    { code: "", name: "", username: "", phone: "", parentId: "", isSuper: "", gradeId: "", ...(saved?.filters ?? {}) }
+  );
+
+  const [allGrades, setAllGrades] = useState([]);
+  const [gradeModal, setGradeModal] = useState(false);
+  const [modalAdviser, setModalAdviser] = useState(null);
+  const [modalSelectedIds, setModalSelectedIds] = useState([]);
+  const [modalSaving, setModalSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(null);
-  const [sorting, setSorting] = useState([{ id: "id", desc: true }]);
-  const [sort, setSort] = useState({ by: "id", order: "DESC" });
+  const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
+  const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
+  const initialPageRef = useRef(saved?.page ?? 1);
   const approxTotalRef = useRef(null);
 
   const buildSearchQuery = useCallback((currentFilters) => {
@@ -96,6 +106,7 @@ const AdviserList = () => {
           sortOrder: currentSort?.order,
           parentId: parseParentId(currentFilters.parentId),
           isSuper: parseIsSuper(currentFilters.isSuper),
+          gradeId: currentFilters.gradeId ? Number(currentFilters.gradeId) : undefined,
         });
 
         setData(res.items || []);
@@ -120,8 +131,47 @@ const AdviserList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, filters, sort);
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, filters, sort);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
+
+  useEffect(() => {
+    getGrades({ page: 1, limit: 200 })
+      .then((res) => setAllGrades(res.items || []))
+      .catch(() => setAllGrades([]));
+  }, []);
+
+  const openGradeModal = useCallback((adviser) => {
+    setModalAdviser(adviser);
+    setModalSelectedIds((adviser.grades || []).map((g) => Number(g.id)));
+    setGradeModal(true);
+  }, []);
+
+  const toggleGradeSelection = useCallback((gradeId) => {
+    setModalSelectedIds((prev) =>
+      prev.includes(gradeId) ? prev.filter((id) => id !== gradeId) : [...prev, gradeId]
+    );
+  }, []);
+
+  const handleSaveGrades = useCallback(async () => {
+    if (!modalAdviser) return;
+    setModalSaving(true);
+    try {
+      await syncAdviserGrades(modalAdviser.id, modalSelectedIds);
+      setData((prev) =>
+        prev.map((row) =>
+          row.id === modalAdviser.id
+            ? { ...row, grades: allGrades.filter((g) => modalSelectedIds.includes(Number(g.id))) }
+            : row
+        )
+      );
+      setGradeModal(false);
+    } finally {
+      setModalSaving(false);
+    }
+  }, [modalAdviser, modalSelectedIds, allGrades]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -133,6 +183,7 @@ const AdviserList = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    saveState({ page: 1, filters, sort, sorting });
     fetchData(1, filters, sort);
   };
 
@@ -144,12 +195,15 @@ const AdviserList = () => {
       phone: "",
       parentId: "",
       isSuper: "",
+      gradeId: "",
     };
     setFilters(reset);
+    saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, filters, sort, sorting });
     fetchData(page, filters, sort);
   };
 
@@ -157,6 +211,7 @@ const AdviserList = () => {
     const searchQuery = buildSearchQuery(filters);
     const parentId = parseParentId(filters.parentId);
     const isSuper = parseIsSuper(filters.isSuper);
+    const gradeId = filters.gradeId ? Number(filters.gradeId) : undefined;
     const limit =
       meta?.total && meta.total > 0
         ? Math.min(meta.total, 300000)
@@ -174,6 +229,7 @@ const AdviserList = () => {
       if (searchQuery) params.append("search", searchQuery);
       if (parentId !== undefined) params.append("parentId", String(parentId));
       if (isSuper !== undefined) params.append("isSuper", isSuper ? "true" : "false");
+      if (gradeId !== undefined) params.append("gradeId", String(gradeId));
 
       const url = `${getApiUrl(API_ROUTES.advisers.export)}?${params.toString()}`;
       const token = getAccessToken();
@@ -364,7 +420,7 @@ const AdviserList = () => {
       },
       {
         id: "schools",
-        header: "مدارس",
+        header: "مجموعه‌ها",
         accessorFn: (row) =>
           (row?.schools || [])
             .map((s) => s?.name || s?.code || "")
@@ -373,6 +429,26 @@ const AdviserList = () => {
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => info.getValue() || "-",
+      },
+      {
+        id: "grades",
+        header: "پایه‌ها",
+        accessorFn: (row) => row?.grades || [],
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => {
+          const grades = info.getValue();
+          if (!grades || grades.length === 0) return <span className="text-muted">-</span>;
+          return (
+            <div className="d-flex flex-wrap gap-1">
+              {grades.map((g) => (
+                <Badge key={g.id} color="info" className="font-size-11">
+                  {g.name}
+                </Badge>
+              ))}
+            </div>
+          );
+        },
       },
       {
         id: "created_at",
@@ -390,23 +466,36 @@ const AdviserList = () => {
         cell: ({ row }) => {
           const adviserId = row.original?.id;
           return (
-            <Button
-              color="primary"
-              size="sm"
-              onClick={() =>
-                navigate(`/advisers/${adviserId}/students`, {
-                  state: { adviser: row.original },
-                })
-              }
-              disabled={!adviserId}
-            >
-              لیست دانش‌آموزان
-            </Button>
+            <div className="d-flex flex-column gap-1">
+              <Button
+                color="primary"
+                size="sm"
+                onClick={() =>
+                  navigate(`/advisers/${adviserId}/students`, {
+                    state: { adviser: row.original },
+                  })
+                }
+                disabled={!adviserId}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                دانش‌آموزان
+              </Button>
+              <Button
+                color="warning"
+                size="sm"
+                onClick={() => openGradeModal(row.original)}
+                disabled={!adviserId}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                <i className="bx bx-book me-1" />
+                پایه‌ها
+              </Button>
+            </div>
           );
         },
       },
     ],
-    [navigate]
+    [navigate, openGradeModal]
   );
 
   const handleSortingChange = useCallback(
@@ -423,6 +512,7 @@ const AdviserList = () => {
       if (!first) {
         const resetSort = { by: undefined, order: undefined };
         setSort(resetSort);
+        saveState({ page: 1, filters, sort: resetSort, sorting: nextSorting });
         fetchData(1, filters, resetSort);
         return;
       }
@@ -432,12 +522,14 @@ const AdviserList = () => {
         order: first.desc ? "DESC" : "ASC",
       };
       setSort(nextSort);
+      saveState({ page: 1, filters, sort: nextSort, sorting: nextSorting });
       fetchData(1, filters, nextSort);
     },
-    [fetchData, filters]
+    [fetchData, filters, saveState]
   );
 
   return (
+    <>
     <div className="page-content">
       <div className="container-fluid">
         <Breadcrumbs title="مدیریت مشاوران" breadcrumbItem="مشاوران" />
@@ -582,6 +674,31 @@ const AdviserList = () => {
                       </InputGroup>
                     </Col>
 
+                    <Col xl="3" lg="4" md="6">
+                      <Label className="form-label" htmlFor="gradeId">
+                        پایه
+                      </Label>
+                      <InputGroup>
+                        <InputGroupText>
+                          <i className="bx bx-book" />
+                        </InputGroupText>
+                        <Input
+                          type="select"
+                          id="gradeId"
+                          name="gradeId"
+                          value={filters.gradeId}
+                          onChange={handleFilterChange}
+                        >
+                          <option value="">همه پایه‌ها</option>
+                          {allGrades.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.name}
+                            </option>
+                          ))}
+                        </Input>
+                      </InputGroup>
+                    </Col>
+
                     <Col xl="3" lg="4" md="6" className="d-flex gap-2">
                       <Button
                         color="primary"
@@ -647,6 +764,72 @@ const AdviserList = () => {
         </Row>
       </div>
     </div>
+
+    <Modal isOpen={gradeModal} toggle={() => !modalSaving && setGradeModal(false)} size="lg">
+      <ModalHeader toggle={() => !modalSaving && setGradeModal(false)}>
+        پایه‌های مشاور:{" "}
+        <strong>{modalAdviser?.user?.name || modalAdviser?.name || modalAdviser?.code || ""}</strong>
+      </ModalHeader>
+      <ModalBody>
+        {allGrades.length === 0 ? (
+          <p className="text-muted text-center py-3">پایه‌ای در سیستم ثبت نشده است</p>
+        ) : (
+          <Row className="g-2">
+            {allGrades.map((grade) => {
+              const gradeId = Number(grade.id);
+              const checked = modalSelectedIds.includes(gradeId);
+              const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+              return (
+                <Col key={grade.id} xs="6" md="4" lg="3">
+                  <div
+                    className={`border rounded p-2 d-flex align-items-center gap-2${checked ? " border-primary bg-soft-primary" : ""}`}
+                    style={{ cursor: modalSaving ? "default" : "pointer" }}
+                    onClick={(e) => { stop(e); if (!modalSaving) toggleGradeSelection(gradeId); }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="form-check-input mt-0 flex-shrink-0"
+                      checked={checked}
+                      readOnly
+                      onClick={stop}
+                      onChange={stop}
+                      style={{ pointerEvents: "none" }}
+                    />
+                    <span className="mb-0" style={{ pointerEvents: "none", fontSize: "0.85rem" }}>
+                      {grade.name}
+                    </span>
+                  </div>
+                </Col>
+              );
+            })}
+          </Row>
+        )}
+        {modalSelectedIds.length > 0 && (
+          <div className="mt-3 pt-3 border-top">
+            <small className="text-muted">انتخاب شده:</small>
+            <div className="d-flex flex-wrap gap-1 mt-1">
+              {allGrades
+                .filter((g) => modalSelectedIds.includes(Number(g.id)))
+                .map((g) => (
+                  <Badge key={g.id} color="info" className="font-size-12 px-2 py-1">
+                    {g.name}
+                  </Badge>
+                ))}
+            </div>
+          </div>
+        )}
+      </ModalBody>
+      <ModalFooter>
+        <Button color="primary" onClick={handleSaveGrades} disabled={modalSaving}>
+          {modalSaving ? <Spinner size="sm" className="me-1" /> : null}
+          ذخیره
+        </Button>
+        <Button color="light" onClick={() => setGradeModal(false)} disabled={modalSaving}>
+          انصراف
+        </Button>
+      </ModalFooter>
+    </Modal>
+    </>
   );
 };
 

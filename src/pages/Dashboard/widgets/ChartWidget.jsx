@@ -42,20 +42,35 @@ const buildChart = (key, data, stats) => {
   const makeDonut = (labels, series, colors) => ({
     type: "donut",
     options: {
-      chart: { type: "donut" },
+      chart: { type: "donut", fontFamily: "inherit" },
       labels,
       colors: colors || ["#556ee6", "#34c38f", "#f1b44c", "#f46a6a", "#adb5bd"],
       legend: { position: "bottom", fontSize: "12px" },
-      dataLabels: { enabled: true, formatter: (v) => `${v.toFixed(0)}%` },
+      dataLabels: {
+        enabled: true,
+        formatter: (v) => Number(v.toFixed(0)).toLocaleString("fa-IR") + "٪",
+      },
+      tooltip: {
+        y: { formatter: (v) => Number(v).toLocaleString("fa-IR") },
+      },
       plotOptions: {
         pie: {
           donut: {
             size: "65%",
             labels: {
               show: true,
+              value: {
+                show: true,
+                fontSize: "22px",
+                fontWeight: 600,
+                color: "#495057",
+                formatter: (v) => Number(v).toLocaleString("fa-IR"),
+              },
               total: {
                 show: true,
                 label: "مجموع",
+                fontSize: "13px",
+                color: "#f46a6a",
                 formatter: (w) => w.globals.seriesTotals.reduce((a, b) => a + b, 0).toLocaleString("fa-IR"),
               },
             },

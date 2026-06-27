@@ -53,7 +53,7 @@ const PermissionEdit = () => {
 
       try {
         await updatePermission(id, values);
-        navigate("/permissions");
+        navigate(-1);
       } catch (err) {
         console.error("update permission error", err);
         const data = err?.response?.data;
@@ -214,7 +214,7 @@ const PermissionEdit = () => {
                           <Button
                             type="button"
                             color="secondary"
-                            onClick={() => navigate("/permissions")}
+                            onClick={() => navigate(-1)}
                           >
                             انصراف
                           </Button>

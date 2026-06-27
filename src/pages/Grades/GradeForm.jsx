@@ -106,7 +106,7 @@ const GradeForm = () => {
       }
 
       setTimeout(() => {
-        navigate("/grades");
+        navigate(-1);
       }, 700);
     } catch (e) {
       console.error("خطا در ذخیره پایه", e);
@@ -204,7 +204,7 @@ const GradeForm = () => {
                     <Button type="submit" color="primary" className="w-md" disabled={loading}>
                       {loading ? "در حال ذخیره..." : isEdit ? "ویرایش پایه" : "ثبت پایه"}
                     </Button>
-                    <Button type="button" color="secondary" onClick={() => navigate("/grades")}>
+                    <Button type="button" color="secondary" onClick={() => navigate(-1)}>
                       انصراف
                     </Button>
                   </div>

@@ -56,6 +56,7 @@ import {
   copySupportForm,
 } from "../../services/supportFormService.jsx";
 import { getParentTags, getParentTagValues } from "../../services/parentTagService.jsx";
+import { getGrades } from "../../services/gradeService.jsx";
 
 const TAB = {
   OVERVIEW: "1",
@@ -582,8 +583,16 @@ const AdvisersTab = ({ formId }) => {
   const [deleteModal, setDeleteModal] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [attachSearch, setAttachSearch] = useState("");
+  const [attachGradeId, setAttachGradeId] = useState("");
   const [attachResults, setAttachResults] = useState([]);
   const [attachLoading, setAttachLoading] = useState(false);
+  const [allGrades, setAllGrades] = useState([]);
+
+  useEffect(() => {
+    getGrades({ page: 1, limit: 200 })
+      .then((res) => setAllGrades(res.items || []))
+      .catch(() => {});
+  }, []);
 
   const fetchData = useCallback(
     async (page = 1, q = search) => {
@@ -637,10 +646,15 @@ const AdvisersTab = ({ formId }) => {
 
   const handleAttachSearch = async (e) => {
     e.preventDefault();
-    if (!attachSearch.trim()) return;
+    if (!attachSearch.trim() && !attachGradeId) return;
     setAttachLoading(true);
     try {
-      const res = await getSupportFormAdviserCandidates(formId, { page: 1, limit: 20, search: attachSearch.trim() });
+      const res = await getSupportFormAdviserCandidates(formId, {
+        page: 1,
+        limit: 50,
+        search: attachSearch.trim() || undefined,
+        gradeId: attachGradeId ? Number(attachGradeId) : undefined,
+      });
       setAttachResults(res.items || []);
       if (!res.items?.length) setAlert({ type: "warning", message: "نتیجه‌ای یافت نشد." });
     } catch {
@@ -724,6 +738,22 @@ const AdvisersTab = ({ formId }) => {
       { id: "name", header: "نام", enableSorting: false, cell: ({ row }) => row.original?.user?.name || row.original?.adviser?.user?.name || "-" },
       { id: "phone", header: "تلفن", enableSorting: false, cell: ({ row }) => row.original?.user?.phone || row.original?.adviser?.user?.phone || "-" },
       {
+        id: "grades",
+        header: "پایه‌ها",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const grades = row.original?.grades || [];
+          if (!grades.length) return <span className="text-muted">-</span>;
+          return (
+            <div className="d-flex flex-wrap gap-1">
+              {grades.map((g) => (
+                <Badge key={g.id} color="info" className="font-size-11">{g.name}</Badge>
+              ))}
+            </div>
+          );
+        },
+      },
+      {
         id: "add",
         header: "افزودن",
         enableSorting: false,
@@ -760,19 +790,45 @@ const AdvisersTab = ({ formId }) => {
         <CardBody>
           <Form onSubmit={handleAttachSearch}>
             <Row className="g-2 align-items-end">
-              <Col md="8">
+              <Col md="5">
+                <Label className="form-label mb-1">جستجوی متنی</Label>
                 <InputGroup>
                   <InputGroupText><i className="bx bx-search" /></InputGroupText>
                   <Input
                     value={attachSearch}
                     onChange={(e) => setAttachSearch(e.target.value)}
-                    placeholder="جستجو با کد ملی، نام کاربری یا تلفن"
+                    placeholder="کد ملی، نام کاربری یا تلفن"
                   />
                 </InputGroup>
               </Col>
               <Col md="4">
-                <Button color="primary" type="submit" className="w-100" disabled={attachLoading}>
-                  {attachLoading ? "در حال جستجو..." : "جستجو"}
+                <Label className="form-label mb-1">فیلتر پایه</Label>
+                <InputGroup>
+                  <InputGroupText><i className="bx bx-book" /></InputGroupText>
+                  <Input
+                    type="select"
+                    value={attachGradeId}
+                    onChange={(e) => setAttachGradeId(e.target.value)}
+                  >
+                    <option value="">همه پایه‌ها</option>
+                    {allGrades.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </Input>
+                </InputGroup>
+              </Col>
+              <Col md="3" className="d-flex align-items-end gap-2">
+                <Button color="primary" type="submit" className="w-100" disabled={attachLoading || (!attachSearch.trim() && !attachGradeId)}>
+                  {attachLoading ? "جستجو..." : "جستجو"}
+                </Button>
+                <Button
+                  color="light"
+                  type="button"
+                  className="flex-shrink-0"
+                  onClick={() => { setAttachSearch(""); setAttachGradeId(""); setAttachResults([]); }}
+                  disabled={attachLoading}
+                >
+                  ریست
                 </Button>
               </Col>
             </Row>
@@ -1670,7 +1726,7 @@ const SupportFormDetail = () => {
                   </p>
                 </div>
                 <div className="d-flex gap-2">
-                  <Button color="light" onClick={() => navigate("/support-forms")}>
+                  <Button color="light" onClick={() => navigate(-1)}>
                     <i className="mdi mdi-arrow-right me-1" />
                     بازگشت
                   </Button>

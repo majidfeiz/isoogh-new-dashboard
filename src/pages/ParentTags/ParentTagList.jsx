@@ -17,6 +17,7 @@ import {
   Alert,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
+import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
@@ -52,6 +53,8 @@ const ParentTagList = () => {
   const navigate = useNavigate();
   document.title = "مدیریت تگ‌ها | داشبورد آیسوق";
 
+  const { saved, saveState } = useListState("parent-tags");
+
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
     page: 1,
@@ -59,15 +62,13 @@ const ParentTagList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [filters, setFilters] = useState({
-    search: "",
-    schoolId: "",
-    parentId: "",
-    rootOnly: "",
-  });
+  const [filters, setFilters] = useState(
+    saved?.filters ?? { search: "", schoolId: "", parentId: "", rootOnly: "" }
+  );
   const [loading, setLoading] = useState(false);
-  const [sorting, setSorting] = useState([{ id: "id", desc: true }]);
-  const [sort, setSort] = useState({ by: "id", order: "DESC" });
+  const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
+  const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
+  const initialPageRef = useRef(saved?.page ?? 1);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(null);
   const [exportPhase, setExportPhase] = useState("idle"); // idle | pending | downloading | finalizing
@@ -141,7 +142,10 @@ const ParentTagList = () => {
   );
 
   useEffect(() => {
-    fetchData(1, filters, sort);
+    const page = initialPageRef.current;
+    initialPageRef.current = 1;
+    fetchData(page, filters, sort);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
 
   const handleFilterChange = (e) => {
@@ -154,16 +158,19 @@ const ParentTagList = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    saveState({ page: 1, filters, sort, sorting });
     fetchData(1, filters, sort);
   };
 
   const handleResetFilters = () => {
     const reset = { search: "", schoolId: "", parentId: "", rootOnly: "" };
     setFilters(reset);
+    saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
   };
 
   const handlePageChange = (page) => {
+    saveState({ page, filters, sort, sorting });
     fetchData(page, filters, sort);
   };
 
@@ -297,6 +304,7 @@ const ParentTagList = () => {
       if (!first) {
         const resetSort = { by: undefined, order: undefined };
         setSort(resetSort);
+        saveState({ page: 1, filters, sort: resetSort, sorting: nextSorting });
         fetchData(1, filters, resetSort);
         return;
       }
@@ -306,9 +314,10 @@ const ParentTagList = () => {
         order: first.desc ? "DESC" : "ASC",
       };
       setSort(nextSort);
+      saveState({ page: 1, filters, sort: nextSort, sorting: nextSorting });
       fetchData(1, filters, nextSort);
     },
-    [fetchData, filters]
+    [fetchData, filters, saveState]
   );
 
   const handleImportRowChange = (index, field, value) => {
@@ -398,7 +407,7 @@ const ParentTagList = () => {
       return;
     }
     if (!importSchoolId) {
-      setImportError("شناسه مدرسه الزامی است.");
+      setImportError("شناسه مجموعه الزامی است.");
       return;
     }
 
@@ -608,7 +617,7 @@ const ParentTagList = () => {
                   <h4 className="card-title mb-0">ایمپورت اکسل تگ‌ها برای کاربران</h4>
                   <div className="text-muted small mt-1">
                     فایل Excel با ستون‌های: A=نام‌کاربری، B=Action (Append|Replace|Remove)، C به بعد: شناسه/نام تگ.
-                    schoolId الزامی است (برای مدیران فقط در صورت داشتن چند مدرسه).
+                    schoolId الزامی است (برای مدیران فقط در صورت داشتن چند مجموعه).
                   </div>
                 </div>
               </CardHeader>
@@ -671,7 +680,7 @@ const ParentTagList = () => {
                       ) : null}
                     </Col>
                     <Col md="3">
-                      <Label className="form-label">شناسه مدرسه</Label>
+                      <Label className="form-label">شناسه مجموعه</Label>
                       <Input
                         type="number"
                         value={importSchoolId}
@@ -683,7 +692,7 @@ const ParentTagList = () => {
                     <Col md="5">
                       <div className="text-muted small">
                         <strong>راهنما:</strong> Action=Append تگ‌های جدید را اضافه می‌کند (تگ والد در نبود ایجاد می‌شود)،
-                        Replace همه تگ‌های قبلی کاربر در همان مدرسه را حذف و جایگزین می‌کند، Remove تمام تگ‌ها را حذف می‌کند.
+                        Replace همه تگ‌های قبلی کاربر در همان مجموعه را حذف و جایگزین می‌کند، Remove تمام تگ‌ها را حذف می‌کند.
                       </div>
                     </Col>
                     <Col md="3" className="d-flex gap-2">
@@ -916,7 +925,7 @@ const ParentTagList = () => {
 
                     <Col xl="2" lg="4" md="6">
                       <Label className="form-label" htmlFor="schoolId">
-                        شناسه مدرسه
+                        شناسه مجموعه
                       </Label>
                       <Input
                         id="schoolId"

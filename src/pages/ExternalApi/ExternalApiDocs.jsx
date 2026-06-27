@@ -145,12 +145,12 @@ const ExternalApiDocs = () => {
               <TabPane tabId="management">
                 <Section title="توضیح کلی">
                   <p>
-                    ادمین می‌تواند برای هر ارگان یا مدرسه یک <strong>کلاینت API</strong> تعریف کند. هر کلاینت شامل:
+                    ادمین می‌تواند برای هر ارگان یا مجموعه یک <strong>کلاینت API</strong> تعریف کند. هر کلاینت شامل:
                   </p>
                   <ul>
                     <li>یک <code>api_key</code> یکتا ۶۴ کاراکتری (خودکار تولید می‌شود)</li>
                     <li>لیست <strong>IP های مجاز</strong> (فقط از این IPها اجازه دسترسی)</li>
-                    <li><code>school_id</code> — اگر تنظیم شود، کلاینت فقط داده‌های همان مدرسه را می‌بیند؛ اگر <code>null</code> باشد همه داده‌ها</li>
+                    <li><code>school_id</code> — اگر تنظیم شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند؛ اگر <code>null</code> باشد همه داده‌ها</li>
                   </ul>
                 </Section>
 
@@ -182,7 +182,7 @@ const ExternalApiDocs = () => {
 
                 <Section title="Body ایجاد کلاینت (POST)">
                   <CodeBlock>{`{
-  "name": "مدرسه شهید بهشتی",
+  "name": "مجموعه شهید بهشتی",
   "description": "توضیحات اختیاری",
   "is_active": true,
   "school_id": 3
@@ -198,7 +198,7 @@ const ExternalApiDocs = () => {
   "data": [
     {
       "id": 1,
-      "name": "مدرسه شهید بهشتی",
+      "name": "مجموعه شهید بهشتی",
       "api_key": "a3f8c2e1d4b7...(64 chars)",
       "is_active": true,
       "description": "دسترسی سامانه مرکزی",
@@ -352,7 +352,7 @@ const ExternalApiDocs = () => {
 
                 <div className="alert alert-info mb-4">
                   <i className="bx bx-info-circle me-1" />
-                  <strong>Scope مدرسه:</strong> اگر <code>school_id</code> روی کلاینت تنظیم شده باشد، تمام پاسخ‌ها فقط داده‌های آن مدرسه را برمی‌گردانند.
+                  <strong>Scope مجموعه:</strong> اگر <code>school_id</code> روی کلاینت تنظیم شده باشد، تمام پاسخ‌ها فقط داده‌های آن مجموعه را برمی‌گردانند.
                 </div>
 
                 <Section title="Endpoint های خارجی">
@@ -409,7 +409,7 @@ const ExternalApiDocs = () => {
       "city": "تهران",
       "province": "تهران",
       "shift": "صبح",
-      "schools": [{ "id": 3, "name": "مدرسه شهید بهشتی" }],
+      "schools": [{ "id": 3, "name": "مجموعه شهید بهشتی" }],
       "created_at": "2024-01-01T00:00:00.000Z"
     }
   ],
@@ -466,7 +466,7 @@ const ExternalApiDocs = () => {
 
                 <Section title="GET /external-api/v1/advisers/:adviserId/students — پاسخ">
                   <p className="text-muted small">
-                    اگر مشاور به مدرسه کلاینت تعلق نداشته باشد، لیست خالی برمی‌گردد.
+                    اگر مشاور به مجموعه کلاینت تعلق نداشته باشد، لیست خالی برمی‌گردد.
                   </p>
                   <CodeBlock>{`{
   "data": [
@@ -518,7 +518,7 @@ const ExternalApiDocs = () => {
                         <tr>
                           <td><Badge color="success">200</Badge></td>
                           <td><code>data: []</code></td>
-                          <td>داده‌ای در محدوده این مدرسه وجود ندارد</td>
+                          <td>داده‌ای در محدوده این مجموعه وجود ندارد</td>
                         </tr>
                       </tbody>
                     </Table>
@@ -529,7 +529,7 @@ const ExternalApiDocs = () => {
                   <ul className="list-unstyled">
                     {[
                       { icon: "bx-key", text: "API Key: بعد از ایجاد یا regenerate فقط یک بار نمایش بده (modal با copy button)" },
-                      { icon: "bx-buildings", text: "school_id: یک dropdown از لیست مدارس — اگر خالی باشد، کلاینت همه داده‌ها را می‌بیند" },
+                      { icon: "bx-buildings", text: "school_id: یک dropdown از لیست مجموعه‌ها — اگر خالی باشد، کلاینت همه داده‌ها را می‌بیند" },
                       { icon: "bx-chip", text: "IPها: به صورت chip/tag نمایش بده با دکمه حذف کنار هر کدام" },
                       { icon: "bx-list-ul", text: "لاگ‌ها: در یک table با ستون‌های: تاریخ، IP، متد، path، status، زمان پاسخ" },
                       { icon: "bx-test-tube", text: "وب‌هوک تست: دکمه «تست» در کنار هر ردیف — نتیجه را در toast نشان بده" },

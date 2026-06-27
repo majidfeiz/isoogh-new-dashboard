@@ -262,12 +262,12 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
-        label: "مدارس",
+        label: "مجموعه‌ها",
         icon: "bx bxs-school",
         permissionAny: ["schools.index", "schools.create"],
         children: [
-          { label: "لیست مدارس", to: "/schools", permission: "schools.index" },
-          { label: "ایجاد مدرسه جدید", to: "/schools/create", permission: "schools.create" },
+          { label: "لیست مجموعه‌ها", to: "/schools", permission: "schools.index" },
+          { label: "ایجاد مجموعه جدید", to: "/schools/create", permission: "schools.create" },
         ],
       },
       {
@@ -434,7 +434,7 @@ const SidebarContent = (props) => {
         ],
         children: [
           {
-            label: "مدارس",
+            label: "مجموعه‌ها",
             to: "/super-adviser-portal/schools",
             permission: "super-adviser-portal.schools.index",
           },

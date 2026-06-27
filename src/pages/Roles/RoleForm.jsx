@@ -58,7 +58,7 @@ const RoleForm = () => {
         } else {
           await createRole(values);
         }
-        navigate("/roles");
+        navigate(-1);
       } catch (err) {
         console.error(err);
         const msg =
@@ -161,7 +161,7 @@ const RoleForm = () => {
                     <Button
                       type="button"
                       color="secondary"
-                      onClick={() => navigate("/roles")}
+                      onClick={() => navigate(-1)}
                     >
                       انصراف
                     </Button>
