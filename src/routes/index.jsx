@@ -237,6 +237,7 @@ import FileForm from "../pages/Files/FileForm.jsx";
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
+import VoipAnalytics from "../pages/Voip/Analytics/VoipAnalytics.jsx";
 
 // external api clients
 import ExternalApiClientList from "../pages/ExternalApi/ExternalApiClientList.jsx";
@@ -390,6 +391,7 @@ const authProtectedRoutes = [
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
   { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
+  { path: "/voip/analytics", component: <VoipAnalytics /> },
 
   // external api clients
   { path: "/external-api-clients", component: <ExternalApiClientList /> },

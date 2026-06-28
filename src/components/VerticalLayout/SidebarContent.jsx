@@ -328,7 +328,7 @@ const SidebarContent = (props) => {
         type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
-        permissionAny: ["voip.outbound.index"],
+        permissionAny: ["voip.outbound.index", "voip.analytics.index"],
         children: [
           {
             label: "تماس خروجی",
@@ -339,6 +339,11 @@ const SidebarContent = (props) => {
             label: "تماس خروجی آنلاین",
             to: "/voip/outbound-call-histories/online",
             permission: "voip.outbound.index",
+          },
+          {
+            label: "آنالیز وویپ",
+            to: "/voip/analytics",
+            permission: "voip.analytics.index",
           },
         ],
       },

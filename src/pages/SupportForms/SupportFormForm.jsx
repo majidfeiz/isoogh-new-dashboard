@@ -699,6 +699,10 @@ const SupportFormForm = () => {
                     اطلاعات را مرحله‌به‌مرحله تکمیل و ثبت کنید.
                   </p>
                 </div>
+                <Button color="secondary" outline onClick={() => navigate("/support-forms")}>
+                  <i className="bx bx-arrow-back me-1"></i>
+                  بازگشت به لیست
+                </Button>
               </CardHeader>
 
               <CardBody>
