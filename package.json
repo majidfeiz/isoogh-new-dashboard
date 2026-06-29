@@ -1,7 +1,7 @@
 {
   "name": "Isoogh new dashboard",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
@@ -141,14 +141,14 @@
       "eslint:recommended",
       "plugin:react/recommended"
     ],
-    "babelOptions": {
-      "presets": [
-        "@babel/preset-react"
-      ]
-    },
     "parser": "@babel/eslint-parser",
     "parserOptions": {
       "requireConfigFile": false,
+      "babelOptions": {
+        "presets": [
+          "@babel/preset-react"
+        ]
+      },
       "ecmaVersion": 2020,
       "sourceType": "module",
       "ecmaFeatures": {
@@ -172,6 +172,11 @@
         "error",
         "never"
       ]
+    }
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^.*/helpers/apiRoutes(\\.jsx)?$": "<rootDir>/src/__mocks__/apiRoutes.js"
     }
   },
   "browserslist": {
