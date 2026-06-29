@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useState } from "react"
 import { Navigate, useSearchParams } from "react-router-dom"
 import moment from "moment-jalaali"
+import { toGregorian } from "jalaali-js"
 
 import Breadcrumbs from "../../../components/Common/Breadcrumb"
 import { useAuth } from "../../../context/AuthContext.jsx"
@@ -28,13 +29,14 @@ import UnansweredAnswersSection from "./components/UnansweredAnswersSection.jsx"
 function defaultPeriod() {
   const jNow = moment()
   const jYear = jNow.jYear()
-  const jMonth = jNow.jMonth()
+  const jMonth = jNow.jMonth() // 0-indexed
   const lastDay = moment.jDaysInMonth(jYear, jMonth)
-  const firstOfMonth = moment(`${jYear}/${jMonth + 1}/1`, "jYYYY/jM/jD")
-  const lastOfMonth = moment(`${jYear}/${jMonth + 1}/${lastDay}`, "jYYYY/jM/jD")
+  const pad = (n) => String(n).padStart(2, "0")
+  const fG = toGregorian(jYear, jMonth + 1, 1)
+  const tG = toGregorian(jYear, jMonth + 1, lastDay)
   return {
-    from: firstOfMonth.format("YYYY-MM-DD"),
-    to: lastOfMonth.format("YYYY-MM-DD"),
+    from: `${fG.gy}-${pad(fG.gm)}-${pad(fG.gd)}`,
+    to: `${tG.gy}-${pad(tG.gm)}-${pad(tG.gd)}`,
   }
 }
 

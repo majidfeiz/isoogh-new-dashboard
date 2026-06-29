@@ -6,6 +6,7 @@ import persian from "react-date-object/calendars/persian"
 import persian_fa from "react-date-object/locales/persian_fa"
 import DateObject from "react-date-object"
 import moment from "moment-jalaali"
+import { toGregorian } from "jalaali-js"
 
 function initDateObj(date) {
   return new DateObject({ date, calendar: persian, locale: persian_fa })
@@ -36,9 +37,12 @@ const AnalyticsFilters = ({ onApply, schools = [], showSchoolFilter = false, ini
       return
     }
     setError("")
-    // return date-only — parent adds +03:30 before API call so axios can encode it correctly
-    const dateFrom = moment(fromDO.toDate()).format("YYYY-MM-DD")
-    const dateTo = moment(toDO.toDate()).format("YYYY-MM-DD")
+    // use Jalali year/month/day directly — avoids JS Date timezone pitfalls
+    const pad = (n) => String(n).padStart(2, "0")
+    const fG = toGregorian(fromDO.year, fromDO.month.number, fromDO.day)
+    const tG = toGregorian(toDO.year, toDO.month.number, toDO.day)
+    const dateFrom = `${fG.gy}-${pad(fG.gm)}-${pad(fG.gd)}`
+    const dateTo = `${tG.gy}-${pad(tG.gm)}-${pad(tG.gd)}`
     onApply({ from: dateFrom, to: dateTo, schoolId: schoolId || undefined })
   }
 

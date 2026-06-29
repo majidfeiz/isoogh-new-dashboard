@@ -3,14 +3,14 @@ import PropTypes from "prop-types";
 import { Col, Container, Row } from "reactstrap";
 
 //Import Breadcrumb
-import Breadcrumbs from "/src/components/Common/Breadcrumb";
+import Breadcrumbs from "../../components/Common/Breadcrumb";
 
 //redux
 import { useSelector, useDispatch } from "react-redux";
 import { createSelector } from "reselect";
 import {
   getMessages as onGetMessages,
-} from "/src/store/actions";
+} from "../../store/actions";
 
 import ChatList from "./ChatList";
 import UserChat from "./UserChat";

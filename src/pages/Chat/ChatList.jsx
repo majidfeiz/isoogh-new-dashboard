@@ -12,7 +12,7 @@ import {
     getChats as onGetChats,
     getGroups as onGetGroups,
     getContacts as onGetContacts,
-} from "/src/store/actions"
+} from "../../store/actions"
 
 // IMage
 import avatar1 from "../../assets/images/users/avatar-1.jpg";
