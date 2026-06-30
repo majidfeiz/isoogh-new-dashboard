@@ -3,12 +3,14 @@ import { apiGet } from "../helpers/httpClient.jsx"
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx"
 import { getAccessToken } from "../helpers/authStorage.jsx"
 
+// Returns URLSearchParams so axios calls .toString() directly — guarantees + encodes as %2B
+// (plain object goes through axios's custom encoder which may vary by version)
 function buildParams({ from, to, schoolId } = {}) {
-  return {
-    from: from || undefined,
-    to: to || undefined,
-    school_id: schoolId || undefined,
-  }
+  const p = new URLSearchParams()
+  if (from) p.set("from", from)
+  if (to) p.set("to", to)
+  if (schoolId) p.set("school_id", String(schoolId))
+  return p
 }
 
 function unwrap(response) {
@@ -66,6 +68,7 @@ export async function getVoipAnalyticsUnansweredAnswers({ from, to, schoolId } =
 
 // exportParams: { from, to, school_id? } — all ISO strings already, URLSearchParams encodes + as %2B
 export async function downloadVoipAnalyticsCsv(exportPath, exportParams, filename) {
+  const { toast } = await import("react-toastify")
   const baseUrl = getApiUrl(exportPath)
   const params = new URLSearchParams()
   if (exportParams.from) params.set("from", exportParams.from)
@@ -78,7 +81,17 @@ export async function downloadVoipAnalyticsCsv(exportPath, exportParams, filenam
   const res = await fetch(fullUrl, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
-  if (!res.ok || !res.body) throw new Error(await res.text())
+
+  if (!res.ok) {
+    if (res.status === 403) {
+      toast.error("دسترسی به دانلود ندارید", { autoClose: 4000 })
+    } else {
+      toast.error("خطا در دانلود فایل — دوباره تلاش کنید", { autoClose: 4000 })
+    }
+    throw new Error(`download failed: ${res.status}`)
+  }
+
+  if (!res.body) throw new Error("no response body")
 
   const reader = res.body.getReader()
   const chunks = []
@@ -88,8 +101,8 @@ export async function downloadVoipAnalyticsCsv(exportPath, exportParams, filenam
     chunks.push(value)
   }
 
-  const bom = new Uint8Array([0xef, 0xbb, 0xbf])
-  const blob = new Blob([bom, ...chunks], { type: "text/csv;charset=utf-8;" })
+  // server sends BOM — do not prepend another one
+  const blob = new Blob(chunks, { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   link.href = URL.createObjectURL(blob)
   link.download = filename
