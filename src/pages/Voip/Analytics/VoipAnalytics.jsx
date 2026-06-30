@@ -41,14 +41,27 @@ function defaultPeriod() {
 }
 
 // adds Tehran UTC+3:30 offset — axios params object encodes + as %2B automatically
+// guard: if year < 2020 the caller passed a Jalali string; replace with today to avoid sending year 1405 to SQL
 function toIso(date, endOfDay = false) {
-  return `${date}T${endOfDay ? "23:59:59" : "00:00:00"}+03:30`
+  let d = date
+  if (parseInt(d, 10) < 2020) {
+    const now = new Date()
+    const pad = (n) => String(n).padStart(2, "0")
+    d = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  }
+  return `${d}T${endOfDay ? "23:59:59" : "00:00:00"}+03:30`
 }
 
 function initPeriodFromUrl(searchParams) {
   const fromDate = searchParams.get("from")
   const toDate = searchParams.get("to")
-  if (fromDate && toDate) return { from: fromDate, to: toDate }
+  if (fromDate && toDate) {
+    // Guard: reject Jalali years accidentally stored in URL (year < 2020 means not Gregorian).
+    // Mirrors the backend safeguard in resolvePeriod().
+    const fromYear = parseInt(fromDate, 10)
+    const toYear = parseInt(toDate, 10)
+    if (fromYear >= 2020 && toYear >= 2020) return { from: fromDate, to: toDate }
+  }
   return defaultPeriod()
 }
 
@@ -172,6 +185,7 @@ const VoipAnalytics = () => {
           showSchoolFilter={showSchoolFilter}
           initialFrom={period.from}
           initialTo={period.to}
+          initialSchoolId={schoolId != null ? String(schoolId) : ""}
         />
 
         <AnalyticsKpiCards

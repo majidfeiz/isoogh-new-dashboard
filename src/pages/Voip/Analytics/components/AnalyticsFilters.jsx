@@ -1,5 +1,5 @@
 // src/pages/Voip/Analytics/components/AnalyticsFilters.jsx
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Button, Col, Input, Label, Row } from "reactstrap"
 import DatePicker from "react-multi-date-picker"
 import persian from "react-date-object/calendars/persian"
@@ -13,7 +13,8 @@ function initDateObj(date) {
 }
 
 // initialFrom / initialTo: YYYY-MM-DD strings read from URL params
-const AnalyticsFilters = ({ onApply, schools = [], showSchoolFilter = false, initialFrom, initialTo }) => {
+// initialSchoolId: string — syncs dropdown with external school selection (table click or URL)
+const AnalyticsFilters = ({ onApply, schools = [], showSchoolFilter = false, initialFrom, initialTo, initialSchoolId = "" }) => {
   const [fromDO, setFromDO] = useState(() => {
     if (initialFrom) return initDateObj(moment(initialFrom, "YYYY-MM-DD").toDate())
     return initDateObj(moment().startOf("jMonth").toDate())
@@ -22,8 +23,12 @@ const AnalyticsFilters = ({ onApply, schools = [], showSchoolFilter = false, ini
     if (initialTo) return initDateObj(moment(initialTo, "YYYY-MM-DD").toDate())
     return initDateObj(moment().endOf("jMonth").toDate())
   })
-  const [schoolId, setSchoolId] = useState("")
+  const [schoolId, setSchoolId] = useState(initialSchoolId)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    setSchoolId(initialSchoolId)
+  }, [initialSchoolId])
 
   const handleApply = () => {
     if (!fromDO || !toDO) {
