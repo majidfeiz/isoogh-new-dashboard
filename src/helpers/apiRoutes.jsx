@@ -143,6 +143,7 @@ export const API_ROUTES = {
     orphanedCalls: "/voip/analytics/orphaned-calls",
     nullCallGroup: "/voip/analytics/null-call-group",
     unansweredAnswers: "/voip/analytics/unanswered-answers",
+    exportAnsweredCalls: "/voip/analytics/answered-calls/export",
     exportDurationMismatch: "/voip/analytics/duration-mismatch/export",
     exportFailedFiles: "/voip/analytics/failed-files/export",
     exportOrphanedCalls: "/voip/analytics/orphaned-calls/export",
