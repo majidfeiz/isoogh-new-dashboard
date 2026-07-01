@@ -103,7 +103,7 @@ const AnalyticsKpiCards = ({
   if (loading) {
     return (
       <Row className="g-3 mb-4">
-        {[...KPI_DEFS, { key: "unanswered" }].map((d) => (
+        {[...KPI_DEFS, { key: "answeredCalls" }, { key: "unanswered" }].map((d) => (
           <Col key={d.key} xs="12" sm="6" xl="auto" style={{ flex: "1 1 0" }}>
             <SkeletonCard />
           </Col>
@@ -190,7 +190,54 @@ const AnalyticsKpiCards = ({
         )
       })}
 
-      {/* Card 5: Unanswered Answers */}
+      {/* Card 5: Answered Calls */}
+      <Col xs="12" sm="6" xl="auto" style={{ flex: "1 1 0" }}>
+        <Card className="shadow-sm h-100">
+          <CardBody>
+            <div className="d-flex align-items-start justify-content-between mb-2">
+              <div>
+                <p className="text-muted mb-1" style={{ fontSize: "0.82rem" }}>
+                  تماس‌های پاسخ‌داده‌شده
+                </p>
+                <h3 className="mb-0 fw-bold" style={{ color: "#34c38f" }}>
+                  {faNum(totalCalls)}
+                  <small className="text-muted fw-normal" style={{ fontSize: "0.85rem" }}>
+                    {" "}تماس
+                  </small>
+                </h3>
+              </div>
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center text-white"
+                style={{ width: 42, height: 42, backgroundColor: "#34c38f", flexShrink: 0 }}
+              >
+                <i className="mdi mdi-phone-check-outline fs-5" />
+              </div>
+            </div>
+
+            <div className="mb-2" style={{ fontSize: "0.78rem", minHeight: 22 }} />
+
+            {canExport && (
+              <button
+                className="btn btn-outline-secondary btn-sm w-100 d-flex align-items-center justify-content-center gap-1"
+                style={{ fontSize: "0.75rem" }}
+                onClick={() =>
+                  handleDownload("answeredCalls", "exportAnsweredCalls", "answered-calls.csv")
+                }
+                disabled={!!downloadingKey || !totalCalls}
+              >
+                {downloadingKey === "answeredCalls" ? (
+                  <Spinner size="sm" />
+                ) : (
+                  <i className="mdi mdi-download" />
+                )}
+                دانلود CSV
+              </button>
+            )}
+          </CardBody>
+        </Card>
+      </Col>
+
+      {/* Card 6: Unanswered Answers */}
       <Col xs="12" sm="6" xl="auto" style={{ flex: "1 1 0" }}>
         <Card className="shadow-sm h-100">
           <CardBody>
