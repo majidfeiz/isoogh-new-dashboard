@@ -2,6 +2,10 @@
 
 Project guide for agents and developers working in this repo.
 
+## Agent context entrypoint
+
+Before investigating a task, read `docs/PROJECT_MEMORY.md` for the verified runtime/architecture baseline and `docs/DOMAIN_MAP.md` to locate the owning page, service, and API route key. Update those files only when durable project facts change.
+
 ---
 
 ## Stack
