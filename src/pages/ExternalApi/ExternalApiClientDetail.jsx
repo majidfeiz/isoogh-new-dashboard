@@ -127,8 +127,12 @@ const ExternalApiClientDetail = () => {
   }, [activeTab, fetchLogs]);
 
   const handleEditChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setEditForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+    const { name, value } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const toggleActive = () => {
+    setEditForm((prev) => ({ ...prev, is_active: !prev.is_active }));
   };
 
   const handleSave = async (e) => {
@@ -332,15 +336,29 @@ const ExternalApiClientDetail = () => {
                             اگر مجموعه انتخاب شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند.
                           </small>
                         </FormGroup>
-                        <FormGroup check className="mb-3">
+                        <FormGroup
+                          check
+                          className="mb-3 position-relative"
+                          role="checkbox"
+                          tabIndex={0}
+                          aria-checked={editForm.is_active}
+                          onClick={toggleActive}
+                          onKeyDown={(e) => {
+                            if (e.key === " " || e.key === "Enter") {
+                              e.preventDefault();
+                              toggleActive();
+                            }
+                          }}
+                          style={{ cursor: "pointer", zIndex: 1 }}
+                        >
                           <Input
                             type="checkbox"
                             name="is_active"
                             id="is_active_edit"
-                            checked={editForm.is_active}
-                            onChange={handleEditChange}
+                            checked={Boolean(editForm.is_active)}
+                            readOnly
                           />
-                          <Label check for="is_active_edit">فعال</Label>
+                          <Label check for="is_active_edit" style={{ pointerEvents: "none" }}>فعال</Label>
                         </FormGroup>
                         <Button color="primary" type="submit" disabled={saving}>
                           {saving ? <Spinner size="sm" /> : "ذخیره تغییرات"}
