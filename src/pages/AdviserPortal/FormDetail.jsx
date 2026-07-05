@@ -17,17 +17,20 @@ import {
   Spinner,
   Table,
 } from "reactstrap";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import moment from "moment-jalaali";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
+import CallTrackingWarningModal from "./CallTrackingWarningModal.jsx";
 import {
   getAdviserSupportFormDetail,
   getAdviserSupportFormStats,
   getAdviserFormStudents,
+  getAdviserWorkShifts,
   makeCall,
   submitAnswers,
+  updateAdviserStudentWorkShift,
 } from "../../services/adviserPortalService.jsx";
 
 const formatJalali = (value, withTime = false) => {
@@ -47,17 +50,37 @@ const formatDuration = (seconds) => {
   return `${m}:${String(s).padStart(2, "0")}`;
 };
 
+const hasAnswer = (value) => {
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "string") return value.trim() !== "";
+  return value !== undefined && value !== null && value !== "";
+};
+
+const callStatusConfig = {
+  0: { label: "بدون وضعیت", color: "secondary" },
+  1: { label: "موفق", color: "success" },
+  2: { label: "ناموفق/ناقص", color: "danger" },
+};
+
+const hasValidCallGroupId = (value) => {
+  if (typeof value !== "string") return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized !== "" && normalized !== "null";
+};
+
 // ─── Answer Form Drawer ───────────────────────────────────────────────────────
 
 const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted }) => {
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
       setAnswers({});
       setSessionsOpen(false);
+      setConfirmationOpen(false);
     }
   }, [open, student?.id]);
 
@@ -77,32 +100,35 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
     });
   };
 
-  const handleSubmit = async () => {
+  const buildPayload = () => {
     const questions = form?.questions || [];
-    for (const q of questions) {
-      if (q.required && !answers[q.id] && answers[q.id] !== 0) {
-        toast.error(`لطفاً به سؤال "${q.text}" پاسخ دهید`);
-        return;
-      }
-    }
-
-    const payload = questions.map((q) => {
+    return questions.filter((q) => hasAnswer(answers[q.id])).map((q) => {
       const val = answers[q.id];
       if (q.type === 1) return { questionId: q.id, answerId: val };
       if (q.type === 2) return { questionId: q.id, answerId: val };
       return { questionId: q.id, answer: val ?? "" };
     });
+  };
 
+  const isComplete = (form?.questions || []).every((q) => hasAnswer(answers[q.id]));
+
+  const handleSubmit = async (callSuccessful) => {
+    if (callSuccessful && !isComplete) {
+      toast.warning("فرم کامل نیست؛ سرور این تماس را ناموفق/ناقص ثبت می‌کند");
+    }
     setSubmitting(true);
     try {
-      await submitAnswers({
+      const result = await submitAnswers({
         formId: form.id,
         studentId: student.id,
-        answers: payload,
+        answers: buildPayload(),
         voipCallId,
+        callSuccessful,
       });
-      toast.success("پاسخ‌ها با موفقیت ثبت شد");
-      onSubmitted?.();
+      const resultStatus = callStatusConfig[result?.status] || callStatusConfig[0];
+      toast.success(`پاسخ‌ها ثبت شد؛ وضعیت تماس: ${resultStatus.label}`);
+      setConfirmationOpen(false);
+      onSubmitted?.(result);
       onClose();
     } catch {
       // handled by httpClient
@@ -261,12 +287,31 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
           <Button color="light" onClick={onClose} disabled={submitting}>
             انصراف
           </Button>
-          <Button color="primary" onClick={handleSubmit} disabled={submitting}>
+          <Button color="primary" onClick={() => setConfirmationOpen(true)} disabled={submitting}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
         </div>
       </ModalBody>
+      <Modal isOpen={confirmationOpen} toggle={() => !submitting && setConfirmationOpen(false)} centered>
+        <ModalHeader toggle={() => !submitting && setConfirmationOpen(false)}>نتیجه تماس</ModalHeader>
+        <ModalBody>
+          <p className="mb-2 fw-semibold">آیا تماس موفق بود؟</p>
+          {!isComplete && (
+            <div className="alert alert-warning py-2 small">
+              حداقل یک سؤال بدون پاسخ است. حتی با انتخاب «موفق»، وضعیت نهایی سرور ناموفق/ناقص خواهد بود.
+            </div>
+          )}
+          <div className="d-flex justify-content-end gap-2 mt-3">
+            <Button color="light" onClick={() => setConfirmationOpen(false)} disabled={submitting}>انصراف</Button>
+            <Button color="danger" onClick={() => handleSubmit(false)} disabled={submitting}>ناموفق</Button>
+            <Button color="success" onClick={() => handleSubmit(true)} disabled={submitting}>
+              {submitting && <Spinner size="sm" className="me-2" />}
+              موفق
+            </Button>
+          </div>
+        </ModalBody>
+      </Modal>
     </Modal>
   );
 };
@@ -335,21 +380,32 @@ const StatsBar = ({ stats, loading }) => {
 const FormDetail = () => {
   const { formId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [form, setForm] = useState(null);
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
-  const [search, setSearch] = useState("");
-  const [callStatus, setCallStatus] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [callStatus, setCallStatus] = useState(searchParams.get("status") ?? "");
+  const [sort, setSort] = useState({
+    by: searchParams.get("sortBy") || "id",
+    order: searchParams.get("sortOrder") === "DESC" ? "DESC" : "ASC",
+  });
   const [loading, setLoading] = useState(false);
+  const [workShifts, setWorkShifts] = useState([]);
+  const [workShiftsLoading, setWorkShiftsLoading] = useState(true);
+  const [workShiftsError, setWorkShiftsError] = useState(false);
+  const [updatingShiftIds, setUpdatingShiftIds] = useState({});
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [lastVoipCallId, setLastVoipCallId] = useState(null);
+  const [callTrackingWarningOpen, setCallTrackingWarningOpen] = useState(false);
 
   const callCooldown = useRef({});
+  const shiftRequestVersions = useRef({});
   const [callingIds, setCallingIds] = useState({});
 
   document.title = `فرم تماس | داشبورد آیسوق`;
@@ -376,26 +432,49 @@ const FormDetail = () => {
   }, [formId]);
 
   const fetchStudents = useCallback(
-    async (page = 1, q = "", status = "") => {
+    async (page = 1, q = "", status = "", currentSort = { by: "id", order: "ASC" }) => {
       setLoading(true);
       try {
-        const res = await getAdviserFormStudents({ formId, page, limit: 15, search: q, callStatus: status });
+        const res = await getAdviserFormStudents({ formId, page, limit: 15, search: q, status, sortBy: currentSort.by, sortOrder: currentSort.order });
         setData(res.items || []);
         setMeta(res.pagination || { page, limit: 15, total: 0, lastPage: 1 });
+        const next = {};
+        if (q) next.search = q;
+        if (status !== "") next.status = String(status);
+        if (currentSort.by !== "id") next.sortBy = currentSort.by;
+        if (currentSort.by !== "id" || currentSort.order !== "ASC") next.sortOrder = currentSort.order;
+        if (page > 1) next.page = String(page);
+        setSearchParams(next, { replace: true });
       } catch {
         setData([]);
       } finally {
         setLoading(false);
       }
     },
-    [formId]
+    [formId, setSearchParams]
   );
+
+  const fetchWorkShifts = useCallback(async (force = false) => {
+    setWorkShiftsLoading(true);
+    setWorkShiftsError(false);
+    try {
+      const items = await getAdviserWorkShifts({ force });
+      setWorkShifts(items);
+    } catch {
+      setWorkShiftsError(true);
+    } finally {
+      setWorkShiftsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchForm();
     fetchStats();
-    fetchStudents(1, "", "");
-  }, [fetchForm, fetchStats, fetchStudents]);
+    fetchWorkShifts();
+    fetchStudents(Number(searchParams.get("page")) || 1, search, callStatus, sort);
+    // Initial query state is intentionally read once; later changes go through handlers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchForm, fetchStats, fetchStudents, fetchWorkShifts]);
 
   const handleCallClick = async (student) => {
     const id = student.id;
@@ -411,11 +490,15 @@ const FormDetail = () => {
 
     try {
       const result = await makeCall({ supportFormId: Number(formId), studentId: id });
+      if (!hasValidCallGroupId(result?.callGroupId)) {
+        setCallTrackingWarningOpen(true);
+        return;
+      }
       toast.success("تماس برقرار شد");
       setLastVoipCallId(result?.voipCallId || result?.id || null);
       setSelectedStudent(student);
       setDrawerOpen(true);
-      fetchStudents(meta.page, search, callStatus);
+      fetchStudents(meta.page, search, callStatus, sort);
       fetchStats();
     } catch {
       // handled by httpClient
@@ -431,13 +514,61 @@ const FormDetail = () => {
   };
 
   const handleAnswerSubmitted = () => {
-    fetchStudents(meta.page, search, callStatus);
+    fetchStudents(meta.page, search, callStatus, sort);
     fetchStats();
   };
 
   const handleCallStatusChange = (status) => {
     setCallStatus(status);
-    fetchStudents(1, search, status);
+    fetchStudents(1, search, status, sort);
+  };
+
+  const handleStatusSort = () => {
+    const nextSort = { by: "status", order: sort.by === "status" && sort.order === "ASC" ? "DESC" : "ASC" };
+    setSort(nextSort);
+    fetchStudents(1, search, callStatus, nextSort);
+  };
+
+  const handleWorkShiftChange = async (student, workShiftId) => {
+    const studentId = student.studentId;
+    if (updatingShiftIds[studentId]) return;
+
+    const requestVersion = (shiftRequestVersions.current[studentId] || 0) + 1;
+    shiftRequestVersions.current[studentId] = requestVersion;
+    setUpdatingShiftIds((prev) => ({ ...prev, [studentId]: true }));
+
+    try {
+      const updated = await updateAdviserStudentWorkShift({
+        formId: Number(formId),
+        studentId,
+        workShiftId: Number(workShiftId),
+      });
+      if (shiftRequestVersions.current[studentId] !== requestVersion) return;
+      setData((prev) => prev.map((item) => (
+        item.studentId === studentId
+          ? { ...item, workShiftId: updated.workShiftId, workShift: updated.workShift }
+          : item
+      )));
+      toast.success("شیفت دانش‌آموز به‌روزرسانی شد");
+    } catch (error) {
+      if (shiftRequestVersions.current[studentId] !== requestVersion) return;
+      const status = error?.response?.status;
+      if (status === 403) {
+        toast.error("اجازه تغییر شیفت این دانش‌آموز را ندارید یا دانش‌آموز به شما تخصیص داده نشده است");
+      } else if (status === 404) {
+        toast.error("دانش‌آموز یا شیفت انتخاب‌شده یافت نشد؛ اطلاعات دوباره دریافت شد");
+        await Promise.allSettled([
+          fetchWorkShifts(true),
+          fetchStudents(meta.page, search, callStatus, sort),
+        ]);
+      } else {
+        toast.error(error?.response?.data?.message || "به‌روزرسانی شیفت انجام نشد");
+      }
+    } finally {
+      if (shiftRequestVersions.current[studentId] === requestVersion) {
+        setUpdatingShiftIds((prev) => ({ ...prev, [studentId]: false }));
+      }
+    }
   };
 
   const formTitle = form?.title || `فرم ${formId}`;
@@ -495,12 +626,19 @@ const FormDetail = () => {
 
             <div className="d-flex align-items-center gap-2 flex-wrap">
               {loading && <Spinner size="sm" color="primary" />}
+              {workShiftsError && (
+                <Button color="warning" outline size="sm" onClick={() => fetchWorkShifts(true)}>
+                  <i className="bx bx-refresh me-1" />
+                  تلاش مجدد دریافت شیفت‌ها
+                </Button>
+              )}
 
               <div className="btn-group">
                 {[
                   { value: "", label: "همه" },
-                  { value: "called", label: "تماس گرفته" },
-                  { value: "not_called", label: "تماس نگرفته" },
+                  { value: "0", label: "بدون وضعیت" },
+                  { value: "1", label: "موفق" },
+                  { value: "2", label: "ناموفق/ناقص" },
                 ].map(({ value, label }) => (
                   <button
                     key={value}
@@ -524,9 +662,9 @@ const FormDetail = () => {
                   value={search}
                   onChange={(e) => {
                     setSearch(e.target.value);
-                    if (!e.target.value) fetchStudents(1, "", callStatus);
+                    if (!e.target.value) fetchStudents(1, "", callStatus, sort);
                   }}
-                  onKeyDown={(e) => e.key === "Enter" && fetchStudents(1, search, callStatus)}
+                  onKeyDown={(e) => e.key === "Enter" && fetchStudents(1, search, callStatus, sort)}
                 />
               </div>
             </div>
@@ -555,7 +693,11 @@ const FormDetail = () => {
                       <th style={{ width: 100 }}>تماس‌ها</th>
                       <th>آخرین تماس</th>
                       <th style={{ width: 80 }}>پاسخ</th>
-                      <th style={{ width: 80 }}>وضعیت</th>
+                      <th style={{ width: 130 }} role="button" onClick={handleStatusSort}>
+                        وضعیت تماس
+                        {sort.by === "status" && <i className={`bx bx-sort-${sort.order === "ASC" ? "up" : "down"} ms-1`} />}
+                      </th>
+                      <th style={{ minWidth: 170 }}>شیفت دانش‌آموز</th>
                       <th style={{ width: 120 }}>عملیات</th>
                     </tr>
                   </thead>
@@ -594,12 +736,29 @@ const FormDetail = () => {
                           )}
                         </td>
                         <td>
-                          <Badge
-                            color={student.status === 1 || student.status === "active" ? "success" : "secondary"}
-                            pill
-                          >
-                            {student.status === 1 || student.status === "active" ? "فعال" : "غیرفعال"}
+                          <Badge color={(callStatusConfig[student.status] || callStatusConfig[0]).color} pill>
+                            {(callStatusConfig[student.status] || callStatusConfig[0]).label}
                           </Badge>
+                        </td>
+                        <td>
+                          <div className="d-flex align-items-center gap-2">
+                            <Input
+                              type="select"
+                              bsSize="sm"
+                              value={student.workShiftId ?? ""}
+                              disabled={workShiftsLoading || workShiftsError || updatingShiftIds[student.studentId]}
+                              onChange={(event) => handleWorkShiftChange(student, event.target.value)}
+                            >
+                              {workShiftsLoading && <option value="">در حال دریافت شیفت‌ها...</option>}
+                              {!workShiftsLoading && (
+                                student.workShiftId === null || !workShifts.some((shift) => String(shift.id) === String(student.workShiftId))
+                              ) && <option value={student.workShiftId ?? ""}>شیفت ناشناخته</option>}
+                              {workShifts.map((shift) => (
+                                <option key={shift.id} value={shift.id}>{shift.name}</option>
+                              ))}
+                            </Input>
+                            {updatingShiftIds[student.studentId] && <Spinner size="sm" color="primary" />}
+                          </div>
                         </td>
                         <td>
                           <div className="d-flex gap-1">
@@ -655,7 +814,7 @@ const FormDetail = () => {
               data={data}
               totalRecords={meta.total}
               currentPage={meta.page}
-              setCurrentPage={(page) => fetchStudents(page, search, callStatus)}
+              setCurrentPage={(page) => fetchStudents(page, search, callStatus, sort)}
               isShowingPageLength={true}
               paginationDiv="col-sm-auto"
               paginationClass="pagination pagination-sm mb-0"
@@ -671,6 +830,10 @@ const FormDetail = () => {
         form={form}
         voipCallId={lastVoipCallId}
         onSubmitted={handleAnswerSubmitted}
+      />
+      <CallTrackingWarningModal
+        open={callTrackingWarningOpen}
+        onAcknowledge={() => setCallTrackingWarningOpen(false)}
       />
     </div>
   );

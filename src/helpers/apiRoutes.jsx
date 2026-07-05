@@ -197,8 +197,13 @@ export const API_ROUTES = {
     schoolDetail: (id) => `/adviser-portal/schools/${id}`,
     schoolStats: (id) => `/adviser-portal/schools/${id}/stats`,
     schoolSupportForms: (schoolId) => `/adviser-portal/schools/${schoolId}/support-forms`,
+    schoolIncompleteCalls: (schoolId) => `/adviser-portal/schools/${schoolId}/incomplete-calls`,
+    schoolIncompleteCallsExport: (schoolId) => `/adviser-portal/schools/${schoolId}/incomplete-calls/export`,
     supportFormDetail: (id) => `/adviser-portal/support-forms/${id}`,
     supportFormStudents: (id) => `/adviser-portal/support-forms/${id}/students`,
+    workShifts: "/adviser-portal/work-shifts",
+    studentWorkShift: (formId, studentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/work-shift`,
     supportFormStats: (id) => `/adviser-portal/support-forms/${id}/stats`,
     submitAnswers: (formId, studentId) =>
       `/adviser-portal/support-forms/${formId}/students/${studentId}/answers`,
