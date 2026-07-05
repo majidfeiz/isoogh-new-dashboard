@@ -272,6 +272,8 @@ import SuperAdviserAnswerSheet from "../pages/SuperAdviserPortal/AnswerSheet.jsx
 // adviser portal
 import AdviserPortalSchools from "../pages/AdviserPortal/SchoolList.jsx";
 import AdviserPortalSupportForms from "../pages/AdviserPortal/SupportFormList.jsx";
+import AdviserPortalSchoolTasks from "../pages/AdviserPortal/SchoolTasks.jsx";
+import AdviserPortalIncompleteCalls from "../pages/AdviserPortal/IncompleteCalls.jsx";
 import AdviserPortalFormDetail from "../pages/AdviserPortal/FormDetail.jsx";
 import AdviserPortalCallLogs from "../pages/AdviserPortal/CallLogs.jsx";
 import AdviserPortalStats from "../pages/AdviserPortal/Stats.jsx";
@@ -426,7 +428,9 @@ const authProtectedRoutes = [
 
   // adviser portal
   { path: "/adviser-calls", component: <AdviserPortalSchools /> },
-  { path: "/adviser-calls/schools/:schoolId", component: <AdviserPortalSupportForms /> },
+  { path: "/adviser-calls/schools/:schoolId", component: <AdviserPortalSchoolTasks /> },
+  { path: "/adviser-calls/schools/:schoolId/planned-calls", component: <AdviserPortalSupportForms /> },
+  { path: "/adviser-calls/schools/:schoolId/incomplete-calls", component: <AdviserPortalIncompleteCalls /> },
   { path: "/adviser-calls/forms/:formId", component: <AdviserPortalFormDetail /> },
   { path: "/adviser-calls/forms/:formId/students/:studentId", component: <AdviserPortalStudentProfile /> },
   { path: "/adviser-calls/logs", component: <AdviserPortalCallLogs /> },

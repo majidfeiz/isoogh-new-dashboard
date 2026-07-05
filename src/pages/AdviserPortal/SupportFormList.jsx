@@ -106,7 +106,7 @@ const SupportFormList = () => {
         <Breadcrumbs
           title="تماس مشاوران"
           breadcrumbItem={schoolName}
-          titleLink="/adviser-calls"
+          titleLink={`/adviser-calls/schools/${schoolId}`}
         />
 
         <Row className="mb-3 align-items-center">

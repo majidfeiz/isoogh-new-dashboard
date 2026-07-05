@@ -51,9 +51,21 @@ const normalizeStudent = (item = {}) => ({
   callCount: item?.call_count ?? item?.callCount ?? 0,
   lastCallAt: item?.last_call_at ?? item?.lastCallAt ?? null,
   hasAnswers: item?.has_answers ?? item?.hasAnswers ?? false,
-  status: item?.status ?? 1,
+  status: item?.status ?? 0,
+  workShiftId: item?.workShiftId ?? item?.work_shift_id ?? null,
+  workShift: item?.workShift ?? item?.work_shift ?? null,
   answerSessions: item?.answer_sessions ?? item?.answerSessions ?? [],
 });
+
+const normalizeWorkShift = (item = {}) => ({
+  id: item?.id ?? null,
+  name: item?.name ?? "",
+});
+
+const WORK_SHIFT_CACHE_TTL = 5 * 60 * 1000;
+let workShiftCache = null;
+let workShiftCacheTime = 0;
+let workShiftRequest = null;
 
 const normalizeStudentProfile = (item = {}) => ({
   studentId: item?.studentId ?? item?.student_id ?? null,
@@ -112,6 +124,27 @@ const normalizePagination = (meta, page, limit, items) => ({
   limit: meta?.limit ?? limit,
   total: meta?.total ?? items.length,
   lastPage: meta?.lastPage ?? (meta?.total ? Math.ceil(meta.total / (meta?.limit || limit)) : 1),
+});
+
+const normalizeIncompleteCall = (item = {}) => ({
+  id: item?.id ?? null,
+  studentId: item?.studentId ?? item?.student_id ?? item?.student?.id ?? null,
+  supportFormId: item?.supportFormId ?? item?.support_form_id ?? item?.supportForm?.id ?? null,
+  status: item?.status ?? 2,
+  student: {
+    id: item?.student?.id ?? item?.studentId ?? item?.student_id ?? null,
+    code: item?.student?.code ?? "",
+    name: item?.student?.name ?? "",
+    phone: item?.student?.phone ?? "",
+    ssn: item?.student?.ssn ?? "",
+  },
+  supportForm: {
+    id: item?.supportForm?.id ?? item?.support_form?.id ?? item?.supportFormId ?? item?.support_form_id ?? null,
+    title: item?.supportForm?.title ?? item?.support_form?.title ?? "",
+  },
+  profilePath: item?.profilePath ?? item?.profile_path ?? "",
+  createdAt: item?.createdAt ?? item?.created_at ?? null,
+  updatedAt: item?.updatedAt ?? item?.updated_at ?? null,
 });
 
 // ─── Schools ─────────────────────────────────────────────────────────────────
@@ -175,6 +208,32 @@ export async function getAdviserSupportFormStats(id) {
   return res?.data?.data || res?.data || {};
 }
 
+export async function getAdviserIncompleteCalls({
+  schoolId,
+  page = 1,
+  limit = 15,
+  search = "",
+  sortBy = "id",
+  sortOrder = "DESC",
+} = {}) {
+  const url = getApiUrl(API_ROUTES.adviserPortal.schoolIncompleteCalls(schoolId));
+  const res = await apiGet(url, {
+    params: { page, limit, search: search || undefined, sortBy, sortOrder },
+    silent: true,
+  });
+  const data = res?.data?.data || {};
+  const items = (data.items || data.data || []).map(normalizeIncompleteCall);
+  return { items, pagination: normalizePagination(data.meta, page, limit, items) };
+}
+
+export async function exportAdviserIncompleteCalls({ schoolId, search = "" }) {
+  const url = getApiUrl(API_ROUTES.adviserPortal.schoolIncompleteCallsExport(schoolId));
+  return apiGet(url, {
+    params: { search: search || undefined },
+    responseType: "blob",
+  });
+}
+
 // ─── Students ─────────────────────────────────────────────────────────────────
 
 export async function getAdviserFormStudents({
@@ -182,7 +241,7 @@ export async function getAdviserFormStudents({
   page = 1,
   limit = 15,
   search = "",
-  callStatus = "",
+  status,
   sortBy = "id",
   sortOrder = "ASC",
 } = {}) {
@@ -192,7 +251,7 @@ export async function getAdviserFormStudents({
       page,
       limit,
       search: search || undefined,
-      callStatus: callStatus || undefined,
+      status: status === "" || status === undefined ? undefined : Number(status),
       sortBy,
       sortOrder,
     },
@@ -203,6 +262,36 @@ export async function getAdviserFormStudents({
   return { items, pagination: normalizePagination(data.meta, page, limit, items) };
 }
 
+export async function getAdviserWorkShifts({ force = false } = {}) {
+  const cacheIsFresh = workShiftCache && Date.now() - workShiftCacheTime < WORK_SHIFT_CACHE_TTL;
+  if (!force && cacheIsFresh) return workShiftCache;
+  if (!force && workShiftRequest) return workShiftRequest;
+
+  const url = getApiUrl(API_ROUTES.adviserPortal.workShifts);
+  workShiftRequest = apiGet(url)
+    .then((res) => {
+      const payload = res?.data?.data || res?.data || [];
+      workShiftCache = (Array.isArray(payload) ? payload : []).map(normalizeWorkShift);
+      workShiftCacheTime = Date.now();
+      return workShiftCache;
+    })
+    .finally(() => {
+      workShiftRequest = null;
+    });
+  return workShiftRequest;
+}
+
+export async function updateAdviserStudentWorkShift({ formId, studentId, workShiftId }) {
+  const url = getApiUrl(API_ROUTES.adviserPortal.studentWorkShift(formId, studentId));
+  const res = await apiPatch(url, { workShiftId }, { silent: true });
+  const data = res?.data?.data || res?.data || {};
+  return {
+    studentId: data?.studentId ?? data?.student_id ?? studentId,
+    workShiftId: data?.workShiftId ?? data?.work_shift_id ?? null,
+    workShift: data?.workShift ?? data?.work_shift ?? null,
+  };
+}
+
 // ─── Call ─────────────────────────────────────────────────────────────────────
 
 export async function makeCall({ supportFormId, studentId }) {
@@ -211,11 +300,12 @@ export async function makeCall({ supportFormId, studentId }) {
   return res?.data?.data || res?.data || {};
 }
 
-export async function submitAnswers({ formId, studentId, answers, voipCallId }) {
+export async function submitAnswers({ formId, studentId, answers, voipCallId, callSuccessful }) {
   const url = getApiUrl(API_ROUTES.adviserPortal.submitAnswers(formId, studentId));
   const res = await apiPost(url, {
     answers,
-    ...(voipCallId ? { voipCallId } : {}),
+    callSuccessful,
+    ...(voipCallId !== null && voipCallId !== undefined ? { voipCallId } : {}),
   });
   return res?.data?.data || res?.data || {};
 }

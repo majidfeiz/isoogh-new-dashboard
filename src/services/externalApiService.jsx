@@ -7,12 +7,20 @@ const normalizeIp = (ip = {}) => ({
   created_at: ip?.created_at ?? null,
 });
 
+const normalizeBoolean = (value, fallback = false) => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === "string") {
+    return !["false", "0", "off", "no", ""].includes(value.trim().toLowerCase());
+  }
+  return Boolean(value);
+};
+
 const normalizeClient = (item = {}) => ({
   id: item?.id ?? null,
   name: item?.name ?? "",
   description: item?.description ?? "",
   api_key: item?.api_key ?? "",
-  is_active: item?.is_active ?? true,
+  is_active: normalizeBoolean(item?.is_active ?? item?.isActive, true),
   school_id: item?.school_id ?? null,
   ips: Array.isArray(item?.ips) ? item.ips.map(normalizeIp) : [],
   created_at: item?.created_at ?? null,

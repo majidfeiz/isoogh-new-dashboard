@@ -177,7 +177,7 @@ const SchoolList = () => {
                         {school.status === 1 || school.status === "active" ? "فعال" : "غیرفعال"}
                       </Badge>
                       <Button color="primary" size="sm" outline>
-                        مشاهده فرم‌ها
+                        مشاهده وظایف
                         <i className="bx bx-chevron-left ms-1" />
                       </Button>
                     </div>

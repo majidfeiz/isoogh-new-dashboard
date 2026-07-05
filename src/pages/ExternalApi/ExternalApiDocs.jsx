@@ -18,7 +18,6 @@ import { API_BASE_URL } from "../../helpers/apiRoutes.jsx";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 
 const swaggerExternalUrl = `${API_BASE_URL}/external-api-docs`;
-const swaggerInternalUrl = `${API_BASE_URL}/api-docs`;
 
 const MethodBadge = ({ method }) => {
   const colors = { GET: "primary", POST: "success", PATCH: "warning", DELETE: "danger" };
@@ -82,15 +81,6 @@ const ExternalApiDocs = () => {
               >
                 <i className="bx bx-link-external me-1" />
                 Swagger خارجی
-              </a>
-              <a
-                href={swaggerInternalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-outline-secondary btn-sm text-nowrap"
-              >
-                <i className="bx bx-link-external me-1" />
-                Swagger داخلی
               </a>
             </div>
           </Col>
@@ -549,10 +539,6 @@ const ExternalApiDocs = () => {
                     <a href={swaggerExternalUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-primary">
                       <i className="bx bx-link-external me-1" />
                       Swagger API خارجی (برای ارگان‌ها)
-                    </a>
-                    <a href={swaggerInternalUrl} target="_blank" rel="noopener noreferrer" className="btn btn-outline-secondary">
-                      <i className="bx bx-link-external me-1" />
-                      Swagger داخلی (مدیریتی)
                     </a>
                   </div>
                 </Section>
