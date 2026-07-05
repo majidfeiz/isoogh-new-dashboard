@@ -1,6 +1,6 @@
 # Project Memory
 
-Last verified against the repository: 2026-07-04 (app version `1.2.4`).
+Last verified against the repository: 2026-07-05 (app version `1.3.0`).
 
 This is the short, code-derived context to read before changing the project. `AGENTS.md` remains the detailed conventions guide; `docs/DOMAIN_MAP.md` is the feature locator.
 
@@ -8,11 +8,13 @@ This is the short, code-derived context to read before changing the project. `AG
 
 ```bash
 source "$HOME/.nvm/nvm.sh"
-nvm use 18
+nvm use
 npm run dev
 ```
 
-- Verified runtime: Node `18.20.8`, npm `10.8.2`.
+- Verified runtime: Node `24.18.0`, npm `11.16.0`; `.nvmrc` pins the Node 24 release line.
+- `node-sass` was removed because it is EOL and incompatible with Node 24; SCSS compilation uses the existing Dart Sass (`sass`) dependency.
+- The Docker builder uses `node:24-bookworm-slim`.
 - Dev server: Vite 5, normally `http://localhost:5173`.
 - Build: `npm run build` (verified passing on 2026-07-04).
 - Lint baseline: `npm run lint` currently cannot start because `eslint-plugin-react` is referenced in `package.json` but is not installed.

@@ -1,6 +1,6 @@
 # Multi-stage build for Vite + React
 # Use debian-based image (glibc) to avoid rollup musl optional dependency issues
-FROM node:18-bullseye-slim AS builder
+FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 
 # Install dependencies (tolerate peer deps from template)
