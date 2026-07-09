@@ -3,8 +3,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import { Badge, Button, Card, CardBody, CardHeader, Spinner, Table } from "reactstrap"
 import Paginations from "../../../components/Common/Paginations.jsx"
 import { getReportsCallsByAdviser } from "../../../services/reportService.jsx"
-import { API_ROUTES, getApiUrl } from "../../../helpers/apiRoutes.jsx"
-import { getAccessToken } from "../../../helpers/authStorage.jsx"
+import { exportReportsCallsByAdviser } from "../../../services/reportService.jsx"
 
 const faNum = (v) => (v == null ? "—" : Number(v).toLocaleString("fa-IR"))
 
@@ -20,11 +19,11 @@ const fmtSec = (sec) => {
 
 const SORT_COLS = [
   { key: "totalCalls", label: "تماس‌ها" },
-  { key: "uniqueStudents", label: "دانش‌آموزان" },
+  { key: "totalStudents", label: "دانش‌آموزان" },
+  { key: "remainingStudents", label: "باقی‌مانده" },
   { key: "totalDurationSeconds", label: "مدت کل" },
-  { key: "avgDurationSeconds", label: "میانگین مدت" },
-  { key: "completedForms", label: "فرم تکمیل‌شده" },
-  { key: "formCompletionPercent", label: "درصد تکمیل" },
+  { key: "answeredCalls", label: "پاسخ‌داده" },
+  { key: "missedCalls", label: "ازدست‌رفته" },
 ]
 
 const CallsByAdviserTable = ({ period, schoolId, hasExportPerm }) => {
@@ -84,21 +83,17 @@ const CallsByAdviserTable = ({ period, schoolId, hasExportPerm }) => {
     if (exporting) return
     setExporting(true)
     try {
-      const params = new URLSearchParams()
-      if (period?.from) params.append("from", period.from)
-      if (period?.to) params.append("to", period.to)
-      if (schoolId) params.append("schoolId", String(schoolId))
-      const url = `${getApiUrl(API_ROUTES.reports.callsByAdviserExport)}?${params.toString()}`
-      const token = getAccessToken()
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const blob = await exportReportsCallsByAdviser({
+        from: period?.from,
+        to: period?.to,
+        schoolId,
+        sortBy,
+        sortOrder,
       })
-      if (!res.ok) throw new Error("خطا در دانلود")
-      const blob = await res.blob()
       const objectUrl = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = objectUrl
-      a.download = "calls-by-adviser.csv"
+      a.download = "adviser-call-performance.xlsx"
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -144,7 +139,7 @@ const CallsByAdviserTable = ({ period, schoolId, hasExportPerm }) => {
             className="d-flex align-items-center gap-1"
           >
             <i className={`mdi ${exporting ? "mdi-loading mdi-spin" : "mdi-file-download-outline"}`} />
-            دانلود CSV
+            دانلود Excel
           </Button>
         )}
       </CardHeader>
@@ -191,15 +186,11 @@ const CallsByAdviserTable = ({ period, schoolId, hasExportPerm }) => {
                     <tr key={row.adviserId}>
                       <td className="fw-medium">{row.adviserName || "—"}</td>
                       <td>{faNum(row.totalCalls)}</td>
-                      <td>{faNum(row.uniqueStudents)}</td>
+                      <td>{faNum(row.totalStudents)}</td>
+                      <td>{faNum(row.remainingStudents)}</td>
                       <td>{fmtSec(row.totalDurationSeconds)}</td>
-                      <td>{fmtSec(row.avgDurationSeconds)}</td>
-                      <td>{faNum(row.completedForms)}</td>
-                      <td>
-                        {row.formCompletionPercent != null
-                          ? `${Number(row.formCompletionPercent).toFixed(1).toLocaleString("fa-IR")}٪`
-                          : "—"}
-                      </td>
+                      <td>{faNum(row.answeredCalls)}</td>
+                      <td>{faNum(row.missedCalls)}</td>
                     </tr>
                   ))
                 )}

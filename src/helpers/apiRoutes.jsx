@@ -6,7 +6,8 @@ const runtimeBase =
   typeof window !== "undefined" && window.__ENV__ && window.__ENV__.VITE_API_BASE_URL;
 const buildBase = import.meta.env?.VITE_API_BASE_URL;
 const defaultBase = "https://napi.isoogh.ir";
-export const API_BASE_URL = runtimeBase || buildBase || defaultBase;
+const normalizeBaseUrl = (value) => String(value || "").trim().replace(/\/+$/, "");
+export const API_BASE_URL = normalizeBaseUrl(runtimeBase || buildBase || defaultBase);
 
 if (!API_BASE_URL) {
   // هشدار برای توسعه: بدون base URL اپ کار نمی‌کند
@@ -297,6 +298,14 @@ export const API_ROUTES = {
     callsTrend: "/reports/calls-trend",
     callsByAdviser: "/reports/calls-by-adviser",
     callsByAdviserExport: "/reports/calls-by-adviser/export",
+    contactFormsComprehensive: "/reports/contact-forms-comprehensive",
+    contactFormsComprehensiveExport: "/reports/contact-forms-comprehensive/export",
+    contactFormsOnline: "/reports/contact-forms-online",
+    contactFormsOnlineExport: "/reports/contact-forms-online/export",
+    studentVoipComprehensive: "/reports/student-voip-comprehensive",
+    studentVoipComprehensiveExport: "/reports/student-voip-comprehensive/export",
+    inactiveAdvisers: "/reports/inactive-advisers",
+    inactiveAdvisersExport: "/reports/inactive-advisers/export",
     callsByHour: "/reports/calls-by-hour",
     studentsCoverage: "/reports/students-coverage",
     uncontactedStudents: "/reports/uncontacted-students",

@@ -34,7 +34,6 @@ declare module 'lodash.clonedeep';
 declare module 'match-sorter';
 declare module 'metismenujs';
 declare module 'moment';
-declare module 'node-sass';
 declare module 'nouislider-react';
 declare module 'prop-types';
 declare module 'react';
@@ -92,4 +91,3 @@ declare module 'styled-components';
 declare module 'toastr';
 declare module 'yup';
 declare module 'vtaits/react-color-picker';
-

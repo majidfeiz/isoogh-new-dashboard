@@ -75,7 +75,7 @@ const ReportsDashboard = () => {
   const [schools, setSchools] = useState([])
 
   const showSchoolFilter = hasPermission("schools.index")
-  const hasExportPerm = hasPermission("reports.export")
+  const hasExportPerm = hasPermission("reports.adviser-call-performance.export")
 
   const overview = useSectionFetch(getReportsOverview)
   const trend = useSectionFetch(getReportsCallsTrend)

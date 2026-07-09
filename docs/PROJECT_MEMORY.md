@@ -1,6 +1,6 @@
 # Project Memory
 
-Last verified against the repository: 2026-07-04 (app version `1.2.4`).
+Last verified against the repository: 2026-07-05 (app version `1.3.0`).
 
 This is the short, code-derived context to read before changing the project. `AGENTS.md` remains the detailed conventions guide; `docs/DOMAIN_MAP.md` is the feature locator.
 
@@ -8,11 +8,13 @@ This is the short, code-derived context to read before changing the project. `AG
 
 ```bash
 source "$HOME/.nvm/nvm.sh"
-nvm use 18
+nvm use
 npm run dev
 ```
 
-- Verified runtime: Node `18.20.8`, npm `10.8.2`.
+- Verified runtime: Node `24.18.0`, npm `11.16.0`; `.nvmrc` pins the Node 24 release line.
+- `node-sass` was removed because it is EOL and incompatible with Node 24; SCSS compilation uses the existing Dart Sass (`sass`) dependency.
+- The Docker builder uses `node:24-bookworm-slim`.
 - Dev server: Vite 5, normally `http://localhost:5173`.
 - Build: `npm run build` (verified passing on 2026-07-04).
 - Lint baseline: `npm run lint` currently cannot start because `eslint-plugin-react` is referenced in `package.json` but is not installed.
@@ -39,6 +41,7 @@ main.jsx
 ## Configuration and authentication
 
 - API base precedence in `src/helpers/apiRoutes.jsx`: `window.__ENV__.VITE_API_BASE_URL` -> build-time `VITE_API_BASE_URL` -> `https://napi.isoogh.ir`.
+- The Docker/nginx image generates `/env.js` from runtime `VITE_API_BASE_URL` on container start; `index.html` loads it before the React bundle, so changing the container env does not require rebuilding the frontend image.
 - Local backend commonly uses `VITE_API_BASE_URL=http://127.0.0.1:8040`.
 - Swagger: local `http://localhost:8040/api-docs#/`; remote `https://napi.isoogh.ir/api-docs#/`.
 - Access token key: `localStorage.isoogh_access_token`. The protected-route guard only checks token presence.

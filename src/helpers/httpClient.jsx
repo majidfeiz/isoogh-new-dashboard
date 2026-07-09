@@ -39,6 +39,10 @@ http.interceptors.request.use(
 http.interceptors.response.use(
   (response) => response,
   async (error) => {
+    if (error?.code === "ERR_CANCELED") {
+      return Promise.reject(error);
+    }
+
     const status = error?.response?.status;
 
     if (status === 401) {
