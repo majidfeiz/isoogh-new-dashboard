@@ -41,6 +41,7 @@ main.jsx
 ## Configuration and authentication
 
 - API base precedence in `src/helpers/apiRoutes.jsx`: `window.__ENV__.VITE_API_BASE_URL` -> build-time `VITE_API_BASE_URL` -> `https://napi.isoogh.ir`.
+- The Docker/nginx image generates `/env.js` from runtime `VITE_API_BASE_URL` on container start; `index.html` loads it before the React bundle, so changing the container env does not require rebuilding the frontend image.
 - Local backend commonly uses `VITE_API_BASE_URL=http://127.0.0.1:8040`.
 - Swagger: local `http://localhost:8040/api-docs#/`; remote `https://napi.isoogh.ir/api-docs#/`.
 - Access token key: `localStorage.isoogh_access_token`. The protected-route guard only checks token presence.

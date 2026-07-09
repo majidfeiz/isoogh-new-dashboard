@@ -252,6 +252,11 @@ import VoipWebhookLogs from "../pages/VoipWebhooks/VoipWebhookLogs.jsx";
 
 // reports
 import ReportsDashboard from "../pages/Reports/ReportsDashboard.jsx";
+import AdviserCallPerformance from "../pages/Reports/AdviserCallPerformance.jsx";
+import ContactFormsComprehensive from "../pages/Reports/ContactFormsComprehensive.jsx";
+import ContactFormsOnline from "../pages/Reports/ContactFormsOnline.jsx";
+import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.jsx";
+import InactiveAdvisers from "../pages/Reports/InactiveAdvisers.jsx";
 
 // admin - dashboard widgets
 import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
@@ -409,6 +414,11 @@ const authProtectedRoutes = [
 
   // reports
   { path: "/reports", component: <ReportsDashboard /> },
+  { path: "/reports/adviser-call-performance", component: <AdviserCallPerformance /> },
+  { path: "/reports/contact-forms-comprehensive", component: <ContactFormsComprehensive /> },
+  { path: "/reports/contact-forms-online", component: <ContactFormsOnline /> },
+  { path: "/reports/student-voip-comprehensive", component: <StudentVoipComprehensive /> },
+  { path: "/reports/inactive-advisers", component: <InactiveAdvisers /> },
 
   // admin - dashboard widgets
   { path: "/admin/dashboard-widgets", component: <DashboardWidgetsAdmin /> },

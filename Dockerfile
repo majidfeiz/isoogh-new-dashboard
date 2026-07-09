@@ -20,6 +20,9 @@ RUN npm run build
 # Serve with nginx
 FROM nginx:stable-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker-entrypoint.sh /docker-entrypoint.d/40-runtime-env.sh
 COPY --from=builder /app/dist /usr/share/nginx/html
+ENV VITE_API_BASE_URL=https://napi.isoogh.ir
+RUN chmod +x /docker-entrypoint.d/40-runtime-env.sh
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

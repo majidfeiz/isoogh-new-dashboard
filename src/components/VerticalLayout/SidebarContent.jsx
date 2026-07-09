@@ -389,11 +389,45 @@ const SidebarContent = (props) => {
         ],
       },
       {
-        type: "item",
+        type: "group",
         label: "گزارشات",
         icon: "bx bx-bar-chart-alt-2",
-        to: "/reports",
-        permission: "reports.index",
+        permissionAny: [
+          "reports.index",
+          "reports.adviser-call-performance.index",
+          "reports.contact-forms-comprehensive.index",
+          "reports.contact-forms-online.index",
+          "reports.student-voip-comprehensive.index",
+          "reports.inactive-advisers.index",
+        ],
+        children: [
+          { label: "داشبورد گزارشات", to: "/reports", permission: "reports.index" },
+          {
+            label: "عملکرد تماس مشاوران",
+            to: "/reports/adviser-call-performance",
+            permission: "reports.adviser-call-performance.index",
+          },
+          {
+            label: "گزارش جامع فرم‌های تماس",
+            to: "/reports/contact-forms-comprehensive",
+            permission: "reports.contact-forms-comprehensive.index",
+          },
+          {
+            label: "گزارش آنلاین فرم تماس‌ها",
+            to: "/reports/contact-forms-online",
+            permission: "reports.contact-forms-online.index",
+          },
+          {
+            label: "گزارش جامع VoIP دانش‌آموزی",
+            to: "/reports/student-voip-comprehensive",
+            permission: "reports.student-voip-comprehensive.index",
+          },
+          {
+            label: "مشاوران غیرفعال",
+            to: "/reports/inactive-advisers",
+            permission: "reports.inactive-advisers.index",
+          },
+        ],
       },
       {
         type: "group",
