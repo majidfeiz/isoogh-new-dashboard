@@ -25,6 +25,7 @@ export const API_ROUTES = {
   version: "/version",
   auth: {
     login: `${API_VERSION.v1}/auth/login`,
+    captcha: `${API_VERSION.v1}/auth/captcha`,
     verifyOtp: `${API_VERSION.v1}/auth/verify-otp`,
     me: `${API_VERSION.v1}/auth/me`,
     refresh: `${API_VERSION.v1}/auth/refresh`,
