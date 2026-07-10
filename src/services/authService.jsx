@@ -4,10 +4,23 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 import { apiPost, apiGet } from "../helpers/httpClient.jsx";
 import { setAuthData, clearAuthData } from "../helpers/authStorage.jsx";
 
+export async function getLoginCaptcha() {
+  const url = getApiUrl(API_ROUTES.auth.captcha);
+  const response = await apiGet(url, { silent: true });
+  return response?.data?.data ?? response?.data ?? { enabled: false };
+}
+
 // مرحله اول ورود: ارسال identifier + password، دریافت otpToken
-export async function login(identifier, password, rememberMe = false) {
+export async function login(identifier, password, rememberMe = false, captcha = null) {
   const url = getApiUrl(API_ROUTES.auth.login);
-  const response = await apiPost(url, { identifier, password, rememberMe }, { silent: true });
+  const payload = { identifier, password, rememberMe };
+
+  if (captcha?.captchaToken && captcha?.captchaAnswer) {
+    payload.captchaToken = captcha.captchaToken;
+    payload.captchaAnswer = captcha.captchaAnswer;
+  }
+
+  const response = await apiPost(url, payload, { silent: true });
   // response: { data: { otpToken, maskedPhone, expiresIn, resendAfter } }
   return response?.data?.data;
 }
