@@ -23,6 +23,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import moment from "moment-jalaali";
+import { getVoipCallDateDisplay } from "../../helpers/voipTime.js";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
 import CallTrackingWarningModal from "./CallTrackingWarningModal.jsx";
@@ -342,7 +343,7 @@ const CallLogsTab = ({ formId, studentId, refreshKey }) => {
               return (
                 <tr key={log.id}>
                   <td className="text-muted small">{(meta.page - 1) * meta.limit + idx + 1}</td>
-                  <td className="small">{formatJalali(log.createdAt, true)}</td>
+                  <td className="small">{getVoipCallDateDisplay(log)}</td>
                   <td>
                     <Badge color={disp.color} pill className="px-2 py-1">{disp.label}</Badge>
                   </td>

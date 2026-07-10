@@ -12,8 +12,8 @@ export const SEARCH_DEBOUNCE_MS = 400
 
 export function defaultComprehensiveQuery() {
   return {
-    from: moment().startOf("jMonth").format("YYYY-MM-DD") + "T00:00:00+03:30",
-    to: moment().add(1, "jMonth").startOf("jMonth").format("YYYY-MM-DD") + "T00:00:00+03:30",
+    from: moment().startOf("jMonth").format("YYYY-MM-DD"),
+    to: moment().endOf("jMonth").format("YYYY-MM-DD"),
     formIds: "",
     schoolId: "",
     search: "",

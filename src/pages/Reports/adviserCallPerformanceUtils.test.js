@@ -9,8 +9,8 @@ import {
 
 test("serializes and restores active report filters", () => {
   const query = {
-    from: "2026-07-01T00:00:00+03:30",
-    to: "2026-07-08T00:00:00+03:30",
+    from: "2026-07-01",
+    to: "2026-07-08",
     schoolId: "12",
     search: "روشن",
     sortBy: "adviserName",

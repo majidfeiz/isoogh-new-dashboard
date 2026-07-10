@@ -22,11 +22,11 @@ test("uses dedicated page and Excel permissions", () => {
   expect(canExportStudentVoipReport(["reports.student-voip-comprehensive.index"])).toBe(false)
 })
 
-test("requires form and both ISO dates and encodes timezone", () => {
+test("requires form and both dates and keeps selected date", () => {
   expect(hasRequiredStudentVoipFilters({ formId: "10", from: "a", to: "b" })).toBe(true)
   expect(hasRequiredStudentVoipFilters({ formId: "", from: "a", to: "b" })).toBe(false)
-  const params = serializeStudentVoipQuery({ formId: 10, from: "2026-07-01T00:00:00+03:30", to: "2026-07-02T00:00:00+03:30" })
-  expect(params.toString()).toContain("%2B03%3A30")
+  const params = serializeStudentVoipQuery({ formId: 10, from: "2026-07-01", to: "2026-07-02" })
+  expect(params.get("from")).toBe("2026-07-01")
   expect(parseStudentVoipQuery(params).formId).toBe("10")
 })
 
