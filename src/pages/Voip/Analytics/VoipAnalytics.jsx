@@ -40,6 +40,16 @@ function defaultPeriod() {
   }
 }
 
+function toIso(date, endOfDay = false) {
+  let d = date
+  if (parseInt(d, 10) < 2020) {
+    const now = new Date()
+    const pad = (n) => String(n).padStart(2, "0")
+    d = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+  }
+  return `${d}T${endOfDay ? "23:59:59" : "00:00:00"}+03:30`
+}
+
 function initPeriodFromUrl(searchParams) {
   const fromDate = searchParams.get("from")
   const toDate = searchParams.get("to")
