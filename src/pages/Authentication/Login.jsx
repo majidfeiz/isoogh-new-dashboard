@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import PropTypes from "prop-types";
 import { Link } from "react-router-dom";
 import withRouter from "../../components/Common/withRouter";
@@ -22,7 +22,11 @@ import profile from "../../assets/images/profile-img.png";
 import logo from "../../assets/images/logo.svg";
 import lightlogo from "../../assets/images/logo-light.svg";
 
-import { login as loginApi, verifyOtp as verifyOtpApi } from "../../services/authService.jsx";
+import {
+  getLoginCaptcha,
+  login as loginApi,
+  verifyOtp as verifyOtpApi,
+} from "../../services/authService.jsx";
 import { setAuthData } from "../../helpers/authStorage.jsx";
 
 const Login = (props) => {
@@ -37,6 +41,11 @@ const Login = (props) => {
   const [otpCode, setOtpCode] = useState("");
   const [serverErrors, setServerErrors] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [captcha, setCaptcha] = useState({ enabled: false });
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
+  const [captchaLoading, setCaptchaLoading] = useState(true);
+  const [captchaExpiresLeft, setCaptchaExpiresLeft] = useState(0);
+  const [captchaTouched, setCaptchaTouched] = useState(false);
 
   // تایمر انقضای OTP
   const [expiresLeft, setExpiresLeft] = useState(0);
@@ -45,6 +54,7 @@ const Login = (props) => {
 
   const expTimerRef = useRef(null);
   const resendTimerRef = useRef(null);
+  const captchaTimerRef = useRef(null);
 
   useEffect(() => {
     if (expiresLeft > 0) {
@@ -60,6 +70,16 @@ const Login = (props) => {
     return () => clearTimeout(resendTimerRef.current);
   }, [resendLeft]);
 
+  useEffect(() => {
+    if (captcha.enabled && captchaExpiresLeft > 0) {
+      captchaTimerRef.current = setTimeout(
+        () => setCaptchaExpiresLeft((t) => t - 1),
+        1000
+      );
+    }
+    return () => clearTimeout(captchaTimerRef.current);
+  }, [captcha.enabled, captchaExpiresLeft]);
+
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -73,9 +93,80 @@ const Login = (props) => {
 
   const extractErrors = (err) => {
     const data = err?.response?.data;
-    if (Array.isArray(data?.message)) return data.message;
-    if (data?.message) return [data.message];
+    const status = err?.response?.status;
+    const messages = Array.isArray(data?.message)
+      ? data.message
+      : data?.message
+        ? [data.message]
+        : [];
+    const hasCaptchaError = messages.some((msg) =>
+      String(msg).toLowerCase().includes("captcha")
+    );
+
+    if (status === 400 && hasCaptchaError) {
+      return ["پاسخ کپچا صحیح نیست یا منقضی شده است. لطفا دوباره تلاش کنید."];
+    }
+
+    if (messages.length > 0) return messages;
     return ["خطای ناشناخته. لطفا دوباره تلاش کنید."];
+  };
+
+  const fetchCaptcha = useCallback(async ({ showError = false } = {}) => {
+    setCaptchaLoading(true);
+    try {
+      const data = await getLoginCaptcha();
+      const nextCaptcha = data?.enabled ? data : { enabled: false };
+      setCaptcha(nextCaptcha);
+      setCaptchaAnswer("");
+      setCaptchaTouched(false);
+      setCaptchaExpiresLeft(nextCaptcha.enabled ? nextCaptcha.expiresIn ?? 120 : 0);
+      return nextCaptcha;
+    } catch (err) {
+      if (showError) {
+        setServerErrors(["دریافت کپچا ناموفق بود. لطفا دوباره تلاش کنید."]);
+      }
+      setCaptcha({ enabled: false });
+      setCaptchaAnswer("");
+      setCaptchaExpiresLeft(0);
+      return { enabled: false };
+    } finally {
+      setCaptchaLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCaptcha();
+  }, [fetchCaptcha]);
+
+  const refreshCaptcha = async () => {
+    setServerErrors([]);
+    await fetchCaptcha({ showError: true });
+  };
+
+  const buildCaptchaPayload = async () => {
+    if (captchaLoading) {
+      setServerErrors(["در حال دریافت کپچا هستیم. لطفا چند لحظه صبر کنید."]);
+      return false;
+    }
+
+    if (!captcha.enabled) return null;
+
+    if (captchaExpiresLeft <= 0) {
+      await fetchCaptcha({ showError: true });
+      setServerErrors(["کپچا منقضی شده است. لطفا پاسخ سؤال جدید را وارد کنید."]);
+      return false;
+    }
+
+    if (!captchaAnswer.trim()) {
+      setCaptchaTouched(true);
+      setServerErrors(["لطفا پاسخ کپچا را وارد کنید."]);
+      return false;
+    }
+
+    return {
+      captchaToken: captcha.captchaToken,
+      captchaAnswer: captchaAnswer.trim(),
+    };
   };
 
   // ── مرحله ۱: ارسال نام کاربری + رمز عبور ────────────────
@@ -91,9 +182,17 @@ const Login = (props) => {
     }),
     onSubmit: async (values) => {
       setServerErrors([]);
+      const captchaPayload = await buildCaptchaPayload();
+      if (captchaPayload === false) return;
+
       setLoading(true);
       try {
-        const data = await loginApi(values.identifier, values.password, rememberMe);
+        const data = await loginApi(
+          values.identifier,
+          values.password,
+          rememberMe,
+          captchaPayload
+        );
 
         if (!data.otpRequired) {
           // OTP غیرفعال است — ورود مستقیم با JWT
@@ -116,6 +215,9 @@ const Login = (props) => {
         setStep(2);
       } catch (err) {
         setServerErrors(extractErrors(err));
+        if (captcha.enabled) {
+          await fetchCaptcha();
+        }
       } finally {
         setLoading(false);
       }
@@ -150,6 +252,13 @@ const Login = (props) => {
 
   // ارسال مجدد کد
   const handleResend = async () => {
+    if (captcha.enabled) {
+      setServerErrors([
+        "برای ارسال مجدد کد، به مرحله قبل برگردید و ورود را دوباره با کپچای جدید انجام دهید.",
+      ]);
+      return;
+    }
+
     setServerErrors([]);
     setLoading(true);
     try {
@@ -302,11 +411,71 @@ const Login = (props) => {
                           </label>
                         </div>
 
+                        {captcha.enabled && (
+                          <div className="mb-3">
+                            <Label className="form-label">کپچا</Label>
+                            <div className="d-flex align-items-start gap-2">
+                              <div className="flex-grow-1">
+                                <div className="input-group">
+                                  <span className="input-group-text fw-bold" dir="ltr">
+                                    {captcha.question}
+                                  </span>
+                                  <Input
+                                    name="captchaAnswer"
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="form-control"
+                                    placeholder="پاسخ"
+                                    value={captchaAnswer}
+                                    onBlur={() => setCaptchaTouched(true)}
+                                    onChange={(e) =>
+                                      setCaptchaAnswer(e.target.value.replace(/[^\d-]/g, ""))
+                                    }
+                                    invalid={captchaTouched && !captchaAnswer.trim()}
+                                    disabled={captchaLoading || captchaExpiresLeft <= 0}
+                                    dir="ltr"
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-light"
+                                    onClick={refreshCaptcha}
+                                    disabled={captchaLoading}
+                                    title="دریافت کپچای جدید"
+                                  >
+                                    {captchaLoading ? (
+                                      <span
+                                        className="spinner-border spinner-border-sm"
+                                        role="status"
+                                      />
+                                    ) : (
+                                      <i className="bx bx-refresh" />
+                                    )}
+                                  </button>
+                                </div>
+                                {captchaTouched && !captchaAnswer.trim() && (
+                                  <div className="invalid-feedback d-block">
+                                    لطفا پاسخ کپچا را وارد کنید
+                                  </div>
+                                )}
+                                <small
+                                  className={
+                                    captchaExpiresLeft > 0 ? "text-muted" : "text-danger"
+                                  }
+                                >
+                                  {captchaExpiresLeft > 0
+                                    ? `اعتبار کپچا: ${formatTime(captchaExpiresLeft)}`
+                                    : "کپچا منقضی شده است. کپچای جدید بگیرید."}
+                                </small>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="mt-3 d-grid">
                           <button
                             className="btn btn-primary btn-block"
                             type="submit"
-                            disabled={loading}
+                            disabled={loading || captchaLoading}
                           >
                             {loading ? (
                               <>
@@ -408,6 +577,15 @@ const Login = (props) => {
                               ارسال مجدد تا{" "}
                               <span className="fw-bold">{formatTime(resendLeft)}</span>
                             </small>
+                          ) : captcha.enabled ? (
+                            <button
+                              type="button"
+                              className="btn btn-link p-0"
+                              onClick={goBack}
+                              disabled={loading}
+                            >
+                              بازگشت برای دریافت کد جدید
+                            </button>
                           ) : (
                             <button
                               type="button"
