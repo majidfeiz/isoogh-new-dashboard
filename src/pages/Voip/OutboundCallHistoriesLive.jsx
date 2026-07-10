@@ -15,16 +15,25 @@ import moment from "moment-jalaali";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import { toGregorian } from "jalaali-js";
 import { io } from "socket.io-client";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import { API_BASE_URL } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
+import { getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
 
 const NAMESPACE = "voip/outbound-call-histories";
 const HIGHLIGHT_DURATION_MS = 5000;
 const AUTO_REFRESH_MS = 15000;
+
+const formatDateObjectGregorian = (dateObject) => {
+  if (!dateObject) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const g = toGregorian(dateObject.year, dateObject.month.number, dateObject.day);
+  return `${g.gy}-${pad(g.gm)}-${pad(g.gd)}`;
+};
 
 // Safely extract list + meta from any common server response shape
 const extractListPayload = (payload) => {
@@ -102,15 +111,6 @@ const OutboundCallHistoriesLive = () => {
     ],
     []
   );
-
-  const formatUnixFa = useCallback((unix) => {
-    if (!unix || Number(unix) <= 0) return "-";
-    const num = Number(unix);
-    if (num >= 2147483647) return "-";
-    const d = new Date(num * 1000);
-    if (Number.isNaN(d.getTime())) return "-";
-    return d.toLocaleString("fa-IR");
-  }, []);
 
   const dispositionBadge = useCallback((val) => {
     if (!val) return <span className="text-muted">-</span>;
@@ -194,16 +194,16 @@ const OutboundCallHistoriesLive = () => {
         id: "starttime_unix",
         header: "زمان شروع",
         enableSorting: false,
-        cell: ({ row }) => formatUnixFa(row.original?.starttime_unix),
+        cell: ({ row }) => getVoipStartedAtDisplay(row.original),
       },
       {
         id: "endtime_unix",
         header: "زمان پایان",
         enableSorting: false,
-        cell: ({ row }) => formatUnixFa(row.original?.endtime_unix),
+        cell: ({ row }) => getVoipEndedAtDisplay(row.original),
       },
     ],
-    [dispositionBadge, formatUnixFa]
+    [dispositionBadge]
   );
 
   const buildPayload = useCallback((overrides = {}) => {
@@ -391,8 +391,8 @@ const OutboundCallHistoriesLive = () => {
   const handleApplyFilters = useCallback((e) => {
     e?.preventDefault?.();
     if (!socketRef.current?.connected) return;
-    const start = startDatePicker ? moment(startDatePicker.toDate()).format("YYYY-MM-DD") : "";
-    const end = endDatePicker ? moment(endDatePicker.toDate()).format("YYYY-MM-DD") : "";
+    const start = formatDateObjectGregorian(startDatePicker);
+    const end = formatDateObjectGregorian(endDatePicker);
     setFilters((prev) => ({ ...prev, page: 1, start_date: start, end_date: end }));
     const payload = buildPayload({ page: 1, start_date: start, end_date: end });
     socketRef.current.emit("subscribe", payload);

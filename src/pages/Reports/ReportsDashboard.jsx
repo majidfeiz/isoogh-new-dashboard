@@ -27,7 +27,6 @@ import CallsByAdviserTable from "./components/CallsByAdviserTable.jsx"
 import UncontactedStudentsTable from "./components/UncontactedStudentsTable.jsx"
 
 function defaultPeriod() {
-  const from = moment().format("YYYY-MM-DD") + "T00:00:00+03:30"
   const jNow = moment()
   const jYear = jNow.jYear()
   const jMonth = jNow.jMonth()
@@ -35,8 +34,8 @@ function defaultPeriod() {
   const firstOfMonth = moment(`${jYear}/${jMonth + 1}/1`, "jYYYY/jM/jD")
   const lastOfMonth = moment(`${jYear}/${jMonth + 1}/${lastDay}`, "jYYYY/jM/jD")
   return {
-    from: firstOfMonth.format("YYYY-MM-DD") + "T00:00:00+03:30",
-    to: lastOfMonth.format("YYYY-MM-DD") + "T23:59:59+03:30",
+    from: firstOfMonth.format("YYYY-MM-DD"),
+    to: lastOfMonth.format("YYYY-MM-DD"),
   }
 }
 

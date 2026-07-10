@@ -2,13 +2,14 @@
 import React from "react";
 import { Card, CardBody, CardHeader, Table, Spinner, Badge } from "reactstrap";
 import { Link } from "react-router-dom";
+import { getVoipCallDateDisplay } from "../../../helpers/voipTime.js";
 
 const fDate = (v) => {
   if (!v) return "—";
   try { return new Date(v).toLocaleDateString("fa-IR"); } catch { return String(v); }
 };
 
-const fUnix = (ts) => {
+const fUnixDate = (ts) => {
   if (!ts) return "—";
   try { return new Date(ts * 1000).toLocaleDateString("fa-IR"); } catch { return "—"; }
 };
@@ -64,7 +65,7 @@ const TABLES_CONFIG = {
       },
       { label: "شماره", render: (r) => r.src || "—" },
       { label: "مدت", render: (r) => r.duration || "—" },
-      { label: "تاریخ", render: (r) => fUnix(r.starttimeUnix) },
+      { label: "تاریخ", render: (r) => getVoipCallDateDisplay(r) },
     ],
     getItems: (d) => d?.items ?? [],
   },
@@ -75,8 +76,8 @@ const TABLES_CONFIG = {
     columns: [
       { label: "#", render: (_, i) => i + 1, width: 36 },
       { label: "عنوان", render: (r) => r.title || "—" },
-      { label: "شروع", render: (r) => fUnix(r.startAt) },
-      { label: "پایان", render: (r) => fUnix(r.endAt) },
+      { label: "شروع", render: (r) => fUnixDate(r.startAt) },
+      { label: "پایان", render: (r) => fUnixDate(r.endAt) },
       { label: "ثبت", render: (r) => fDate(r.createdAt) },
     ],
     getItems: (d) => d?.items ?? [],

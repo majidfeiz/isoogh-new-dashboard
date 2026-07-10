@@ -17,6 +17,7 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import moment from "moment-jalaali";
+import { getVoipCallDateDisplay } from "../../helpers/voipTime.js";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
 import {
@@ -292,7 +293,7 @@ const CallLogs = () => {
                             </Badge>
                           </td>
                           <td className="text-muted small">{formatSeconds(log.duration)}</td>
-                          <td className="text-muted small">{formatJalali(log.callDate)}</td>
+                          <td className="text-muted small">{getVoipCallDateDisplay(log)}</td>
                           <td>
                             {log.hasAnswers ? (
                               <i className="bx bx-check-circle text-success font-size-18" />
