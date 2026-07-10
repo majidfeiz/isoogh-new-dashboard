@@ -9,8 +9,8 @@ export const SORT_FIELDS = [
 
 export function defaultReportQuery() {
   return {
-    from: moment().startOf("jMonth").format("YYYY-MM-DD") + "T00:00:00+03:30",
-    to: moment().add(1, "jMonth").startOf("jMonth").format("YYYY-MM-DD") + "T00:00:00+03:30",
+    from: moment().startOf("jMonth").format("YYYY-MM-DD"),
+    to: moment().endOf("jMonth").format("YYYY-MM-DD"),
     schoolId: "",
     search: "",
     sortBy: "totalCalls",

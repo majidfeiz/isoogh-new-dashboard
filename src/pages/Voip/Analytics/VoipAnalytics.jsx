@@ -25,7 +25,7 @@ import OrphanedCallsSection from "./components/OrphanedCallsSection.jsx"
 import NullCallGroupSection from "./components/NullCallGroupSection.jsx"
 import UnansweredAnswersSection from "./components/UnansweredAnswersSection.jsx"
 
-// period state stores YYYY-MM-DD only — timezone is added at API call time
+// period state stores YYYY-MM-DD only; backend resolves the selected local day.
 function defaultPeriod() {
   const jNow = moment()
   const jYear = jNow.jYear()
@@ -38,18 +38,6 @@ function defaultPeriod() {
     from: `${fG.gy}-${pad(fG.gm)}-${pad(fG.gd)}`,
     to: `${tG.gy}-${pad(tG.gm)}-${pad(tG.gd)}`,
   }
-}
-
-// adds Tehran UTC+3:30 offset — axios params object encodes + as %2B automatically
-// guard: if year < 2020 the caller passed a Jalali string; replace with today to avoid sending year 1405 to SQL
-function toIso(date, endOfDay = false) {
-  let d = date
-  if (parseInt(d, 10) < 2020) {
-    const now = new Date()
-    const pad = (n) => String(n).padStart(2, "0")
-    d = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-  }
-  return `${d}T${endOfDay ? "23:59:59" : "00:00:00"}+03:30`
 }
 
 function initPeriodFromUrl(searchParams) {
@@ -114,7 +102,7 @@ const VoipAnalytics = () => {
 
   const fetchAll = useCallback(
     (p = period, sid = schoolId) => {
-      const params = { from: toIso(p.from), to: toIso(p.to, true), schoolId: sid }
+      const params = { from: p.from, to: p.to, schoolId: sid }
       summary.run(params)
       durationMismatch.run(params)
       failedFiles.run(params)

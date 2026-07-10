@@ -38,7 +38,7 @@ test("maps comprehensive KPI, statuses, chart, forms and pagination", async () =
   }
   apiGet.mockResolvedValue({ data: { data } })
   const result = await getContactFormsComprehensiveReport({
-    from: "2026-07-01T00:00:00+03:30",
+    from: "2026-07-01",
     formIds: "12,18",
     page: 1,
   })
@@ -46,7 +46,7 @@ test("maps comprehensive KPI, statuses, chart, forms and pagination", async () =
   expect(result.meta).toEqual({ page: 1, limit: 10, total: 1, lastPage: 1 })
   expect(result.statuses[0].label).toBe("سایر: FAILED")
   expect(result.chart[0]).toEqual(expect.objectContaining({ value: 4, percent: 80 }))
-  expect(apiGet.mock.calls[0][1].params.toString()).toContain("from=2026-07-01T00%3A00%3A00%2B03%3A30")
+  expect(apiGet.mock.calls[0][1].params.get("from")).toBe("2026-07-01")
   expect(apiGet.mock.calls[0][1].params.get("formIds")).toBe("12,18")
 })
 
@@ -61,8 +61,8 @@ test("downloads comprehensive Excel blob with exact active filters and no pagina
   const blob = new Blob(["xlsx"])
   apiGet.mockResolvedValue({ data: blob })
   const filters = {
-    from: "2026-07-01T00:00:00+03:30",
-    to: "2026-07-08T00:00:00+03:30",
+    from: "2026-07-01",
+    to: "2026-07-08",
     formIds: "12,18",
     schoolId: "4",
     search: "پیگیری",
@@ -149,13 +149,13 @@ test("maps student VoIP rows and pagination and passes abort signal", async () =
   const controller = new AbortController()
   const result = await getStudentVoipComprehensiveReport({
     formId: 10,
-    from: "2026-07-01T00:00:00+03:30",
-    to: "2026-07-08T00:00:00+03:30",
+    from: "2026-07-01",
+    to: "2026-07-08",
     page: 1,
   }, controller.signal)
   expect(result).toEqual(data)
   expect(apiGet.mock.calls[0][1].signal).toBe(controller.signal)
-  expect(apiGet.mock.calls[0][1].params.toString()).toContain("%2B03%3A30")
+  expect(apiGet.mock.calls[0][1].params.get("from")).toBe("2026-07-01")
   expect(result.meta.total).toBe(10496)
 })
 
@@ -164,8 +164,8 @@ test("downloads student VoIP Excel with active filters and no pagination", async
   apiGet.mockResolvedValue({ data: blob })
   const filters = {
     formId: "10",
-    from: "2026-07-01T00:00:00+03:30",
-    to: "2026-07-08T00:00:00+03:30",
+    from: "2026-07-01",
+    to: "2026-07-08",
     schoolId: "4",
     search: "موسوی",
     sortBy: "avgSuccessfulDurationSeconds",
@@ -234,8 +234,8 @@ test("downloads a blob with active filters and without pagination", async () => 
   const blob = new Blob(["xlsx"])
   apiGet.mockResolvedValue({ data: blob })
   const filters = {
-    from: "2026-07-01T00:00:00+03:30",
-    to: "2026-07-08T00:00:00+03:30",
+    from: "2026-07-01",
+    to: "2026-07-08",
     schoolId: "4",
     search: "روشن",
     sortBy: "answeredCalls",
@@ -257,6 +257,6 @@ test("downloads a blob with active filters and without pagination", async () => 
   })
   expect(config.params.has("page")).toBe(false)
   expect(config.params.has("limit")).toBe(false)
-  expect(config.params.toString()).toContain("from=2026-07-01T00%3A00%3A00%2B03%3A30")
-  expect(config.params.toString()).not.toContain("+03%3A30")
+  expect(config.params.get("from")).toBe("2026-07-01")
+  expect(config.params.toString()).not.toContain("%2B03%3A30")
 })

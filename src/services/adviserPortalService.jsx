@@ -99,8 +99,11 @@ const normalizeStudentCallLog = (item = {}) => ({
   toPhone: item?.toPhone ?? item?.to_phone ?? "",
   disposition: item?.disposition ?? "",
   duration: item?.duration ?? "",
-  startTimeUnix: item?.startTimeUnix ?? item?.start_time_unix ?? null,
-  endTimeUnix: item?.endTimeUnix ?? item?.end_time_unix ?? null,
+  startTimeUnix: item?.startTimeUnix ?? item?.starttime_unix_normalized ?? item?.starttime_unix ?? item?.start_time_unix ?? null,
+  endTimeUnix: item?.endTimeUnix ?? item?.endtime_unix_normalized ?? item?.endtime_unix ?? item?.end_time_unix ?? null,
+  startedAtJalali: item?.started_at_jalali ?? item?.call_started_at_jalali ?? item?.call_date_jalali ?? "",
+  endedAtJalali: item?.ended_at_jalali ?? item?.call_ended_at_jalali ?? "",
+  callDateJalali: item?.call_date_jalali ?? item?.callStartedAtJalali ?? "",
   hasAnswers: item?.hasAnswers ?? item?.has_answers ?? false,
   createdAt: item?.createdAt ?? item?.created_at ?? null,
 });
@@ -114,7 +117,8 @@ const normalizeCallLog = (item = {}) => ({
   studentId: item?.student_id ?? item?.studentId ?? null,
   disposition: item?.disposition ?? "",
   duration: item?.duration ?? 0,
-  callDate: item?.call_date ?? item?.callDate ?? item?.created_at ?? null,
+  callDate: item?.call_date_jalali ?? item?.call_started_at_jalali ?? item?.started_at_jalali ?? item?.call_date ?? item?.callDate ?? item?.created_at ?? null,
+  callDateJalali: item?.call_date_jalali ?? item?.call_started_at_jalali ?? item?.started_at_jalali ?? "",
   hasAnswers: item?.has_answers ?? item?.hasAnswers ?? false,
   voipCallId: item?.voip_call_id ?? item?.voipCallId ?? null,
 });

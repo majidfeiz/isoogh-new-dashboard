@@ -6,6 +6,7 @@ import persian from "react-date-object/calendars/persian"
 import persian_fa from "react-date-object/locales/persian_fa"
 import DateObject from "react-date-object"
 import moment from "moment-jalaali"
+import { toGregorian } from "jalaali-js"
 
 function initDateObj(date) {
   return new DateObject({ date, calendar: persian, locale: persian_fa })
@@ -33,9 +34,12 @@ const PeriodPicker = ({ onApply, schools = [], showSchoolFilter = false }) => {
       return
     }
     setError("")
-    const isoFrom = moment(fromDO.toDate()).format("YYYY-MM-DD") + "T00:00:00+03:30"
-    const isoTo = moment(toDO.toDate()).format("YYYY-MM-DD") + "T23:59:59+03:30"
-    onApply({ from: isoFrom, to: isoTo, schoolId: schoolId || undefined })
+    const pad = (n) => String(n).padStart(2, "0")
+    const fG = toGregorian(fromDO.year, fromDO.month.number, fromDO.day)
+    const tG = toGregorian(toDO.year, toDO.month.number, toDO.day)
+    const from = `${fG.gy}-${pad(fG.gm)}-${pad(fG.gd)}`
+    const to = `${tG.gy}-${pad(tG.gm)}-${pad(tG.gd)}`
+    onApply({ from, to, schoolId: schoolId || undefined })
   }
 
   return (

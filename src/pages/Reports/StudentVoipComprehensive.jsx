@@ -6,6 +6,7 @@ import DateObject from "react-date-object"
 import persian from "react-date-object/calendars/persian"
 import persianFa from "react-date-object/locales/persian_fa"
 import moment from "moment-jalaali"
+import { toGregorian } from "jalaali-js"
 
 import Breadcrumbs from "../../components/Common/Breadcrumb"
 import Paginations from "../../components/Common/Paginations.jsx"
@@ -35,7 +36,12 @@ import {
 
 const fa = (value) => value == null || value === "" ? "—" : Number(value).toLocaleString("fa-IR")
 const text = (value) => value == null || value === "" ? "—" : value
-const dateObject = (iso) => new DateObject({ date: new Date(iso), calendar: persian, locale: persianFa })
+const dateObject = (date) => new DateObject({ date: moment(String(date).slice(0, 10), "YYYY-MM-DD").toDate(), calendar: persian, locale: persianFa })
+const dateObjectToGregorianDate = (dateObjectValue) => {
+  const pad = (n) => String(n).padStart(2, "0")
+  const g = toGregorian(dateObjectValue.year, dateObjectValue.month.number, dateObjectValue.day)
+  return `${g.gy}-${pad(g.gm)}-${pad(g.gd)}`
+}
 
 const StudentVoipComprehensive = () => {
   document.title = "گزارش جامع VoIP دانش‌آموزی | داشبورد آیسوق"
@@ -51,7 +57,7 @@ const StudentVoipComprehensive = () => {
   const [search, setSearch] = useState(query.search)
   const [draftFormId, setDraftFormId] = useState(query.formId)
   const [draftFrom, setDraftFrom] = useState(() => dateObject(query.from))
-  const [draftTo, setDraftTo] = useState(() => dateObject(query.to).subtract(1, "day"))
+  const [draftTo, setDraftTo] = useState(() => dateObject(query.to))
   const [draftSchoolId, setDraftSchoolId] = useState(query.schoolId)
   const [filterError, setFilterError] = useState("")
   const [exporting, setExporting] = useState(false)
@@ -96,7 +102,7 @@ const StudentVoipComprehensive = () => {
   useEffect(() => {
     setDraftFormId(query.formId)
     setDraftFrom(dateObject(query.from))
-    setDraftTo(dateObject(query.to).subtract(1, "day"))
+    setDraftTo(dateObject(query.to))
     setDraftSchoolId(query.schoolId)
     setSearch(query.search)
   }, [query.formId, query.from, query.to, query.schoolId, query.search])
@@ -118,8 +124,8 @@ const StudentVoipComprehensive = () => {
     setFilterError("")
     updateQuery({
       formId: draftFormId,
-      from: moment(draftFrom.toDate()).format("YYYY-MM-DD") + "T00:00:00+03:30",
-      to: moment(draftTo.toDate()).add(1, "day").format("YYYY-MM-DD") + "T00:00:00+03:30",
+      from: dateObjectToGregorianDate(draftFrom),
+      to: dateObjectToGregorianDate(draftTo),
       schoolId: showSchoolFilter ? draftSchoolId : "",
       page: 1,
     })

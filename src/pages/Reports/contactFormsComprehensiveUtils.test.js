@@ -36,14 +36,14 @@ test("saves the report blob with the required Excel filename", () => {
   expect(urlApi.revokeObjectURL).toHaveBeenCalledWith("blob:report")
 })
 
-test("serializes multiple form ids and encodes timezone", () => {
+test("serializes multiple form ids and keeps selected date", () => {
   const params = serializeComprehensiveQuery({
-    from: "2026-07-01T00:00:00+03:30",
+    from: "2026-07-01",
     formIds: normalizeFormIds([12, 18, 21]),
     page: 2,
   })
   expect(params.get("formIds")).toBe("12,18,21")
-  expect(params.toString()).toContain("%2B03%3A30")
+  expect(params.get("from")).toBe("2026-07-01")
   expect(parseComprehensiveQuery(params).page).toBe(2)
 })
 

@@ -19,7 +19,7 @@ import {
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import moment from "moment-jalaali";
+import { toGregorian } from "jalaali-js";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
@@ -28,6 +28,7 @@ import Paginations from "../../components/Common/Paginations.jsx";
 import { getOutboundCallHistories } from "../../services/voipService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
+import { getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
 
 const INITIAL_EXPORT_STATE = {
   status: "idle",
@@ -35,6 +36,13 @@ const INITIAL_EXPORT_STATE = {
   totalBytes: null,
   percent: null,
   errorMessage: null,
+};
+
+const formatDateObjectGregorian = (dateObject) => {
+  if (!dateObject) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const g = toGregorian(dateObject.year, dateObject.month.number, dateObject.day);
+  return `${g.gy}-${pad(g.gm)}-${pad(g.gd)}`;
 };
 
 const OutboundCallHistories = () => {
@@ -124,8 +132,8 @@ const OutboundCallHistories = () => {
       return;
     }
 
-    const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
-    const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
+    const start = formatDateObjectGregorian(startDate);
+    const end = formatDateObjectGregorian(endDate);
 
     fetchData({
       page: 1,
@@ -140,8 +148,8 @@ const OutboundCallHistories = () => {
 
   const handlePageChange = useCallback(
     (page) => {
-      const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
-      const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
+      const start = formatDateObjectGregorian(startDate);
+      const end = formatDateObjectGregorian(endDate);
 
       fetchData({
         page,
@@ -238,8 +246,8 @@ const OutboundCallHistories = () => {
       return;
     }
 
-    const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
-    const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
+    const start = formatDateObjectGregorian(startDate);
+    const end = formatDateObjectGregorian(endDate);
     const cleanedQ = q?.trim?.() || "";
     const perPage = meta?.total && meta.total > 0 ? meta.total : meta.limit;
 
@@ -337,15 +345,6 @@ const OutboundCallHistories = () => {
     setFileModalOpen(false);
     setSelectedCallFiles([]);
     setSelectedCallId(null);
-  };
-
-  const formatUnixFa = (unix) => {
-    if (!unix || Number(unix) <= 0) return "-";
-    const num = Number(unix);
-    if (num >= 2147483647) return "-";
-    const d = new Date(num * 1000);
-    if (Number.isNaN(d.getTime())) return "-";
-    return d.toLocaleString("fa-IR");
   };
 
   const dispositionFa = (val) => {
@@ -553,7 +552,7 @@ const OutboundCallHistories = () => {
         enableSorting: true,
         enableColumnFilter: false,
         cell: ({ row }) => {
-          const val = formatUnixFa(row.original?.starttime_unix);
+          const val = getVoipStartedAtDisplay(row.original);
           return <span style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{val}</span>;
         },
         meta: { sortKey: "starttime_unix" },
@@ -564,7 +563,7 @@ const OutboundCallHistories = () => {
         enableSorting: true,
         enableColumnFilter: false,
         cell: ({ row }) => {
-          const val = formatUnixFa(row.original?.endtime_unix);
+          const val = getVoipEndedAtDisplay(row.original);
           return <span style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{val}</span>;
         },
         meta: { sortKey: "endtime_unix" },
@@ -595,8 +594,8 @@ const OutboundCallHistories = () => {
       setSorting(nextSorting);
       setSort({ by: sortKey, order: sortDirection });
 
-      const start = startDate ? moment(startDate.toDate()).format("YYYY-MM-DD") : "";
-      const end = endDate ? moment(endDate.toDate()).format("YYYY-MM-DD") : "";
+      const start = formatDateObjectGregorian(startDate);
+      const end = formatDateObjectGregorian(endDate);
 
       fetchData({ page: 1, currentType: type, currentQ: q, currentSortBy: sortKey, currentSortOrder: sortDirection, currentStart: start, currentEnd: end });
     },
