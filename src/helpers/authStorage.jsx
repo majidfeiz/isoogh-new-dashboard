@@ -3,6 +3,7 @@
 const TOKEN_KEY = "isoogh_access_token";
 const USER_KEY = "isoogh_user";
 const PERMISSIONS_KEY = "isoogh_permissions";
+export const AUTH_CLEARED_EVENT = "isoogh:auth-cleared";
 
 const SWITCH_CALLBACK_TOKEN_KEY = "switchCallbackToken";
 const SWITCH_ORIGINAL_USER_KEY = "originalUser";
@@ -73,6 +74,10 @@ export function clearAuthData() {
     s.removeItem(USER_KEY);
     s.removeItem(PERMISSIONS_KEY);
   });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(AUTH_CLEARED_EVENT));
+  }
 }
 
 export function isLoggedIn() {

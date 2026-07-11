@@ -1,6 +1,6 @@
 # Project Memory
 
-Last verified against the repository: 2026-07-05 (app version `1.3.0`).
+Last verified against the repository: 2026-07-11 (app version `1.5.1`).
 
 This is the short, code-derived context to read before changing the project. `AGENTS.md` remains the detailed conventions guide; `docs/DOMAIN_MAP.md` is the feature locator.
 
@@ -16,7 +16,7 @@ npm run dev
 - `node-sass` was removed because it is EOL and incompatible with Node 24; SCSS compilation uses the existing Dart Sass (`sass`) dependency.
 - The Docker builder uses `node:24-bookworm-slim`.
 - Dev server: Vite 5, normally `http://localhost:5173`.
-- Build: `npm run build` (verified passing on 2026-07-04).
+- Build: `npm run build` (verified passing on 2026-07-11).
 - Lint baseline: `npm run lint` currently cannot start because `eslint-plugin-react` is referenced in `package.json` but is not installed.
 - Tests use the old `react-scripts test` command; do not assume the test setup is aligned with Vite.
 
@@ -44,10 +44,12 @@ main.jsx
 - The Docker/nginx image generates `/env.js` from runtime `VITE_API_BASE_URL` on container start; `index.html` loads it before the React bundle, so changing the container env does not require rebuilding the frontend image.
 - Local backend commonly uses `VITE_API_BASE_URL=http://127.0.0.1:8040`.
 - Swagger: local `http://localhost:8040/api-docs#/`; remote `https://napi.isoogh.ir/api-docs#/`.
-- Access token key: `localStorage.isoogh_access_token`. The protected-route guard only checks token presence.
+- Authentication is hybrid JWT + server-side session management: the frontend sends the signed JWT as `Authorization: Bearer <accessToken>`, while the backend validates that the token `jti` still has an active `login_sessions` row across replicas. Frontend logout calls `POST /auth/logout`, then clears local token/user/permission storage and redirects to `/login`; if logout fails, local auth is still cleared.
+- Access token key: `localStorage.isoogh_access_token` or `sessionStorage.isoogh_access_token` depending on "remember me". The protected-route guard only checks token presence.
 - `AuthContext` loads `/auth/me`, normalizes permission names, and refreshes on mount, focus, and visibility changes.
 - Important existing caveat: `AuthProvider` is mounted in both `src/main.jsx` and `src/App.jsx`; the inner provider is what routed components consume and this can duplicate `/auth/me` work.
-- HTTP requests go through `src/helpers/httpClient.jsx`. It injects the bearer token, clears auth data on 401, parses blob errors, and displays Persian error toasts unless `config.silent` is true.
+- HTTP requests go through `src/helpers/httpClient.jsx`. It injects the bearer token for internal API requests, avoids sending the internal bearer token to `/external-api/v1/*`, clears auth data on 401, parses blob errors, and displays Persian error toasts unless `config.silent` is true.
+- Session-management endpoints under `/auth/sessions*` and `/auth/admin/*/sessions*` are active product behavior. If deleting the current session invalidates the current token, the next authenticated request returns `401`, which clears auth state and redirects to `/login`.
 - Do not show the same API error toast again in page components.
 
 ## Change path
