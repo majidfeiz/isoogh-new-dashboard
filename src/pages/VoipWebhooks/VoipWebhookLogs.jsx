@@ -29,6 +29,12 @@ const formatDateTime = (value) => {
   return date.toLocaleString("fa-IR");
 };
 
+const getLogStatus = (log) => {
+  if (log.success) return { color: "success", label: "موفق" };
+  if (log.final_failure) return { color: "danger", label: "شکست نهایی" };
+  return { color: "warning", label: "در انتظار تلاش بعدی" };
+};
+
 const VoipWebhookLogs = () => {
   const navigate = useNavigate();
   document.title = "لاگ وب‌هوک‌های VoIP | داشبورد آیسوق";
@@ -127,15 +133,20 @@ const VoipWebhookLogs = () => {
                             <th>زمان ارسال</th>
                             <th>وب‌هوک</th>
                             <th>شناسه تماس</th>
+                            <th>شماره تلاش</th>
+                            <th>تلاش بعدی</th>
                             <th>Payload</th>
                             <th>وضعیت پاسخ</th>
-                            <th>پاسخ</th>
+                            <th>خطا</th>
+                            <th>شکست نهایی</th>
                             <th>نتیجه</th>
+                            <th>پاسخ</th>
                           </tr>
                         </thead>
                         <tbody>
                           {logs.map((log) => {
                             const webhookName = webhooks.find((w) => w.id === log.webhook_id)?.name;
+                            const status = getLogStatus(log);
                             return (
                               <tr key={log.id}>
                                 <td className="text-nowrap">{formatDateTime(log.sent_at)}</td>
@@ -143,6 +154,8 @@ const VoipWebhookLogs = () => {
                                 <td>
                                   {log.voip_call_history_id ? `#${log.voip_call_history_id}` : "-"}
                                 </td>
+                                <td>{log.attempt_number ?? "-"}</td>
+                                <td className="text-nowrap">{formatDateTime(log.next_attempt_at)}</td>
                                 <td>
                                   <Button
                                     color="light"
@@ -169,17 +182,29 @@ const VoipWebhookLogs = () => {
                                   <span
                                     className="text-truncate d-block text-muted small"
                                     style={{ maxWidth: 150 }}
+                                    title={log.error_message}
+                                  >
+                                    {log.error_message || "-"}
+                                  </span>
+                                </td>
+                                <td>
+                                  {log.final_failure ? (
+                                    <Badge color="danger" pill>بله</Badge>
+                                  ) : (
+                                    <Badge color="secondary" pill>خیر</Badge>
+                                  )}
+                                </td>
+                                <td>
+                                  <Badge color={status.color} pill>{status.label}</Badge>
+                                </td>
+                                <td>
+                                  <span
+                                    className="text-truncate d-block text-muted small"
+                                    style={{ maxWidth: 150 }}
                                     title={log.response_body}
                                   >
                                     {log.response_body || "-"}
                                   </span>
-                                </td>
-                                <td>
-                                  {log.success ? (
-                                    <Badge color="success" pill>موفق</Badge>
-                                  ) : (
-                                    <Badge color="danger" pill>ناموفق</Badge>
-                                  )}
                                 </td>
                               </tr>
                             );

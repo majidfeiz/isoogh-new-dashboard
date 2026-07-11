@@ -29,7 +29,46 @@ const EMPTY_FORM = {
   webhook_url: "",
   secret: "",
   is_active: true,
+  replay_from: "",
+  max_attempts: 3,
+  retry_interval_minutes: 10,
 };
+
+const pad = (value) => String(value).padStart(2, "0");
+
+const toDateTimeLocalValue = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+const quickReplayRanges = [
+  {
+    label: "از یک ماه گذشته",
+    getValue: () => {
+      const date = new Date();
+      date.setMonth(date.getMonth() - 1);
+      return toDateTimeLocalValue(date);
+    },
+  },
+  {
+    label: "از یک هفته گذشته",
+    getValue: () => {
+      const date = new Date();
+      date.setDate(date.getDate() - 7);
+      return toDateTimeLocalValue(date);
+    },
+  },
+  {
+    label: "از امروز",
+    getValue: () => {
+      const date = new Date();
+      date.setHours(0, 0, 0, 0);
+      return toDateTimeLocalValue(date);
+    },
+  },
+];
 
 const VoipWebhookForm = () => {
   const { id } = useParams();
@@ -53,6 +92,9 @@ const VoipWebhookForm = () => {
           webhook_url: data.webhook_url,
           secret: data.secret || "",
           is_active: data.is_active,
+          replay_from: toDateTimeLocalValue(data.replay_from),
+          max_attempts: data.max_attempts ?? 3,
+          retry_interval_minutes: data.retry_interval_minutes ?? 10,
         });
       })
       .catch(() => toast.error("خطا در دریافت اطلاعات وب‌هوک"))
@@ -65,6 +107,11 @@ const VoipWebhookForm = () => {
     if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
   };
 
+  const handleQuickReplayRange = (getValue) => {
+    setForm((prev) => ({ ...prev, replay_from: getValue() }));
+    if (errors.replay_from) setErrors((prev) => ({ ...prev, replay_from: "" }));
+  };
+
   const validate = () => {
     const errs = {};
     if (!form.name.trim()) errs.name = "نام وب‌هوک الزامی است";
@@ -72,6 +119,20 @@ const VoipWebhookForm = () => {
     if (!form.webhook_url.trim()) errs.webhook_url = "آدرس URL الزامی است";
     else if (!/^https?:\/\/.+/.test(form.webhook_url.trim())) {
       errs.webhook_url = "آدرس URL معتبر نیست";
+    }
+    const maxAttempts = Number(form.max_attempts);
+    if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 20) {
+      errs.max_attempts = "تعداد تلاش باید عددی بین ۱ تا ۲۰ باشد";
+    }
+    const retryInterval = Number(form.retry_interval_minutes);
+    if (!Number.isInteger(retryInterval) || retryInterval < 1 || retryInterval > 1440) {
+      errs.retry_interval_minutes = "فاصله تلاش‌ها باید عددی بین ۱ تا ۱۴۴۰ دقیقه باشد";
+    }
+    if (form.replay_from) {
+      const replayFrom = new Date(form.replay_from);
+      if (Number.isNaN(replayFrom.getTime())) {
+        errs.replay_from = "تاریخ شروع ارسال معتبر نیست";
+      }
     }
     return errs;
   };
@@ -89,6 +150,9 @@ const VoipWebhookForm = () => {
         webhook_url: form.webhook_url.trim(),
         secret: form.secret.trim() || undefined,
         is_active: form.is_active,
+        replay_from: form.replay_from ? new Date(form.replay_from).toISOString() : undefined,
+        max_attempts: Number(form.max_attempts),
+        retry_interval_minutes: Number(form.retry_interval_minutes),
       };
 
       if (isEdit) {
@@ -189,6 +253,72 @@ const VoipWebhookForm = () => {
                       در صورت تنظیم، هدر <code>X-Webhook-Signature</code> به درخواست اضافه می‌شود.
                     </small>
                   </FormGroup>
+
+                  <FormGroup>
+                    <Label>شروع ارسال تاریخچه تماس‌ها</Label>
+                    <Row className="g-2 align-items-start">
+                      <Col md={7}>
+                        <Input
+                          type="datetime-local"
+                          name="replay_from"
+                          value={form.replay_from}
+                          onChange={handleChange}
+                          invalid={!!errors.replay_from}
+                        />
+                        <FormFeedback>{errors.replay_from}</FormFeedback>
+                      </Col>
+                      <Col md={5}>
+                        <div className="d-flex flex-wrap gap-1">
+                          {quickReplayRanges.map((range) => (
+                            <Button
+                              key={range.label}
+                              color="light"
+                              size="sm"
+                              type="button"
+                              onClick={() => handleQuickReplayRange(range.getValue)}
+                            >
+                              {range.label}
+                            </Button>
+                          ))}
+                        </div>
+                      </Col>
+                    </Row>
+                  </FormGroup>
+
+                  <Row>
+                    <Col md={6}>
+                      <FormGroup>
+                        <Label>تعداد تلاش برای هر payload</Label>
+                        <Input
+                          type="number"
+                          name="max_attempts"
+                          value={form.max_attempts}
+                          onChange={handleChange}
+                          invalid={!!errors.max_attempts}
+                          min={1}
+                          max={20}
+                          step={1}
+                        />
+                        <FormFeedback>{errors.max_attempts}</FormFeedback>
+                      </FormGroup>
+                    </Col>
+                    <Col md={6}>
+                      <FormGroup>
+                        <Label>فاصله تلاش‌ها (دقیقه)</Label>
+                        <Input
+                          type="number"
+                          name="retry_interval_minutes"
+                          value={form.retry_interval_minutes}
+                          onChange={handleChange}
+                          invalid={!!errors.retry_interval_minutes}
+                          min={1}
+                          max={1440}
+                          step={1}
+                        />
+                        <FormFeedback>{errors.retry_interval_minutes}</FormFeedback>
+                      </FormGroup>
+                    </Col>
+                  </Row>
 
                   <FormGroup check className="mb-4">
                     <Input
