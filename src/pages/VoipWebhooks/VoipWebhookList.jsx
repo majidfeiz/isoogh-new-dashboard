@@ -62,9 +62,9 @@ const VoipWebhookList = () => {
     setTestingId(id);
     try {
       await testVoipWebhook(id);
-      toast.success("درخواست تست ارسال شد");
+      toast.success("درخواست تست در صف ثبت شد");
     } catch {
-      toast.error("خطا در ارسال تست وب‌هوک");
+      toast.error("خطا در ثبت تست وب‌هوک در صف");
     } finally {
       setTestingId(null);
     }
@@ -143,6 +143,33 @@ const VoipWebhookList = () => {
           ),
       },
       {
+        id: "replay_from",
+        header: "شروع تاریخچه",
+        accessorKey: "replay_from",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => formatDateTime(info.getValue()),
+      },
+      {
+        id: "max_attempts",
+        header: "تعداد تلاش",
+        accessorKey: "max_attempts",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => info.getValue() ?? "-",
+      },
+      {
+        id: "retry_interval_minutes",
+        header: "فاصله تلاش",
+        accessorKey: "retry_interval_minutes",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => {
+          const value = info.getValue();
+          return value ? `${value} دقیقه` : "-";
+        },
+      },
+      {
         id: "created_at",
         header: "تاریخ ایجاد",
         accessorKey: "created_at",
@@ -174,7 +201,7 @@ const VoipWebhookList = () => {
                     onClick={() => handleTest(id)}
                     disabled={testingId === id}
                   >
-                    {testingId === id ? <Spinner size="sm" /> : "تست"}
+                    {testingId === id ? <Spinner size="sm" /> : "ثبت در صف تست"}
                   </Button>
                 </>
               )}
