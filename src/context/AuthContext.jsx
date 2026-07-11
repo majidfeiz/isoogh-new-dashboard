@@ -6,6 +6,7 @@ import {
   getAccessToken,
   setAuthData,
   clearAuthData,
+  AUTH_CLEARED_EVENT,
   getSwitchCallbackToken,
   getOriginalUser,
   setSwitchData,
@@ -43,12 +44,19 @@ export const AuthProvider = ({ children }) => {
   const [callbackToken, setCallbackToken] = useState(() => getSwitchCallbackToken());
   const [originalUser, setOriginalUser] = useState(() => getOriginalUser());
 
+  const resetAuthState = () => {
+    setUser(null);
+    setPermissions([]);
+    setIsSwitched(false);
+    setCallbackToken(null);
+    setOriginalUser(null);
+  };
+
   const refreshMe = async (reason = "manual") => {
     const token = getAccessToken();
 
     if (!token) {
-      setUser(null);
-      setPermissions([]);
+      resetAuthState();
       return null;
     }
 
@@ -71,11 +79,7 @@ export const AuthProvider = ({ children }) => {
       if (status === 401 || status === 403) {
         clearAuthData();
         clearSwitchData();
-        setUser(null);
-        setPermissions([]);
-        setIsSwitched(false);
-        setCallbackToken(null);
-        setOriginalUser(null);
+        resetAuthState();
       }
       return null;
     } finally {
@@ -145,6 +149,16 @@ export const AuthProvider = ({ children }) => {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const onAuthCleared = () => {
+      clearSwitchData();
+      resetAuthState();
+    };
+    window.addEventListener(AUTH_CLEARED_EVENT, onAuthCleared);
+    return () => window.removeEventListener(AUTH_CLEARED_EVENT, onAuthCleared);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

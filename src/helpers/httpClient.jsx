@@ -28,7 +28,9 @@ const http = axios.create({
 http.interceptors.request.use(
   (config) => {
     const token = getAccessToken();
-    if (token) {
+    const requestUrl = String(config.url || "");
+    const isExternalApiRequest = requestUrl.includes("/external-api/v1/");
+    if (token && !isExternalApiRequest) {
       config.headers.Authorization = `Bearer ${token}`;
     }
     return config;
@@ -47,6 +49,12 @@ http.interceptors.response.use(
 
     if (status === 401) {
       clearAuthData();
+      if (
+        typeof window !== "undefined" &&
+        window.location.pathname !== "/login"
+      ) {
+        window.location.replace("/login");
+      }
     }
 
     // اگر پاسخ blob بود و json دارد، تبدیلش کنیم تا message خوانده شود
