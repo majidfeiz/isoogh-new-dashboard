@@ -30,7 +30,14 @@ import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 function toJalali(dateInput) {
   if (!dateInput) return "—";
   try {
-    const d = typeof dateInput === "number" ? new Date(dateInput * 1000) : new Date(dateInput);
+    const numericValue =
+      typeof dateInput === "number" || /^\d+$/.test(String(dateInput))
+        ? Number(dateInput)
+        : null;
+    const d = numericValue
+      ? new Date(numericValue < 1000000000000 ? numericValue * 1000 : numericValue)
+      : new Date(dateInput);
+    if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleString("fa-IR", {
       year: "numeric",
       month: "2-digit",
@@ -203,6 +210,7 @@ const AdminUserSessions = () => {
                               <th>آدرس IP</th>
                               <th>دستگاه / مرورگر</th>
                               <th>زمان ورود</th>
+                              <th>انقضا</th>
                               <th>مرا به خاطر بسپار</th>
                               {canRevoke && <th />}
                             </tr>
@@ -229,6 +237,7 @@ const AdminUserSessions = () => {
                                     </span>
                                   </td>
                                   <td>{toJalali(s.created_at)}</td>
+                                  <td>{toJalali(s.expires_at)}</td>
                                   <td>
                                     {s.remember_me ? (
                                       <Badge color="success" pill>
