@@ -8,6 +8,9 @@ const normalizeWebhook = (item = {}) => ({
   webhook_url: item?.webhook_url ?? "",
   secret: item?.secret ?? "",
   is_active: item?.is_active ?? true,
+  replay_from: item?.replay_from ?? null,
+  max_attempts: item?.max_attempts ?? 3,
+  retry_interval_minutes: item?.retry_interval_minutes ?? 10,
   created_at: item?.created_at ?? null,
   updated_at: item?.updated_at ?? null,
 });
@@ -17,6 +20,10 @@ const normalizeWebhookLog = (item = {}) => ({
   webhook_id: item?.webhook_id ?? null,
   voip_call_history_id: item?.voip_call_history_id ?? null,
   payload: item?.payload ?? {},
+  attempt_number: item?.attempt_number ?? null,
+  next_attempt_at: item?.next_attempt_at ?? null,
+  final_failure: item?.final_failure ?? false,
+  error_message: item?.error_message ?? "",
   response_status: item?.response_status ?? null,
   response_body: item?.response_body ?? "",
   success: item?.success ?? false,
@@ -27,7 +34,8 @@ export async function getVoipWebhooks() {
   const url = getApiUrl(API_ROUTES.voipWebhooks.list);
   const res = await apiGet(url);
   const data = res?.data?.data ?? res?.data ?? [];
-  return Array.isArray(data) ? data.map(normalizeWebhook) : [];
+  const items = Array.isArray(data) ? data : data?.items || data?.data || [];
+  return Array.isArray(items) ? items.map(normalizeWebhook) : [];
 }
 
 export async function getVoipWebhook(id) {
