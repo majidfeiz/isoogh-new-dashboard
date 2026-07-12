@@ -15,11 +15,22 @@ const normalizeWebhook = (item = {}) => ({
   updated_at: item?.updated_at ?? null,
 });
 
+const normalizeJsonPayload = (value) => {
+  if (typeof value !== "string") return value ?? {};
+
+  try {
+    const parsed = JSON.parse(value);
+    return parsed ?? {};
+  } catch {
+    return value;
+  }
+};
+
 const normalizeWebhookLog = (item = {}) => ({
   id: item?.id ?? null,
   webhook_id: item?.webhook_id ?? null,
   voip_call_history_id: item?.voip_call_history_id ?? null,
-  payload: item?.payload ?? {},
+  payload: normalizeJsonPayload(item?.payload),
   attempt_number: item?.attempt_number ?? null,
   next_attempt_at: item?.next_attempt_at ?? null,
   final_failure: item?.final_failure ?? false,

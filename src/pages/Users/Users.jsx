@@ -20,7 +20,7 @@ import {
   InputGroupText,
   Progress,
 } from "reactstrap";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
@@ -33,11 +33,13 @@ import {
   getUsers,
   deleteUser,
 } from "../../services/userService.jsx";
+import { getRoles } from "../../services/roleService.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import SwitchUserButton from "../../components/Common/SwitchUserButton.jsx";
 
 const UserList = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, user } = useAuth();
 
   const isAdmin = useMemo(() => {
@@ -61,6 +63,11 @@ const UserList = () => {
   const [filters, setFilters] = useState(
     saved?.filters ?? { name: "", username: "", ssn: "", phone: "" }
   );
+  const initialRoleId = searchParams.get("roleId") || saved?.roleId || "";
+  const [roleId, setRoleId] = useState(initialRoleId);
+  const [roles, setRoles] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
+  const [rolesLoadFailed, setRolesLoadFailed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(null);
@@ -69,13 +76,33 @@ const UserList = () => {
   const initialPageRef = useRef(saved?.page ?? 1);
   const approxTotalRef = useRef(null);
 
+  const syncRoleQuery = useCallback(
+    (nextRoleId) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (nextRoleId) {
+          next.set("roleId", nextRoleId);
+        } else {
+          next.delete("roleId");
+        }
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams]
+  );
+
   const buildSearchQuery = useCallback((currentFilters) => {
     const values = Object.values(currentFilters || {}).filter(Boolean);
     return values.join(" ").trim();
   }, []);
 
   const fetchData = useCallback(
-    async (page = 1, currentFilters = {}, currentSort = sort) => {
+    async (
+      page = 1,
+      currentFilters = {},
+      currentSort = sort,
+      currentRoleId = ""
+    ) => {
       setLoading(true);
       try {
         const searchQuery = buildSearchQuery(currentFilters);
@@ -83,6 +110,7 @@ const UserList = () => {
           page,
           limit: meta.limit,
           search: searchQuery,
+          roleId: currentRoleId,
           sortBy: currentSort?.by,
           sortOrder: currentSort?.order,
         });
@@ -110,9 +138,38 @@ const UserList = () => {
   useEffect(() => {
     const page = initialPageRef.current;
     initialPageRef.current = 1;
-    fetchData(page, filters, sort);
+    fetchData(page, filters, sort, roleId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadRoles = async () => {
+      setRolesLoading(true);
+      setRolesLoadFailed(false);
+      try {
+        const res = await getRoles({ page: 1, limit: 100, search: "" });
+        if (!mounted) return;
+        setRoles(res.items || []);
+      } catch (e) {
+        if (!mounted) return;
+        console.error("خطا در دریافت نقش‌ها", e);
+        setRoles([]);
+        setRolesLoadFailed(true);
+      } finally {
+        if (mounted) {
+          setRolesLoading(false);
+        }
+      }
+    };
+
+    loadRoles();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -124,20 +181,31 @@ const UserList = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    saveState({ page: 1, filters, sort, sorting });
-    fetchData(1, filters, sort);
+    saveState({ page: 1, filters, roleId, sort, sorting });
+    fetchData(1, filters, sort, roleId);
   };
 
   const handleResetFilters = () => {
     const reset = { name: "", username: "", ssn: "", phone: "" };
+    const resetRoleId = "";
     setFilters(reset);
-    saveState({ page: 1, filters: reset, sort, sorting });
-    fetchData(1, reset, sort);
+    setRoleId(resetRoleId);
+    syncRoleQuery(resetRoleId);
+    saveState({ page: 1, filters: reset, roleId: resetRoleId, sort, sorting });
+    fetchData(1, reset, sort, resetRoleId);
   };
 
   const handlePageChange = (page) => {
-    saveState({ page, filters, sort, sorting });
-    fetchData(page, filters, sort);
+    saveState({ page, filters, roleId, sort, sorting });
+    fetchData(page, filters, sort, roleId);
+  };
+
+  const handleRoleChange = (e) => {
+    const nextRoleId = e.target.value;
+    setRoleId(nextRoleId);
+    syncRoleQuery(nextRoleId);
+    saveState({ page: 1, filters, roleId: nextRoleId, sort, sorting });
+    fetchData(1, filters, sort, nextRoleId);
   };
 
   const handleExport = async () => {
@@ -154,6 +222,7 @@ const UserList = () => {
       if (sort?.by) params.append("sortBy", sort.by);
       if (sort?.order) params.append("sortOrder", sort.order);
       if (searchQuery) params.append("search", searchQuery);
+      if (roleId) params.append("roleId", roleId);
 
       const url = `${getApiUrl(API_ROUTES.users.export)}?${params.toString()}`;
       const token = getAccessToken();
@@ -289,14 +358,14 @@ const UserList = () => {
       try {
         setLoading(true);
         await deleteUser(id);
-        await fetchData(meta.page, filters, sort);
+        await fetchData(meta.page, filters, sort, roleId);
       } catch (e) {
         console.error("خطا در حذف کاربر", e);
       } finally {
         setLoading(false);
       }
     },
-    [meta.page, filters, sort, fetchData]
+    [meta.page, filters, sort, roleId, fetchData]
   );
 
 
@@ -463,8 +532,8 @@ const UserList = () => {
       if (!first) {
         const resetSort = { by: undefined, order: undefined };
         setSort(resetSort);
-        saveState({ page: 1, filters, sort: resetSort, sorting: nextSorting });
-        fetchData(1, filters, resetSort);
+        saveState({ page: 1, filters, roleId, sort: resetSort, sorting: nextSorting });
+        fetchData(1, filters, resetSort, roleId);
         return;
       }
 
@@ -473,10 +542,10 @@ const UserList = () => {
         order: first.desc ? "DESC" : "ASC",
       };
       setSort(nextSort);
-      saveState({ page: 1, filters, sort: nextSort, sorting: nextSorting });
-      fetchData(1, filters, nextSort);
+      saveState({ page: 1, filters, roleId, sort: nextSort, sorting: nextSorting });
+      fetchData(1, filters, nextSort, roleId);
     },
-    [fetchData, filters, saveState]
+    [fetchData, filters, roleId, saveState]
   );
 
   return (
@@ -572,6 +641,34 @@ const UserList = () => {
                           onChange={handleFilterChange}
                           placeholder="مثلاً 0912..."
                         />
+                      </InputGroup>
+                    </Col>
+
+                    <Col xl="3" lg="4" md="6">
+                      <Label className="form-label">نقش</Label>
+                      <InputGroup>
+                        <InputGroupText>
+                          <i className="mdi mdi-shield-account-outline" />
+                        </InputGroupText>
+                        <Input
+                          type="select"
+                          name="roleId"
+                          value={roleId}
+                          onChange={handleRoleChange}
+                          disabled={rolesLoading}
+                        >
+                          <option value="">
+                            {rolesLoading ? "در حال دریافت نقش‌ها..." : "همه نقش‌ها"}
+                          </option>
+                          {rolesLoadFailed && roleId ? (
+                            <option value={roleId}>نقش انتخاب‌شده</option>
+                          ) : null}
+                          {roles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                              {role.label || role.name || `نقش ${role.id}`}
+                            </option>
+                          ))}
+                        </Input>
                       </InputGroup>
                     </Col>
 
