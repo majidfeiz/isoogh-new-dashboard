@@ -192,6 +192,13 @@ const SidebarContent = (props) => {
         permission: null,
       },
       {
+        type: "item",
+        label: "چت آنلاین",
+        icon: "bx bx-chat",
+        to: "/chat",
+        permission: null,
+      },
+      {
         type: "group",
         label: "دسترسی",
         icon: "bx bx-lock-alt",
