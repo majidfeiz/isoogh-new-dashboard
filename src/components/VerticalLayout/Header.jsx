@@ -8,8 +8,6 @@ import { Link } from "react-router-dom";
 // Reactstrap
 import { Dropdown, DropdownToggle, DropdownMenu } from "reactstrap";
 
-// Import menuDropdown
-import LanguageDropdown from "../CommonForBoth/TopbarDropdown/LanguageDropdown";
 import NotificationDropdown from "../CommonForBoth/TopbarDropdown/NotificationDropdown";
 import ProfileMenu from "../CommonForBoth/TopbarDropdown/ProfileMenu";
 import megamenuImg from "../../assets/images/megamenu-img.png";
@@ -304,8 +302,7 @@ const Header = props => {
               </div>
             </div>
 
-            <LanguageDropdown />
-{/* 
+{/*
             <Dropdown
               className="d-none d-lg-inline-block ms-1"
               isOpen={socialDrp}

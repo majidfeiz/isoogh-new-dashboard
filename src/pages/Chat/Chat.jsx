@@ -186,7 +186,19 @@ const normalizeMessage = (item = {}) => ({
   conversationId: item.conversationId ?? item.conversation_id ?? null,
   schoolId: item.schoolId ?? item.school_id ?? null,
   senderUserId:
-    item.senderUserId ?? item.sender_user_id ?? item.sender?.id ?? item.userId ?? item.user_id ?? item.createdByUserId ?? null,
+    item.senderUserId ??
+    item.sender_user_id ??
+    item.sender?.id ??
+    item.user?.id ??
+    item.userId ??
+    item.user_id ??
+    item.createdByUserId ??
+    item.created_by_user_id ??
+    item.createdBy?.id ??
+    item.created_by?.id ??
+    item.authorId ??
+    item.author_id ??
+    null,
   sender: item.sender || item.user || null,
   type: item.type || "text",
   status: item.status || (item.deletedAt || item.deleted_at ? "deleted" : item.editedAt || item.edited_at ? "edited" : "active"),
@@ -287,9 +299,14 @@ const getMessageSenderName = (message = {}) =>
   message.sender?.phone ||
   message.sender?.mobile ||
   message.user?.name ||
+  message.user?.full_name ||
   message.user?.fullName ||
   message.user?.username ||
   message.user?.phone ||
+  message.createdBy?.name ||
+  message.createdBy?.fullName ||
+  message.created_by?.name ||
+  message.author?.name ||
   "کاربر";
 
 const getConversationMembers = (conversation = {}) =>
@@ -740,6 +757,7 @@ const isGenericDirectTitle = (conversation = {}) => {
 
 const shouldGroupWithPreviousMessage = (previous = {}, message = {}) => {
   if (!previous?.id || !message?.id) return false;
+  if (!previous.senderUserId || !message.senderUserId) return false;
   if (String(previous.senderUserId) !== String(message.senderUserId)) return false;
   const previousTime = new Date(previous.createdAt || 0).getTime();
   const currentTime = new Date(message.createdAt || 0).getTime();
@@ -1198,6 +1216,31 @@ const Chat = () => {
       return getMemberDisplayName(member) || fromLookup || explicit;
     },
     [activeConversation, currentUserId, resolveUserNameById, userOptionById]
+  );
+
+  const hydrateOutgoingMessage = useCallback(
+    (message = {}) => {
+      if (!message?.id) return message;
+      const senderUserId = message.senderUserId || currentUserId;
+      const currentUserName = getUserName(auth?.user || {});
+      return {
+        ...message,
+        senderUserId,
+        sender:
+          message.sender ||
+          (String(senderUserId) === String(currentUserId)
+            ? {
+                id: currentUserId,
+                name: currentUserName,
+                fullName: auth?.user?.fullName || auth?.user?.full_name || currentUserName,
+                username: auth?.user?.username,
+                phone: auth?.user?.phone || auth?.user?.mobile,
+                initials: getUserAvatarText(currentUserName),
+              }
+            : message.sender),
+      };
+    },
+    [auth?.user, currentUserId]
   );
 
   const getConversationTypingUserIds = useCallback(
@@ -2056,7 +2099,7 @@ const Chat = () => {
 
   const sendChatPayload = async (payload) => {
     const created = await sendChatMessage(activeConversationId, payload);
-    const message = normalizeMessage(created?.message || created);
+    const message = hydrateOutgoingMessage(normalizeMessage(created?.message || created));
     appendMessageToState(message);
     return message;
   };
@@ -2115,7 +2158,7 @@ const Chat = () => {
           }),
         ],
       });
-      appendMessageToState(normalizeMessage(created?.message || created));
+      appendMessageToState(hydrateOutgoingMessage(normalizeMessage(created?.message || created)));
       removeVoiceDraft();
     } catch (err) {
       if (err?.response?.status === 403) {
@@ -3073,7 +3116,7 @@ const Chat = () => {
                                 title={canOpenSenderDirect ? `ارسال پیام خصوصی به ${senderName}` : undefined}
                                 onClick={() => openDirectChatFromMessage(message, senderName)}
                               >
-                                {!isGrouped ? (message.sender?.initials || getUserAvatarText(senderName)) : ""}
+                                {!isGrouped ? (message.sender?.initials || getUserAvatarText(senderName || "کاربر")) : ""}
                                 {senderDirectLoading && <Spinner size="sm" />}
                               </button>
                             )}
