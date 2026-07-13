@@ -193,6 +193,32 @@ export const API_ROUTES = {
     update: (id) => `/files/${id}`,
     delete: (id) => `/files/${id}`,
   },
+  chat: {
+    conversations: "/chat/conversations",
+    fileUpload: "/chat/files/upload",
+    conversationMessages: (conversationId) => `/chat/conversations/${conversationId}/messages`,
+    conversation: (conversationId) => `/chat/conversations/${conversationId}`,
+    conversationBlocks: (conversationId) => `/chat/conversations/${conversationId}/blocks`,
+    conversationBlockStatus: (conversationId) => `/chat/conversations/${conversationId}/block-status`,
+    conversationBlock: (conversationId, blockedUserId) =>
+      `/chat/conversations/${conversationId}/blocks/${blockedUserId}`,
+    conversationMembers: (conversationId) => `/chat/conversations/${conversationId}/members`,
+    conversationMember: (conversationId, userId) =>
+      `/chat/conversations/${conversationId}/members/${userId}`,
+    conversationSettings: (conversationId) => `/chat/conversations/${conversationId}/settings`,
+    conversationUserMessages: (conversationId, userId) =>
+      `/chat/conversations/${conversationId}/messages/users/${userId}`,
+    conversationPresence: (conversationId) => `/chat/conversations/${conversationId}/presence`,
+    message: (messageId) => `/chat/messages/${messageId}`,
+    messageReactions: (messageId) => `/chat/messages/${messageId}/reactions`,
+    conversationRead: (conversationId) => `/chat/conversations/${conversationId}/read`,
+    schoolUsers: (schoolId) => `/chat/schools/${schoolId}/users`,
+    schoolSettings: (schoolId) => `/chat/schools/${schoolId}/settings`,
+    schoolStatistics: (schoolId) => `/chat/schools/${schoolId}/admin/statistics`,
+    schoolBlocks: (schoolId) => `/chat/schools/${schoolId}/admin/blocks`,
+    schoolBlock: (schoolId, blockedUserId) =>
+      `/chat/schools/${schoolId}/admin/blocks/${blockedUserId}`,
+  },
   adviserPortal: {
     schools: "/adviser-portal/schools",
     schoolsExport: "/adviser-portal/schools/export",

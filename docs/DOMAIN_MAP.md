@@ -16,6 +16,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Parent tags | `pages/ParentTags` | `parentTagService` | `parentTags` | `/parent-tags*` |
 | Support forms | `pages/SupportForms` | `supportFormService` | `supportForms` | `/support-forms*` |
 | Files | `pages/Files` | `fileService` | `files` | `/files*` |
+| School chat | `pages/Chat` | `chatService` | `chat` | `/chat` |
 | Notifications | `pages/Notifications` | `notificationService` | `notifications` | `/notifications*` |
 | VoIP history/live | `pages/Voip` | `voipService` | `voip` | `/voip/outbound-call-histories*` |
 | VoIP analytics | `pages/Voip/Analytics` | `voipAnalyticsService` | `voipAnalytics` | `/voip/analytics` |
