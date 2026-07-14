@@ -99,6 +99,12 @@ const CONVERSATION_TYPE_META = {
   group: { key: "group", label: "گروه", icon: "bx-group" },
   channel: { key: "channel", label: "کانال", icon: "bx-rss" },
 };
+const CHAT_USER_ROLE_LABELS = {
+  admin: "ادمین",
+  manager: "مدیر",
+  super_adviser: "سرمشاور",
+  adviser: "مشاور",
+};
 
 const getId = (item) => item?.id ?? item?._id ?? null;
 const toArray = (value) => (Array.isArray(value) ? value : []);
@@ -226,13 +232,45 @@ const getUserName = (user = {}) =>
   `کاربر ${getChatUserId(user) || getId(user)}`;
 
 const getChatUserId = (item = {}) =>
-  item.user_id ?? item.userId ?? item.user?.id ?? item.id ?? null;
+  item.__chatUserId ?? item.user_id ?? item.userId ?? item.user?.id ?? item.id ?? null;
 
 const getUserAvatarText = (name = "") => {
   const clean = String(name || "").trim();
   if (!clean) return "؟";
   return clean.slice(0, 2).toUpperCase();
 };
+
+const isSystemAdminRole = (role = "") =>
+  ["admin", "system_admin", "super_admin"].includes(String(role || "").toLowerCase());
+
+const getRoleValue = (role = {}) =>
+  typeof role === "string" ? role : role.key || role.slug || role.name || role.title || role.label || "";
+
+const isSystemAdminUser = (item = {}, { includeTopLevelRole = true } = {}) => {
+  if (
+    item.__isSystemAdmin === true ||
+    item.isSystemAdmin === true ||
+    item.is_system_admin === true ||
+    item.user?.isSystemAdmin === true ||
+    item.user?.is_system_admin === true
+  ) {
+    return true;
+  }
+
+  const roles = [
+    ...(Array.isArray(item.user?.roles) ? item.user.roles : []),
+    ...(Array.isArray(item.roles) ? item.roles : []),
+  ];
+  if (roles.some((role) => isSystemAdminRole(getRoleValue(role)))) return true;
+
+  const userRole = item.user?.systemRole || item.user?.system_role || item.user?.role;
+  if (isSystemAdminRole(userRole)) return true;
+
+  const topLevelRole = item.systemRole || item.system_role || (includeTopLevelRole ? item.role : "");
+  return isSystemAdminRole(topLevelRole);
+};
+
+const isSystemAdminMember = (member = {}) => isSystemAdminUser(member, { includeTopLevelRole: false });
 
 const getUserRoleLabels = (item = {}) => {
   const labels = [];
@@ -241,6 +279,9 @@ const getUserRoleLabels = (item = {}) => {
     const label = role?.label || role?.name;
     if (label) labels.push(label);
   });
+  if (item.roleLabel) labels.push(item.roleLabel);
+  if (item.role && item.__source === "chat") labels.push(CHAT_USER_ROLE_LABELS[item.role] || item.role);
+  if (isSystemAdminUser(item)) labels.push("ادمین");
 
   if (item.__source === "adviser" || item.user_id || item.userId) {
     const isSuper = item.is_super === true || item.is_super === 1 || item.is_super === "1" || item.isSuper;
@@ -259,16 +300,21 @@ const normalizeChatUserOption = (item = {}, source = "user") => {
     __chatUserId: chatUserId,
     __displayName: getUserName(item),
     __roleLabels: getUserRoleLabels({ ...item, __source: source }),
+    __isSystemAdmin: isSystemAdminUser({ ...item, __source: source }),
   };
 };
 
-const normalizeChatUserCandidate = (item = {}) => ({
-  ...item,
-  __source: "chat",
-  __chatUserId: item.id,
-  __displayName: item.name || item.username || item.phone || `کاربر ${item.id}`,
-  __roleLabels: [item.roleLabel || item.role].filter(Boolean),
-});
+const normalizeChatUserCandidate = (item = {}) => {
+  const chatUserId = getChatUserId(item);
+  const normalized = normalizeChatUserOption({ ...item, id: chatUserId }, "chat");
+  if (!normalized) return null;
+  return {
+    ...normalized,
+    __displayName: item.name || item.fullName || item.full_name || item.username || item.phone || normalized.__displayName,
+    __roleLabels: getUserRoleLabels({ ...item, __source: "chat" }),
+    __isSystemAdmin: isSystemAdminUser({ ...item, __source: "chat" }),
+  };
+};
 
 const mergeChatUserOptions = (groups = []) => {
   const byUserId = new Map();
@@ -286,10 +332,18 @@ const mergeChatUserOptions = (groups = []) => {
       ...normalized,
       __roleLabels: Array.from(new Set([...(prev.__roleLabels || []), ...(normalized.__roleLabels || [])])),
       __displayName: normalized.__displayName || prev.__displayName,
+      __isSystemAdmin: prev.__isSystemAdmin || normalized.__isSystemAdmin,
     });
   });
   return Array.from(byUserId.values());
 };
+
+const renderAdminBadge = ({ compact = false } = {}) => (
+  <span className={`school-chat-admin-badge ${compact ? "compact" : ""}`} title="ادمین سیستم">
+    <i className="bx bx-shield-quarter" />
+    {!compact && "ادمین"}
+  </span>
+);
 
 const getMessageSenderName = (message = {}) =>
   message.sender?.name ||
@@ -944,6 +998,14 @@ const Chat = () => {
     () => messagesByConversationId[activeConversationId] || [],
     [activeConversationId, messagesByConversationId]
   );
+  const adminChatUserCandidates = useMemo(
+    () => chatUserCandidates.filter((item) => isSystemAdminUser(item)),
+    [chatUserCandidates]
+  );
+  const schoolChatUserCandidates = useMemo(
+    () => chatUserCandidates.filter((item) => !isSystemAdminUser(item)),
+    [chatUserCandidates]
+  );
   const activeMessagesMeta = messagesMetaByConversationId[activeConversationId] || {
     page: 1,
     limit: 20,
@@ -957,6 +1019,23 @@ const Chat = () => {
     });
     return map;
   }, [userOptions]);
+  const isKnownSystemAdminUser = useCallback(
+    (userId, fallback = {}, { includeTopLevelRole = true } = {}) => {
+      if (!userId) return isSystemAdminUser(fallback, { includeTopLevelRole });
+      if (isSystemAdminUser(fallback, { includeTopLevelRole })) return true;
+      if (isSystemAdminUser(userOptionById[String(userId)] || {})) return true;
+
+      for (const conversation of conversations) {
+        const member = getConversationMembers(conversation).find(
+          (item) => String(getMemberUserId(item)) === String(userId)
+        );
+        if (member && isSystemAdminUser(member, { includeTopLevelRole })) return true;
+      }
+
+      return false;
+    },
+    [conversations, userOptionById]
+  );
   const activeDirectMember = useMemo(() => {
     if (!activeConversation || activeConversation.type !== "direct") return null;
     return getConversationOtherMember(activeConversationWithMembers || activeConversation, currentUserId) || null;
@@ -965,6 +1044,7 @@ const Chat = () => {
   const activeDirectMemberUserId = getMemberUserId(activeDirectMember || {});
   const activeDirectPeerUserId = activeDirectBlockStatus?.peerUserId || activeDirectMemberUserId;
   const activeDirectPeerPresence = activeDirectPeerUserId ? presenceByUserId[String(activeDirectPeerUserId)] : null;
+  const activeDirectPeerIsAdmin = isKnownSystemAdminUser(activeDirectPeerUserId, activeDirectMember || {});
   const activePersonalBlocks = personalBlocksByConversationId[activeConversationId] || [];
   const isActiveDirectPeerBlockedByMe = !!activeDirectPeerUserId && activePersonalBlocks.some(
     (block) => String(getBlockUserId(block)) === String(activeDirectPeerUserId)
@@ -1216,6 +1296,23 @@ const Chat = () => {
       return getMemberDisplayName(member) || fromLookup || explicit;
     },
     [activeConversation, currentUserId, resolveUserNameById, userOptionById]
+  );
+
+  const isMessageSenderSystemAdmin = useCallback(
+    (message = {}) => {
+      const senderUserId = message.senderUserId || message.sender?.id || message.user?.id;
+      if (!senderUserId) return isSystemAdminUser(message.sender || message.user || {});
+      const member = getConversationMembers(activeConversation).find(
+        (item) => String(getMemberUserId(item)) === String(senderUserId)
+      );
+      if (isKnownSystemAdminUser(senderUserId, message.sender || message.user || {})) return true;
+      return member
+        ? isKnownSystemAdminUser(senderUserId, member, {
+            includeTopLevelRole: activeConversation?.type === "direct",
+          })
+        : false;
+    },
+    [activeConversation, isKnownSystemAdminUser]
   );
 
   const hydrateOutgoingMessage = useCallback(
@@ -1537,7 +1634,7 @@ const Chat = () => {
 
     const missingIds = Array.from(ids).filter((id) => {
       if (String(id) === String(currentUserId)) return false;
-      return !userNamesById[id] && !userOptionById[id]?.__displayName;
+      return !userNamesById[id] || !userOptionById[id]?.__chatUserId;
     });
 
     if (!missingIds.length) return;
@@ -1546,14 +1643,20 @@ const Chat = () => {
     Promise.allSettled(missingIds.slice(0, 25).map((id) => getUser(id, { silent: true }))).then((results) => {
       if (cancelled) return;
       const nextNames = {};
+      const nextOptions = [];
       results.forEach((result, index) => {
         if (result.status !== "fulfilled") return;
         const id = missingIds[index];
         const name = getUserName(result.value);
         if (name && !name.startsWith("کاربر ")) nextNames[id] = name;
+        const normalizedUser = normalizeChatUserOption(result.value, "user");
+        if (normalizedUser) nextOptions.push(normalizedUser);
       });
       if (Object.keys(nextNames).length) {
         setUserNamesById((prev) => ({ ...prev, ...nextNames }));
+      }
+      if (nextOptions.length) {
+        setUserOptions((prev) => mergeChatUserOptions([prev, nextOptions]));
       }
     });
 
@@ -1756,7 +1859,7 @@ const Chat = () => {
     if (!createModalOpen || !activeSchoolId) return;
     const search = submittedUserSearch.trim();
     getChatSchoolUsers({ schoolId: activeSchoolId, search, limit: 50 })
-      .then((items) => setUserOptions(items.map(normalizeChatUserCandidate).filter((item) => item.__chatUserId)))
+      .then((items) => setUserOptions(items.map(normalizeChatUserCandidate).filter((item) => item?.__chatUserId)))
       .catch(() => setUserOptions([]));
   }, [activeSchoolId, createModalOpen, submittedUserSearch]);
 
@@ -1775,9 +1878,10 @@ const Chat = () => {
         if (cancelled) return;
         const candidates = items
           .map(normalizeChatUserCandidate)
-          .filter((item) => item.__chatUserId && String(item.__chatUserId) !== String(currentUserId))
+          .filter((item) => item?.__chatUserId && String(item.__chatUserId) !== String(currentUserId))
           .slice(0, 12);
         setChatUserCandidates(candidates);
+        setUserOptions((prev) => mergeChatUserOptions([prev, candidates]));
       })
       .catch(() => setChatUserCandidates([]))
       .finally(() => {
@@ -1809,8 +1913,9 @@ const Chat = () => {
         setMemberSearchResults(
           items
             .map(normalizeChatUserCandidate)
-            .filter((item) => item.__chatUserId && String(item.__chatUserId) !== String(currentUserId))
+            .filter((item) => item?.__chatUserId && String(item.__chatUserId) !== String(currentUserId))
         );
+        setUserOptions((prev) => mergeChatUserOptions([prev, items.map(normalizeChatUserCandidate).filter(Boolean)]));
       })
       .catch(() => setMemberSearchResults([]))
       .finally(() => {
@@ -2244,7 +2349,7 @@ const Chat = () => {
   };
 
   const openDirectChat = async (user) => {
-    const userId = Number(user.__chatUserId || user.id);
+    const userId = Number(getChatUserId(user));
     if (!userId || openingDirectUserId) return;
     const existing = conversations.find(
       (conversation) => String(getDirectConversationMemberId(conversation, currentUserId)) === String(userId)
@@ -2264,8 +2369,16 @@ const Chat = () => {
       const conversation = normalizeConversation(created?.conversation || created);
       setConversations((prev) => [conversation, ...prev.filter((item) => item.id !== conversation.id)]);
       setUserNamesById((prev) => ({ ...prev, [String(userId)]: user.__displayName || user.name || prev[String(userId)] }));
+      setUserOptions((prev) => mergeChatUserOptions([prev, [user]]));
       setActiveConversationId(conversation.id);
       setMobilePane("chat");
+    } catch (error) {
+      const status = error?.response?.status;
+      const message = error?.response?.data?.message;
+      const messages = Array.isArray(message) ? message.join(" ") : String(message || "");
+      if (status === 403 && messages.includes("school chat scope")) {
+        toast.error("این کاربر در محدوده چت مجموعه انتخاب‌شده نیست. شناسه کاربر یا مجموعه را بررسی کنید.");
+      }
     } finally {
       setOpeningDirectUserId(null);
     }
@@ -2785,9 +2898,14 @@ const Chat = () => {
   };
 
   const activeTypingLabel = activeConversation ? getConversationTypingLabel(activeConversation) : "";
+  const activeDirectPresenceLabel = getUserPresenceLabel(activeDirectPeerPresence);
   const activeConversationSubtitle =
     activeTypingLabel ||
-    (activeConversation?.type === "direct" ? getUserPresenceLabel(activeDirectPeerPresence) : resolveConversationSubtitle(activeConversation || {}));
+    (activeConversation?.type === "direct"
+      ? activeDirectPeerIsAdmin
+        ? `ادمین سیستم · ${activeDirectPresenceLabel}`
+        : activeDirectPresenceLabel
+      : resolveConversationSubtitle(activeConversation || {}));
   const stickerPickerPortal =
     typeof document !== "undefined" && stickerPickerOpen
       ? createPortal(
@@ -2877,13 +2995,20 @@ const Chat = () => {
                 </div>
 
                 <div className="school-chat-conversations">
+                  {!!debouncedConversationSearch && (
+                    <div className="school-chat-user-results-title">
+                      <span>گفتگوها</span>
+                    </div>
+                  )}
                   {conversationsLoading && <div className="text-center p-4"><Spinner size="sm" /></div>}
                   {!conversationsLoading && conversations.map((item) => {
                     const title = resolveConversationTitle(item);
                     const typeMeta = getConversationTypeMeta(item.type);
                     const conversationTypingLabel = getConversationTypingLabel(item);
                     const directPeerId = item.type === "direct" ? getDirectConversationMemberId(item, currentUserId) : null;
+                    const directPeer = item.type === "direct" ? getConversationOtherMember(item, currentUserId) : null;
                     const directPeerPresence = directPeerId ? presenceByUserId[String(directPeerId)] : null;
+                    const directPeerIsAdmin = directPeerId ? isKnownSystemAdminUser(directPeerId, directPeer || {}) : false;
                     const conversationMessages = messagesByConversationId[item.id] || [];
                     const latestMessage = conversationMessages[conversationMessages.length - 1];
                     const preview =
@@ -2908,11 +3033,13 @@ const Chat = () => {
                         >
                           <span>{resolveConversationAvatarText(item)}</span>
                           <i className={`bx ${typeMeta.icon}`} />
+                          {directPeerIsAdmin && renderAdminBadge({ compact: true })}
                           {directPeerPresence?.isOnline && <span className="school-chat-presence-dot" />}
                         </span>
                         <span className="school-chat-conversation-body">
                           <span className="school-chat-conversation-title">
                             <strong>{title}</strong>
+                            {directPeerIsAdmin && renderAdminBadge()}
                             <span className={`school-chat-type-badge school-chat-type-badge--${typeMeta.key}`}>
                               <i className={`bx ${typeMeta.icon}`} />
                               {typeMeta.label}
@@ -2962,7 +3089,7 @@ const Chat = () => {
                       {!chatUserCandidatesLoading && !chatUserCandidates.length && (
                         <div className="text-muted small p-3">کاربری پیدا نشد.</div>
                       )}
-                      {chatUserCandidates.map((user) => (
+                      {schoolChatUserCandidates.map((user) => (
                         <button
                           type="button"
                           key={`candidate-${user.__chatUserId}`}
@@ -2970,14 +3097,49 @@ const Chat = () => {
                           onClick={() => openDirectChat(user)}
                           disabled={openingDirectUserId === Number(user.__chatUserId)}
                         >
-                          <span className="school-chat-avatar">{getUserAvatarText(user.__displayName)}</span>
+                          <span className="school-chat-avatar">
+                            {user.initials || getUserAvatarText(user.__displayName)}
+                            {isSystemAdminUser(user) && renderAdminBadge({ compact: true })}
+                          </span>
                           <span>
-                            <strong>{user.__displayName}</strong>
+                            <strong>
+                              {user.__displayName}
+                              {isSystemAdminUser(user) && renderAdminBadge()}
+                            </strong>
                             <small>{user.__roleLabels?.join("، ") || "کاربر"}</small>
                           </span>
                           {openingDirectUserId === Number(user.__chatUserId) && <Spinner size="sm" />}
                         </button>
                       ))}
+                      {!!adminChatUserCandidates.length && (
+                        <>
+                          <div className="school-chat-user-results-title school-chat-user-results-title--admin">
+                            <span>ادمین‌ها</span>
+                          </div>
+                          {adminChatUserCandidates.map((user) => (
+                            <button
+                              type="button"
+                              key={`admin-candidate-${user.__chatUserId}`}
+                              className="school-chat-user-result school-chat-user-result--admin"
+                              onClick={() => openDirectChat(user)}
+                              disabled={openingDirectUserId === Number(user.__chatUserId)}
+                            >
+                              <span className="school-chat-avatar school-chat-avatar--admin">
+                                {user.initials || getUserAvatarText(user.__displayName)}
+                                {renderAdminBadge({ compact: true })}
+                              </span>
+                              <span>
+                                <strong>
+                                  {user.__displayName}
+                                  {renderAdminBadge()}
+                                </strong>
+                                <small>{user.__roleLabels?.join("، ") || "ادمین سیستم"}</small>
+                              </span>
+                              {openingDirectUserId === Number(user.__chatUserId) && <Spinner size="sm" />}
+                            </button>
+                          ))}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3007,12 +3169,16 @@ const Chat = () => {
                           }`}
                         >
                           {resolveConversationAvatarText(activeConversation)}
+                          {activeDirectPeerIsAdmin && renderAdminBadge({ compact: true })}
                           {activeConversation?.type === "direct" && activeDirectPeerPresence?.isOnline && (
                             <span className="school-chat-presence-dot" />
                           )}
                         </span>
                         <span className="school-chat-header-title">
-                          <h5 className="mb-1">{resolveConversationTitle(activeConversation)}</h5>
+                          <h5 className="mb-1">
+                            {resolveConversationTitle(activeConversation)}
+                            {activeDirectPeerIsAdmin && renderAdminBadge()}
+                          </h5>
                           <small className={activeTypingLabel ? "text-primary" : "text-muted"}>
                             {activeConversationSubtitle}
                           </small>
@@ -3088,6 +3254,7 @@ const Chat = () => {
                       {activeMessages.map((message, index) => {
                         const isOwn = String(message.senderUserId) === String(currentUserId);
                         const senderName = resolveMessageSenderName(message);
+                        const senderIsAdmin = isMessageSenderSystemAdmin(message);
                         const isGrouped = shouldGroupWithPreviousMessage(activeMessages[index - 1], message);
                         const isDeleted = message.status === "deleted" || message.deletedAt;
                         const isEdited = message.status === "edited" || message.editedAt;
@@ -3107,16 +3274,24 @@ const Chat = () => {
                         const senderDirectLoading =
                           canOpenSenderDirect && openingDirectUserId === Number(message.senderUserId);
                         return (
-                          <div key={message.id} className={`school-chat-message ${isOwn ? "own" : ""} ${isGrouped ? "grouped" : ""}`}>
+                          <div
+                            key={message.id}
+                            className={`school-chat-message ${isOwn ? "own" : ""} ${isGrouped ? "grouped" : ""} ${
+                              senderIsAdmin && !isOwn ? "from-admin" : ""
+                            }`}
+                          >
                             {!isOwn && (
                               <button
                                 type="button"
-                                className={`school-chat-message-avatar ${canOpenSenderDirect ? "is-clickable" : ""}`}
+                                className={`school-chat-message-avatar ${senderIsAdmin ? "is-admin" : ""} ${
+                                  canOpenSenderDirect ? "is-clickable" : ""
+                                }`}
                                 disabled={!canOpenSenderDirect || senderDirectLoading}
                                 title={canOpenSenderDirect ? `ارسال پیام خصوصی به ${senderName}` : undefined}
                                 onClick={() => openDirectChatFromMessage(message, senderName)}
                               >
                                 {!isGrouped ? (message.sender?.initials || getUserAvatarText(senderName || "کاربر")) : ""}
+                                {!isGrouped && senderIsAdmin && renderAdminBadge({ compact: true })}
                                 {senderDirectLoading && <Spinner size="sm" />}
                               </button>
                             )}
@@ -3129,6 +3304,7 @@ const Chat = () => {
                                   onClick={() => openDirectChatFromMessage(message, senderName)}
                                 >
                                   {senderName}
+                                  {senderIsAdmin && renderAdminBadge()}
                                 </button>
                               )}
                               {isDeleted ? (
@@ -3392,14 +3568,19 @@ const Chat = () => {
                         const isSelfMember = String(memberId) === String(currentUserId);
                         const isOwner = role === "owner";
                         const memberPresence = presenceByUserId[String(memberId)];
+                        const memberIsAdmin = isKnownSystemAdminUser(memberId, member, { includeTopLevelRole: false });
                         return (
                           <div key={`member-${memberId}`} className="school-chat-member-row">
                             <span className={`school-chat-avatar sm ${memberPresence?.isOnline ? "is-online" : ""}`}>
                               {getMemberInitials(member)}
+                              {memberIsAdmin && renderAdminBadge({ compact: true })}
                               {memberPresence?.isOnline && <span className="school-chat-presence-dot" />}
                             </span>
                             <div className="school-chat-member-main">
-                              <strong>{memberName}</strong>
+                              <strong>
+                                {memberName}
+                                {memberIsAdmin && renderAdminBadge()}
+                              </strong>
                               <small className={memberPresence?.isOnline ? "text-success" : "text-muted"}>
                                 {getUserPresenceLabel(memberPresence)}
                               </small>
@@ -3470,11 +3651,18 @@ const Chat = () => {
                               {memberSearchResults.map((user) => {
                                 const userId = user.__chatUserId;
                                 const exists = activeMemberIds.has(String(userId));
+                                const userIsAdmin = isSystemAdminUser(user);
                                 return (
                                   <div key={`member-result-${userId}`}>
-                                    <span className="school-chat-avatar sm">{getUserAvatarText(user.__displayName)}</span>
+                                    <span className="school-chat-avatar sm">
+                                      {user.initials || getUserAvatarText(user.__displayName)}
+                                      {userIsAdmin && renderAdminBadge({ compact: true })}
+                                    </span>
                                     <div>
-                                      <strong>{user.__displayName}</strong>
+                                      <strong>
+                                        {user.__displayName}
+                                        {userIsAdmin && renderAdminBadge()}
+                                      </strong>
                                       {!!user.__roleLabels?.length && <small>{user.__roleLabels.join("، ")}</small>}
                                     </div>
                                     <Button
