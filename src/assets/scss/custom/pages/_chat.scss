@@ -438,11 +438,56 @@
         }
     }
 
+    &--admin {
+        background: linear-gradient(135deg, #f59e0b, #2563eb);
+    }
+
     &.sm {
         flex-basis: 32px;
         font-size: 12px;
         height: 32px;
         width: 32px;
+    }
+}
+
+.school-chat-admin-badge {
+    align-items: center;
+    background: rgba(245, 158, 11, 0.16);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    border-radius: 999px;
+    color: #b45309;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 10px;
+    font-weight: $font-weight-semibold;
+    gap: 3px;
+    line-height: 1;
+    margin-inline-start: 6px;
+    padding: 3px 6px;
+    vertical-align: middle;
+
+    i {
+        font-size: 12px;
+    }
+
+    &.compact {
+        background: #f59e0b;
+        border: 2px solid $white;
+        bottom: -5px;
+        box-shadow: 0 3px 8px rgba(245, 158, 11, 0.24);
+        color: $white;
+        height: 18px;
+        justify-content: center;
+        margin: 0;
+        padding: 0;
+        position: absolute;
+        right: -5px;
+        width: 18px;
+        z-index: 2;
+
+        i {
+            font-size: 11px;
+        }
     }
 }
 
@@ -495,6 +540,10 @@
 
     strong {
         min-width: 0;
+    }
+
+    .school-chat-admin-badge {
+        margin-inline-start: 2px;
     }
 }
 
@@ -588,8 +637,19 @@
         background: rgba($primary, 0.06);
     }
 
+    &--admin:hover {
+        background: rgba(245, 158, 11, 0.08);
+    }
+
     span:not(.school-chat-avatar) {
         display: grid;
+        min-width: 0;
+    }
+
+    strong {
+        align-items: center;
+        display: flex;
+        gap: 4px;
         min-width: 0;
     }
 
@@ -640,6 +700,13 @@
         cursor: default;
         opacity: 1;
     }
+}
+
+.school-chat-header-title h5 {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .school-chat-header-avatar {
@@ -722,6 +789,28 @@
             border-radius: 14px;
         }
     }
+
+    &.from-admin {
+        .school-chat-message-avatar {
+            background: linear-gradient(135deg, #f59e0b, #2563eb);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+        }
+
+        .school-chat-bubble {
+            background: linear-gradient(135deg, rgba(255, 251, 235, 0.98), rgba(239, 246, 255, 0.98));
+            border-color: rgba(245, 158, 11, 0.34);
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08), inset -3px 0 0 #f59e0b;
+        }
+
+        .school-chat-sender {
+            color: #1d4ed8;
+            font-weight: 800;
+        }
+
+        .school-chat-message-meta {
+            color: #8a6a17;
+        }
+    }
 }
 
 .school-chat-message-avatar {
@@ -750,6 +839,10 @@
     &:disabled {
         cursor: default;
         opacity: 1;
+    }
+
+    &.is-admin {
+        background: linear-gradient(135deg, #f59e0b, #2563eb);
     }
 }
 
@@ -785,12 +878,14 @@
 }
 
 .school-chat-sender {
+    align-items: center;
     background: transparent;
     border: 0;
     color: $primary;
-    display: block;
+    display: inline-flex;
     font-size: 13px;
     font-weight: $font-weight-semibold;
+    gap: 4px;
     margin-bottom: 5px;
     padding: 0;
     text-align: right;
@@ -1345,6 +1440,13 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    strong {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
     }
 }
 
