@@ -86,9 +86,9 @@ export async function createUser(payload) {
 }
 
 // گرفتن جزئیات یک کاربر
-export async function getUser(id) {
+export async function getUser(id, config = {}) {
   const url = getApiUrl(API_ROUTES.users.detail(id));
-  const res = await apiGet(url);
+  const res = await apiGet(url, config);
   return res.data?.data || res.data;
 }
 

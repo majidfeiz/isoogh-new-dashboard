@@ -47,6 +47,35 @@ const formatDateTime = (value) => {
   return date.toLocaleString("fa-IR");
 };
 
+const formatLimit = (value, unit) => {
+  if (value === null || value === undefined) return "نامحدود";
+  return unit ? `${value} ${unit}` : String(value);
+};
+
+const parsePositiveIntOrNull = (value, unlimited) => {
+  if (unlimited) return null;
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    throw new Error("مقدار محدودیت باید عدد صحیح بزرگ‌تر از صفر باشد");
+  }
+  return numberValue;
+};
+
+const buildRateLimitPayload = (form) => ({
+  daily_request_limit: parsePositiveIntOrNull(
+    form.dailyRequestLimit,
+    form.dailyUnlimited
+  ),
+  max_concurrent_requests: parsePositiveIntOrNull(
+    form.maxConcurrentRequests,
+    form.concurrentUnlimited
+  ),
+  min_request_interval_seconds: parsePositiveIntOrNull(
+    form.minRequestIntervalSeconds,
+    form.intervalUnlimited
+  ),
+});
+
 const ExternalApiClientDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -62,7 +91,18 @@ const ExternalApiClientDetail = () => {
   const [activeTab, setActiveTab] = useState("info");
 
   // edit form
-  const [editForm, setEditForm] = useState({ name: "", description: "", is_active: true, school_id: "" });
+  const [editForm, setEditForm] = useState({
+    name: "",
+    description: "",
+    is_active: true,
+    school_id: "",
+    dailyUnlimited: true,
+    dailyRequestLimit: "",
+    concurrentUnlimited: true,
+    maxConcurrentRequests: "",
+    intervalUnlimited: true,
+    minRequestIntervalSeconds: "",
+  });
   const [saving, setSaving] = useState(false);
 
   // api key
@@ -90,6 +130,16 @@ const ExternalApiClientDetail = () => {
         description: data.description,
         is_active: data.is_active,
         school_id: data.school_id ?? "",
+        dailyUnlimited: data.daily_request_limit == null,
+        dailyRequestLimit: data.daily_request_limit == null ? "" : String(data.daily_request_limit),
+        concurrentUnlimited: data.max_concurrent_requests == null,
+        maxConcurrentRequests:
+          data.max_concurrent_requests == null ? "" : String(data.max_concurrent_requests),
+        intervalUnlimited: data.min_request_interval_seconds == null,
+        minRequestIntervalSeconds:
+          data.min_request_interval_seconds == null
+            ? ""
+            : String(data.min_request_interval_seconds),
       });
     } catch {
       toast.error("خطا در دریافت اطلاعات کلاینت");
@@ -127,8 +177,19 @@ const ExternalApiClientDetail = () => {
   }, [activeTab, fetchLogs]);
 
   const handleEditChange = (e) => {
-    const { name, value } = e.target;
-    setEditForm((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type, checked } = e.target;
+    setEditForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+  };
+
+  const toggleEditFlag = (name) => {
+    setEditForm((prev) => ({ ...prev, [name]: !prev[name] }));
+  };
+
+  const handleFlagKeyDown = (e, name) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      toggleEditFlag(name);
+    }
   };
 
   const toggleActive = () => {
@@ -140,16 +201,18 @@ const ExternalApiClientDetail = () => {
     if (!editForm.name.trim()) return toast.warning("نام الزامی است");
     setSaving(true);
     try {
+      const rateLimitPayload = buildRateLimitPayload(editForm);
       await updateExternalApiClient(id, {
         name: editForm.name.trim(),
         description: editForm.description.trim(),
         is_active: editForm.is_active,
         school_id: editForm.school_id ? Number(editForm.school_id) : null,
+        ...rateLimitPayload,
       });
       await fetchClient();
       toast.success("تغییرات ذخیره شد");
-    } catch {
-      toast.error("خطا در ذخیره تغییرات");
+    } catch (error) {
+      toast.error(error?.message || "خطا در ذخیره تغییرات");
     } finally {
       setSaving(false);
     }
@@ -336,6 +399,128 @@ const ExternalApiClientDetail = () => {
                             اگر مجموعه انتخاب شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند.
                           </small>
                         </FormGroup>
+                        <div className="border-top pt-3 mt-3 mb-3">
+                          <h6 className="mb-3">محدودیت درخواست‌ها</h6>
+                          <Row className="g-3">
+                            <Col md={12}>
+                              <FormGroup className="mb-0">
+                                <Label>حداکثر درخواست در ۲۴ ساعت</Label>
+                                <div className="d-flex flex-wrap align-items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    name="dailyRequestLimit"
+                                    value={editForm.dailyRequestLimit}
+                                    onChange={handleEditChange}
+                                    disabled={editForm.dailyUnlimited}
+                                    placeholder="مثلاً 10000"
+                                    style={{ maxWidth: 180 }}
+                                  />
+                                  <FormGroup
+                                    check
+                                    className="mb-0"
+                                    role="checkbox"
+                                    tabIndex={0}
+                                    aria-checked={editForm.dailyUnlimited}
+                                    onClick={() => toggleEditFlag("dailyUnlimited")}
+                                    onKeyDown={(e) => handleFlagKeyDown(e, "dailyUnlimited")}
+                                    style={{ cursor: "pointer" }}
+                                  >
+                                    <Input
+                                      type="checkbox"
+                                      name="dailyUnlimited"
+                                      id="daily_unlimited_edit"
+                                      checked={editForm.dailyUnlimited}
+                                      readOnly
+                                    />
+                                    <Label check for="daily_unlimited_edit" style={{ pointerEvents: "none" }}>
+                                      نامحدود
+                                    </Label>
+                                  </FormGroup>
+                                </div>
+                              </FormGroup>
+                            </Col>
+
+                            <Col md={12}>
+                              <FormGroup className="mb-0">
+                                <Label>حداکثر درخواست همزمان</Label>
+                                <div className="d-flex flex-wrap align-items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    name="maxConcurrentRequests"
+                                    value={editForm.maxConcurrentRequests}
+                                    onChange={handleEditChange}
+                                    disabled={editForm.concurrentUnlimited}
+                                    placeholder="مثلاً 5"
+                                    style={{ maxWidth: 180 }}
+                                  />
+                                  <FormGroup
+                                    check
+                                    className="mb-0"
+                                    role="checkbox"
+                                    tabIndex={0}
+                                    aria-checked={editForm.concurrentUnlimited}
+                                    onClick={() => toggleEditFlag("concurrentUnlimited")}
+                                    onKeyDown={(e) => handleFlagKeyDown(e, "concurrentUnlimited")}
+                                    style={{ cursor: "pointer" }}
+                                  >
+                                    <Input
+                                      type="checkbox"
+                                      name="concurrentUnlimited"
+                                      id="concurrent_unlimited_edit"
+                                      checked={editForm.concurrentUnlimited}
+                                      readOnly
+                                    />
+                                    <Label check for="concurrent_unlimited_edit" style={{ pointerEvents: "none" }}>
+                                      نامحدود
+                                    </Label>
+                                  </FormGroup>
+                                </div>
+                              </FormGroup>
+                            </Col>
+
+                            <Col md={12}>
+                              <FormGroup className="mb-0">
+                                <Label>حداقل فاصله بین درخواست‌ها</Label>
+                                <div className="d-flex flex-wrap align-items-center gap-2">
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    name="minRequestIntervalSeconds"
+                                    value={editForm.minRequestIntervalSeconds}
+                                    onChange={handleEditChange}
+                                    disabled={editForm.intervalUnlimited}
+                                    placeholder="ثانیه"
+                                    style={{ maxWidth: 180 }}
+                                  />
+                                  <span className="text-muted small">ثانیه</span>
+                                  <FormGroup
+                                    check
+                                    className="mb-0"
+                                    role="checkbox"
+                                    tabIndex={0}
+                                    aria-checked={editForm.intervalUnlimited}
+                                    onClick={() => toggleEditFlag("intervalUnlimited")}
+                                    onKeyDown={(e) => handleFlagKeyDown(e, "intervalUnlimited")}
+                                    style={{ cursor: "pointer" }}
+                                  >
+                                    <Input
+                                      type="checkbox"
+                                      name="intervalUnlimited"
+                                      id="interval_unlimited_edit"
+                                      checked={editForm.intervalUnlimited}
+                                      readOnly
+                                    />
+                                    <Label check for="interval_unlimited_edit" style={{ pointerEvents: "none" }}>
+                                      نامحدود
+                                    </Label>
+                                  </FormGroup>
+                                </div>
+                              </FormGroup>
+                            </Col>
+                          </Row>
+                        </div>
                         <FormGroup
                           check
                           className="mb-3 position-relative"
@@ -388,6 +573,32 @@ const ExternalApiClientDetail = () => {
                                 <Badge color="secondary">غیرفعال</Badge>
                               )}
                             </td>
+                          </tr>
+                          <tr>
+                            <th>درخواست‌های ۲۴ ساعت</th>
+                            <td>{formatLimit(client.daily_request_limit)}</td>
+                          </tr>
+                          <tr>
+                            <th>درخواست همزمان</th>
+                            <td>{formatLimit(client.max_concurrent_requests)}</td>
+                          </tr>
+                          <tr>
+                            <th>فاصله درخواست</th>
+                            <td>{formatLimit(client.min_request_interval_seconds, "ثانیه")}</td>
+                          </tr>
+                          <tr>
+                            <th>در حال اجرا</th>
+                            <td>
+                              {Number(client.active_requests || 0) > 0 ? (
+                                <Badge color="warning">{client.active_requests}</Badge>
+                              ) : (
+                                "0"
+                              )}
+                            </td>
+                          </tr>
+                          <tr>
+                            <th>آخرین درخواست</th>
+                            <td>{formatDateTime(client.last_request_at)}</td>
                           </tr>
                           <tr>
                             <th>تاریخ ایجاد</th>
@@ -559,7 +770,9 @@ const ExternalApiClientDetail = () => {
                                     <td>
                                       <Badge
                                         color={
-                                          log.response_status >= 200 && log.response_status < 300
+                                          log.response_status === 429
+                                            ? "warning"
+                                            : log.response_status >= 200 && log.response_status < 300
                                             ? "success"
                                             : log.response_status >= 400
                                             ? "danger"
