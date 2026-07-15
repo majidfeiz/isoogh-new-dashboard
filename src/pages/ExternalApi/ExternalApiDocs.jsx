@@ -141,6 +141,7 @@ const ExternalApiDocs = () => {
                     <li>یک <code>api_key</code> یکتا ۶۴ کاراکتری (خودکار تولید می‌شود)</li>
                     <li>لیست <strong>IP های مجاز</strong> (فقط از این IPها اجازه دسترسی)</li>
                     <li><code>school_id</code> — اگر تنظیم شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند؛ اگر <code>null</code> باشد همه داده‌ها</li>
+                    <li>محدودیت درخواست‌ها: تعداد درخواست ۲۴ ساعت، درخواست همزمان، و حداقل فاصله بین درخواست‌ها؛ مقدار <code>null</code> یعنی نامحدود</li>
                   </ul>
                 </Section>
 
@@ -159,7 +160,7 @@ const ExternalApiDocs = () => {
                         <EndpointRow method="GET"    path="/external-api-clients"                    permission="external-api.index"  description="لیست همه کلاینت‌ها + IPها" />
                         <EndpointRow method="POST"   path="/external-api-clients"                    permission="external-api.create" description="ایجاد کلاینت جدید" />
                         <EndpointRow method="GET"    path="/external-api-clients/:id"                permission="external-api.show"   description="نمایش یک کلاینت" />
-                        <EndpointRow method="PATCH"  path="/external-api-clients/:id"                permission="external-api.update" description="ویرایش نام/توضیح/وضعیت/school_id" />
+                        <EndpointRow method="PATCH"  path="/external-api-clients/:id"                permission="external-api.update" description="ویرایش نام/توضیح/وضعیت/school_id و محدودیت درخواست‌ها" />
                         <EndpointRow method="DELETE" path="/external-api-clients/:id"                permission="external-api.delete" description="حذف کلاینت" />
                         <EndpointRow method="POST"   path="/external-api-clients/:id/regenerate-key" permission="external-api.update" description="تولید مجدد API Key" />
                         <EndpointRow method="POST"   path="/external-api-clients/:id/ips"            permission="external-api.update" description="افزودن IP مجاز" />
@@ -175,8 +176,14 @@ const ExternalApiDocs = () => {
   "name": "مجموعه شهید بهشتی",
   "description": "توضیحات اختیاری",
   "is_active": true,
-  "school_id": 3
+  "school_id": 3,
+  "daily_request_limit": 10000,
+  "max_concurrent_requests": 5,
+  "min_request_interval_seconds": 2
 }`}</CodeBlock>
+                  <p className="text-muted small mt-2">
+                    برای نامحدود کردن هر محدودیت مقدار همان فیلد را <code>null</code> بفرستید. مقدار <code>0</code> معتبر نیست.
+                  </p>
                   <div className="alert alert-warning mt-2">
                     <i className="bx bx-error-circle me-1" />
                     <code>api_key</code> خودکار تولید می‌شود. آن را فقط یک بار به کاربر نشان بده — بعداً قابل بازیابی نیست.
@@ -193,6 +200,11 @@ const ExternalApiDocs = () => {
       "is_active": true,
       "description": "دسترسی سامانه مرکزی",
       "school_id": 3,
+      "daily_request_limit": 10000,
+      "max_concurrent_requests": 5,
+      "min_request_interval_seconds": 2,
+      "active_requests": 0,
+      "last_request_at": "2024-06-01T10:30:00.000Z",
       "created_at": "2024-01-01T00:00:00.000Z",
       "updated_at": "2024-01-01T00:00:00.000Z",
       "ips": [
@@ -512,6 +524,21 @@ const ExternalApiDocs = () => {
                           <td>IP سرور در لیست مجاز نیست</td>
                         </tr>
                         <tr>
+                          <td><Badge color="warning">429</Badge></td>
+                          <td><code>External API daily request limit exceeded</code></td>
+                          <td>سقف درخواست در ۲۴ ساعت برای کلاینت پر شده است</td>
+                        </tr>
+                        <tr>
+                          <td><Badge color="warning">429</Badge></td>
+                          <td><code>External API concurrent request limit exceeded</code></td>
+                          <td>تعداد درخواست‌های همزمان کلاینت از حد مجاز بیشتر شده است</td>
+                        </tr>
+                        <tr>
+                          <td><Badge color="warning">429</Badge></td>
+                          <td><code>External API request interval limit exceeded</code></td>
+                          <td>فاصله زمانی بین شروع دو درخواست رعایت نشده است</td>
+                        </tr>
+                        <tr>
                           <td><Badge color="success">200</Badge></td>
                           <td><code>data: []</code></td>
                           <td>داده‌ای در محدوده این مجموعه وجود ندارد</td>
@@ -526,6 +553,7 @@ const ExternalApiDocs = () => {
                     {[
                       { icon: "bx-key", text: "API Key: بعد از ایجاد یا regenerate فقط یک بار نمایش بده (modal با copy button)" },
                       { icon: "bx-buildings", text: "school_id: یک dropdown از لیست مجموعه‌ها — اگر خالی باشد، کلاینت همه داده‌ها را می‌بیند" },
+                      { icon: "bx-timer", text: "Rate limit: مقدار null یعنی نامحدود؛ input خالی بدون toggle نامحدود نباید ارسال شود" },
                       { icon: "bx-chip", text: "IPها: به صورت chip/tag نمایش بده با دکمه حذف کنار هر کدام" },
                       { icon: "bx-list-ul", text: "لاگ‌ها: در یک table با ستون‌های: تاریخ، IP، متد، path، status، زمان پاسخ" },
                       { icon: "bx-test-tube", text: "وب‌هوک تست: دکمه «تست» در کنار هر ردیف — نتیجه را در toast نشان بده" },

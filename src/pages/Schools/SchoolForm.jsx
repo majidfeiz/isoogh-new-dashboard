@@ -1,5 +1,5 @@
 // src/pages/Schools/SchoolForm.jsx
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import {
   Card,
   CardBody,
@@ -12,6 +12,7 @@ import {
   FormGroup,
   Label,
   Input,
+  InputGroup,
   Alert,
   FormFeedback,
 } from "reactstrap"
@@ -24,6 +25,30 @@ import {
   updateSchool,
 } from "../../services/schoolService.jsx"
 import { getManagers } from "../../services/managerService.jsx"
+
+const emptyToNull = (value) => {
+  if (typeof value === "string" && value.trim() === "") return null
+  return value
+}
+
+const toOptionalNumber = (value) => {
+  if (value === "" || value === null || value === undefined) return undefined
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : undefined
+}
+
+const managerLabel = (manager) =>
+  manager?.user?.name ||
+  manager?.user?.username ||
+  manager?.code ||
+  `مدیر #${manager?.id}`
+
+const normalizeErrorMessages = (error) => {
+  const message = error?.response?.data?.message
+  if (Array.isArray(message)) return message
+  if (typeof message === "string") return [message]
+  return []
+}
 
 const SchoolForm = () => {
   const { id } = useParams()
@@ -38,17 +63,38 @@ const SchoolForm = () => {
     phone: "",
     address: "",
     manager_id: "",
+    status: "",
   })
+  const [initialForm, setInitialForm] = useState(null)
   const [managers, setManagers] = useState([])
+  const [managerSearch, setManagerSearch] = useState("")
+  const [managersLoading, setManagersLoading] = useState(false)
   const [errors, setErrors] = useState({})
   const [alert, setAlert] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    getManagers({ limit: 200 })
-      .then((res) => setManagers(res.items || []))
-      .catch(() => {})
+  const fetchManagers = useCallback(async (search = "") => {
+    setManagersLoading(true)
+    try {
+      const res = await getManagers({
+        page: 1,
+        limit: 20,
+        search,
+        sortBy: "id",
+        sortOrder: "DESC",
+      })
+      setManagers(res.items || [])
+    } catch (e) {
+      console.error("خطا در دریافت مدیران", e)
+      setManagers([])
+    } finally {
+      setManagersLoading(false)
+    }
   }, [])
+
+  useEffect(() => {
+    fetchManagers()
+  }, [fetchManagers])
 
   useEffect(() => {
     if (!isEdit) return
@@ -59,9 +105,9 @@ const SchoolForm = () => {
         const data = await getSchool(id)
         const school = data?.data || data
 
-        setForm({
+        const nextForm = {
           name: school?.name || "",
-          code: school?.code || "",
+          code: school?.code != null ? String(school.code) : "",
           phone: school?.phone || "",
           address: school?.address || school?.location || "",
           manager_id:
@@ -69,7 +115,20 @@ const SchoolForm = () => {
             school?.managerId ??
             school?.manager?.id ??
             "",
-        })
+          status: school?.status ?? "",
+        }
+
+        setForm(nextForm)
+        setInitialForm(nextForm)
+
+        if (school?.manager?.id) {
+          setManagers((prev) => {
+            if (prev.some((manager) => Number(manager.id) === Number(school.manager.id))) {
+              return prev
+            }
+            return [school.manager, ...prev]
+          })
+        }
       } catch (e) {
         console.error("خطا در دریافت مجموعه", e)
         setAlert({ type: "danger", message: "خطا در دریافت اطلاعات مجموعه" })
@@ -84,33 +143,65 @@ const SchoolForm = () => {
     setForm((prev) => ({ ...prev, [name]: value }))
   }
 
-  const validate = () => {
+  const buildPayload = () => {
+    const payload = {
+      name: String(form.name || "").trim(),
+      code: String(form.code || "").trim(),
+      manager_id: Number(form.manager_id),
+      phone: emptyToNull(form.phone),
+      address: emptyToNull(form.address),
+    }
+
+    const status = toOptionalNumber(form.status)
+    if (status !== undefined) {
+      payload.status = status
+    }
+
+    if (!isEdit || !initialForm) return payload
+
+    const changedPayload = {}
+    Object.entries(payload).forEach(([key, value]) => {
+      const initialValue = key === "manager_id" ? Number(initialForm[key]) : emptyToNull(initialForm[key])
+      if (value !== initialValue) {
+        changedPayload[key] = value
+      }
+    })
+
+    return changedPayload
+  }
+
+  const validate = (payload) => {
     const errs = {}
-    if (!form.name.trim()) errs.name = ["نام مجموعه الزامی است"]
-    if (!form.code.trim()) errs.code = ["کد مجموعه الزامی است"]
-    if (!form.manager_id || Number(form.manager_id) < 1)
-      errs.manager_id = ["شناسه مدیر مجموعه الزامی است"]
+    if (!String(form.name || "").trim()) errs.name = ["نام مجموعه الزامی است"]
+    if (!String(form.code || "").trim()) errs.code = ["کد مجموعه الزامی است"]
+    if (String(form.name || "").trim().length > 255) {
+      errs.name = ["نام مجموعه نباید بیشتر از ۲۵۵ کاراکتر باشد"]
+    }
+    if (String(form.code || "").trim().length > 255) {
+      errs.code = ["کد مجموعه نباید بیشتر از ۲۵۵ کاراکتر باشد"]
+    }
+    if (!Number.isInteger(payload.manager_id) || payload.manager_id < 1) {
+      errs.manager_id = ["مدیر مجموعه را از لیست انتخاب کنید"]
+    }
     return errs
+  }
+
+  const handleManagerSearch = (e) => {
+    e.preventDefault()
+    fetchManagers(managerSearch.trim())
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setAlert(null)
 
-    const errs = validate()
+    const payload = buildPayload()
+    const errs = validate({ ...payload, manager_id: Number(form.manager_id) })
     if (Object.keys(errs).length) {
       setErrors(errs)
       return
     }
     setErrors({})
-
-    const payload = {
-      name: form.name,
-      code: form.code,
-      manager_id: Number(form.manager_id),
-      phone: form.phone || undefined,
-      address: form.address || undefined,
-    }
 
     setLoading(true)
     try {
@@ -125,8 +216,14 @@ const SchoolForm = () => {
       setTimeout(() => navigate(-1), 700)
     } catch (e) {
       console.error("خطا در ذخیره مجموعه", e)
-      if (e.response?.status === 422) {
+      if (e.response?.status === 403) {
+        setAlert({ type: "danger", message: "شما دسترسی انجام این عملیات را ندارید." })
+      } else if (e.response?.status === 422) {
+        const messages = normalizeErrorMessages(e)
         setErrors(e.response.data.errors || {})
+        if (messages.length) {
+          setAlert({ type: "danger", message: messages.join("، ") })
+        }
       } else {
         setAlert({ type: "danger", message: "خطایی رخ داد. لطفاً دوباره تلاش کنید." })
       }
@@ -204,34 +301,46 @@ const SchoolForm = () => {
                         <Label for="manager_id">
                           مدیر مجموعه <span className="text-danger">*</span>
                         </Label>
-                        {managers.length > 0 ? (
+                        <InputGroup className="mb-2">
                           <Input
-                            id="manager_id"
-                            name="manager_id"
-                            type="select"
-                            value={form.manager_id}
-                            onChange={handleChange}
-                            invalid={!!errors.manager_id}
-                          >
-                            <option value="">انتخاب مدیر...</option>
-                            {managers.map((m) => (
-                              <option key={m.id} value={m.id}>
-                                {m.user?.name || m.name || `مدیر #${m.id}`}
-                              </option>
-                            ))}
-                          </Input>
-                        ) : (
-                          <Input
-                            id="manager_id"
-                            name="manager_id"
-                            type="number"
-                            min="1"
-                            value={form.manager_id}
-                            onChange={handleChange}
-                            placeholder="شناسه عددی مدیر (مثلاً ۳)"
-                            invalid={!!errors.manager_id}
+                            value={managerSearch}
+                            onChange={(e) => setManagerSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault()
+                                fetchManagers(managerSearch.trim())
+                              }
+                            }}
+                            placeholder="جستجوی نام، نام کاربری یا کد مدیر"
+                            disabled={managersLoading}
                           />
-                        )}
+                          <Button
+                            type="button"
+                            color="light"
+                            disabled={managersLoading}
+                            onClick={handleManagerSearch}
+                          >
+                            جستجو
+                          </Button>
+                        </InputGroup>
+                        <Input
+                          id="manager_id"
+                          name="manager_id"
+                          type="select"
+                          value={form.manager_id}
+                          onChange={handleChange}
+                          invalid={!!errors.manager_id}
+                          disabled={managersLoading}
+                        >
+                          <option value="">
+                            {managersLoading ? "در حال دریافت مدیران..." : "انتخاب مدیر..."}
+                          </option>
+                          {managers.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {managerLabel(m)}
+                            </option>
+                          ))}
+                        </Input>
                         {renderError("manager_id")}
                       </FormGroup>
                     </Col>
@@ -248,6 +357,26 @@ const SchoolForm = () => {
                           invalid={!!errors.phone}
                         />
                         {renderError("phone")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="6">
+                      <FormGroup>
+                        <Label for="status">وضعیت</Label>
+                        <Input
+                          id="status"
+                          name="status"
+                          type="select"
+                          value={form.status}
+                          onChange={handleChange}
+                          invalid={!!errors.status}
+                          style={{ width: "120px" }}
+                        >
+                          <option value="">بدون تغییر</option>
+                          <option value="1">فعال</option>
+                          <option value="0">غیرفعال</option>
+                        </Input>
+                        {renderError("status")}
                       </FormGroup>
                     </Col>
 

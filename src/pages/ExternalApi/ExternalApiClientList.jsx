@@ -37,7 +37,47 @@ const formatDateTime = (value) => {
   return date.toLocaleString("fa-IR");
 };
 
-const EMPTY_FORM = { name: "", description: "", is_active: true, school_id: "" };
+const formatLimit = (value, unit) => {
+  if (value === null || value === undefined) return "نامحدود";
+  return unit ? `${value} ${unit}` : String(value);
+};
+
+const parsePositiveIntOrNull = (value, unlimited) => {
+  if (unlimited) return null;
+  const numberValue = Number(value);
+  if (!Number.isInteger(numberValue) || numberValue < 1) {
+    throw new Error("مقدار محدودیت باید عدد صحیح بزرگ‌تر از صفر باشد");
+  }
+  return numberValue;
+};
+
+const buildRateLimitPayload = (form) => ({
+  daily_request_limit: parsePositiveIntOrNull(
+    form.dailyRequestLimit,
+    form.dailyUnlimited
+  ),
+  max_concurrent_requests: parsePositiveIntOrNull(
+    form.maxConcurrentRequests,
+    form.concurrentUnlimited
+  ),
+  min_request_interval_seconds: parsePositiveIntOrNull(
+    form.minRequestIntervalSeconds,
+    form.intervalUnlimited
+  ),
+});
+
+const EMPTY_FORM = {
+  name: "",
+  description: "",
+  is_active: true,
+  school_id: "",
+  dailyUnlimited: true,
+  dailyRequestLimit: "",
+  concurrentUnlimited: true,
+  maxConcurrentRequests: "",
+  intervalUnlimited: true,
+  minRequestIntervalSeconds: "",
+};
 
 const ExternalApiClientList = () => {
   const navigate = useNavigate();
@@ -87,22 +127,35 @@ const ExternalApiClientList = () => {
     setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  const toggleFormFlag = (name) => {
+    setForm((prev) => ({ ...prev, [name]: !prev[name] }));
+  };
+
+  const handleFlagKeyDown = (e, name) => {
+    if (e.key === " " || e.key === "Enter") {
+      e.preventDefault();
+      toggleFormFlag(name);
+    }
+  };
+
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return toast.warning("نام کلاینت الزامی است");
     setSaving(true);
     try {
+      const rateLimitPayload = buildRateLimitPayload(form);
       const created = await createExternalApiClient({
         name: form.name.trim(),
         description: form.description.trim(),
         is_active: form.is_active,
         school_id: form.school_id ? Number(form.school_id) : null,
+        ...rateLimitPayload,
       });
       setNewApiKey(created.api_key || "");
       await fetchData();
       toast.success("کلاینت با موفقیت ایجاد شد");
-    } catch {
-      toast.error("خطا در ایجاد کلاینت");
+    } catch (error) {
+      toast.error(error?.message || "خطا در ایجاد کلاینت");
     } finally {
       setSaving(false);
     }
@@ -163,6 +216,49 @@ const ExternalApiClientList = () => {
           const school = schools.find((s) => s.id === sid);
           return school ? school.name : `#${sid}`;
         },
+      },
+      {
+        id: "daily_request_limit",
+        header: "درخواست‌های ۲۴ ساعت",
+        accessorKey: "daily_request_limit",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => formatLimit(info.getValue()),
+      },
+      {
+        id: "max_concurrent_requests",
+        header: "همزمان",
+        accessorKey: "max_concurrent_requests",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => formatLimit(info.getValue()),
+      },
+      {
+        id: "min_request_interval_seconds",
+        header: "فاصله درخواست",
+        accessorKey: "min_request_interval_seconds",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => formatLimit(info.getValue(), "ثانیه"),
+      },
+      {
+        id: "active_requests",
+        header: "در حال اجرا",
+        accessorKey: "active_requests",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => {
+          const value = Number(info.getValue() || 0);
+          return value > 0 ? <Badge color="warning">{value}</Badge> : "0";
+        },
+      },
+      {
+        id: "last_request_at",
+        header: "آخرین درخواست",
+        accessorKey: "last_request_at",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => formatDateTime(info.getValue()),
       },
       {
         id: "is_active",
@@ -363,16 +459,149 @@ const ExternalApiClientList = () => {
                   اگر انتخاب شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند.
                 </small>
               </FormGroup>
-              <FormGroup check>
+              <FormGroup
+                check
+                role="checkbox"
+                tabIndex={0}
+                aria-checked={form.is_active}
+                onClick={() => toggleFormFlag("is_active")}
+                onKeyDown={(e) => handleFlagKeyDown(e, "is_active")}
+                style={{ cursor: "pointer" }}
+              >
                 <Input
                   type="checkbox"
                   name="is_active"
                   id="is_active_create"
                   checked={form.is_active}
-                  onChange={handleFormChange}
+                  readOnly
                 />
-                <Label check for="is_active_create">فعال</Label>
+                <Label check for="is_active_create" style={{ pointerEvents: "none" }}>
+                  فعال
+                </Label>
               </FormGroup>
+
+              <div className="border-top pt-3 mt-3">
+                <h6 className="mb-3">محدودیت درخواست‌ها</h6>
+                <Row className="g-3">
+                  <Col md={12}>
+                    <FormGroup className="mb-0">
+                      <Label>حداکثر درخواست در ۲۴ ساعت</Label>
+                      <div className="d-flex flex-wrap align-items-center gap-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          name="dailyRequestLimit"
+                          value={form.dailyRequestLimit}
+                          onChange={handleFormChange}
+                          disabled={form.dailyUnlimited}
+                          placeholder="مثلاً 10000"
+                          style={{ maxWidth: 180 }}
+                        />
+                        <FormGroup
+                          check
+                          className="mb-0"
+                          role="checkbox"
+                          tabIndex={0}
+                          aria-checked={form.dailyUnlimited}
+                          onClick={() => toggleFormFlag("dailyUnlimited")}
+                          onKeyDown={(e) => handleFlagKeyDown(e, "dailyUnlimited")}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <Input
+                            type="checkbox"
+                            name="dailyUnlimited"
+                            id="daily_unlimited_create"
+                            checked={form.dailyUnlimited}
+                            readOnly
+                          />
+                          <Label check for="daily_unlimited_create" style={{ pointerEvents: "none" }}>
+                            نامحدود
+                          </Label>
+                        </FormGroup>
+                      </div>
+                    </FormGroup>
+                  </Col>
+
+                  <Col md={12}>
+                    <FormGroup className="mb-0">
+                      <Label>حداکثر درخواست همزمان</Label>
+                      <div className="d-flex flex-wrap align-items-center gap-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          name="maxConcurrentRequests"
+                          value={form.maxConcurrentRequests}
+                          onChange={handleFormChange}
+                          disabled={form.concurrentUnlimited}
+                          placeholder="مثلاً 5"
+                          style={{ maxWidth: 180 }}
+                        />
+                        <FormGroup
+                          check
+                          className="mb-0"
+                          role="checkbox"
+                          tabIndex={0}
+                          aria-checked={form.concurrentUnlimited}
+                          onClick={() => toggleFormFlag("concurrentUnlimited")}
+                          onKeyDown={(e) => handleFlagKeyDown(e, "concurrentUnlimited")}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <Input
+                            type="checkbox"
+                            name="concurrentUnlimited"
+                            id="concurrent_unlimited_create"
+                            checked={form.concurrentUnlimited}
+                            readOnly
+                          />
+                          <Label check for="concurrent_unlimited_create" style={{ pointerEvents: "none" }}>
+                            نامحدود
+                          </Label>
+                        </FormGroup>
+                      </div>
+                    </FormGroup>
+                  </Col>
+
+                  <Col md={12}>
+                    <FormGroup className="mb-0">
+                      <Label>حداقل فاصله بین درخواست‌ها</Label>
+                      <div className="d-flex flex-wrap align-items-center gap-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          name="minRequestIntervalSeconds"
+                          value={form.minRequestIntervalSeconds}
+                          onChange={handleFormChange}
+                          disabled={form.intervalUnlimited}
+                          placeholder="ثانیه"
+                          style={{ maxWidth: 180 }}
+                        />
+                        <span className="text-muted small">ثانیه</span>
+                        <FormGroup
+                          check
+                          className="mb-0"
+                          role="checkbox"
+                          tabIndex={0}
+                          aria-checked={form.intervalUnlimited}
+                          onClick={() => toggleFormFlag("intervalUnlimited")}
+                          onKeyDown={(e) => handleFlagKeyDown(e, "intervalUnlimited")}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <Input
+                            type="checkbox"
+                            name="intervalUnlimited"
+                            id="interval_unlimited_create"
+                            checked={form.intervalUnlimited}
+                            readOnly
+                          />
+                          <Label check for="interval_unlimited_create" style={{ pointerEvents: "none" }}>
+                            نامحدود
+                          </Label>
+                        </FormGroup>
+                      </div>
+                    </FormGroup>
+                  </Col>
+                </Row>
+              </div>
             </ModalBody>
             <ModalFooter>
               <Button color="secondary" type="button" onClick={() => setModal(false)}>

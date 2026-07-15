@@ -21,9 +21,40 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { getSchools, deleteSchool } from "../../services/schoolService.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+
+const formatDateTime = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toISOString().replace("T", " ").slice(0, 16);
+};
+
+const managerLabel = (manager) =>
+  manager?.user?.name ||
+  manager?.user?.username ||
+  manager?.code ||
+  (manager?.id ? `مدیر #${manager.id}` : "");
+
+const normalizeSavedFilters = (filters) => {
+  if (!filters) return { search: "", managerId: "" };
+  const search =
+    filters.search ??
+    [filters.name, filters.code, filters.managerName]
+      .filter(Boolean)
+      .map((value) => value.toString().trim())
+      .filter(Boolean)
+      .join(" ");
+
+  return {
+    search,
+    managerId: filters.managerId || "",
+  };
+};
 
 const SchoolList = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   document.title = "مجموعه‌ها | داشبورد آیسوق";
 
   const { saved, saveState } = useListState("schools");
@@ -35,20 +66,14 @@ const SchoolList = () => {
     total: 0,
     lastPage: 1,
   });
-  const [filters, setFilters] = useState(
-    saved?.filters ?? { name: "", code: "", city: "", managerName: "", managerId: "" }
-  );
+  const [filters, setFilters] = useState(normalizeSavedFilters(saved?.filters));
   const [loading, setLoading] = useState(false);
   const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
   const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
   const initialPageRef = useRef(saved?.page ?? 1);
 
   const buildSearchQuery = useCallback((currentFilters) => {
-    return Object.values(currentFilters || {})
-      .filter(Boolean)
-      .map((v) => v.trim())
-      .filter(Boolean)
-      .join(" ");
+    return (currentFilters?.search || "").toString().trim();
   }, []);
 
   const fetchData = useCallback(
@@ -107,7 +132,7 @@ const SchoolList = () => {
   };
 
   const handleResetFilters = () => {
-    const reset = { name: "", code: "", city: "", managerName: "", managerId: "" };
+    const reset = { search: "", managerId: "" };
     setFilters(reset);
     saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
@@ -162,7 +187,7 @@ const SchoolList = () => {
         header: "کد مجموعه",
         accessorKey: "code",
         enableColumnFilter: false,
-        enableSorting: false,
+        enableSorting: true,
         cell: (info) => info.getValue() || "-",
       },
       {
@@ -174,17 +199,9 @@ const SchoolList = () => {
         cell: (info) => info.getValue() || "-",
       },
       {
-        id: "city",
-        header: "شهر",
-        accessorKey: "city",
-        enableColumnFilter: false,
-        enableSorting: false,
-        cell: (info) => info.getValue() || "-",
-      },
-      {
-        id: "province",
-        header: "استان",
-        accessorKey: "province",
+        id: "phone",
+        header: "تلفن",
+        accessorKey: "phone",
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => info.getValue() || "-",
@@ -197,14 +214,30 @@ const SchoolList = () => {
         enableSorting: false,
         cell: (info) => {
           const manager = info.row.original?.manager || info.getValue();
-          const name =
-            manager?.user?.name ||
-            manager?.name ||
-            manager?.label ||
-            manager?.username;
           const fallback = info.row.original?.manager_name || info.row.original?.managerName;
-          return name || fallback || "-";
+          return managerLabel(manager) || fallback || "-";
         },
+      },
+      {
+        id: "status",
+        header: "وضعیت",
+        accessorKey: "status",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => {
+          const value = info.getValue();
+          if (value === 1 || value === "1" || value === true) return "فعال";
+          if (value === 0 || value === "0" || value === false) return "غیرفعال";
+          return "-";
+        },
+      },
+      {
+        id: "created_at",
+        header: "تاریخ ایجاد",
+        accessorKey: "created_at",
+        enableColumnFilter: false,
+        enableSorting: true,
+        cell: (info) => formatDateTime(info.getValue()),
       },
       {
         id: "actions",
@@ -213,32 +246,40 @@ const SchoolList = () => {
         enableSorting: false,
         cell: ({ row }) => {
           const id = row.original.id;
+          const canUpdate = hasPermission("schools.update");
+          const canDelete = hasPermission("schools.delete");
+
+          if (!canUpdate && !canDelete) return "-";
 
           return (
             <div className="d-flex gap-2">
-              <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
-                ویرایش
-              </Button>
+              {canUpdate && (
+                <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
+                  ویرایش
+                </Button>
+              )}
 
-              <Button
-                color="danger"
-                size="sm"
-                onClick={() => handleDelete(id)}
-                disabled={loading}
-              >
-                حذف
-              </Button>
+              {canDelete && (
+                <Button
+                  color="danger"
+                  size="sm"
+                  onClick={() => handleDelete(id)}
+                  disabled={loading}
+                >
+                  حذف
+                </Button>
+              )}
             </div>
           );
         },
       },
     ],
-    [handleEdit, handleDelete, loading]
+    [handleEdit, handleDelete, hasPermission, loading]
   );
 
   const handleSortingChange = useCallback(
     (nextSorting) => {
-      const allowed = ["id", "name", "code"];
+      const allowed = ["id", "name", "code", "created_at"];
       const first = nextSorting?.[0];
 
       if (first && !allowed.includes(first.id)) {
@@ -284,84 +325,51 @@ const SchoolList = () => {
 
                 <div className="d-flex align-items-center gap-2">
                   {loading && <Spinner size="sm" color="primary" />}
-                  <Button color="primary" onClick={handleCreate}>
-                    <i className="mdi mdi-plus me-1" />
-                    ایجاد مجموعه جدید
-                  </Button>
+                  {hasPermission("schools.create") && (
+                    <Button color="primary" onClick={handleCreate}>
+                      <i className="mdi mdi-plus me-1" />
+                      ایجاد مجموعه جدید
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
 
               <CardBody>
                 <Form className="mb-4" onSubmit={handleSearchSubmit}>
                   <Row className="g-3 align-items-end">
-                    <Col xl="3" lg="4" md="6">
-                      <Label className="form-label" htmlFor="name">
-                        نام مجموعه
+                    <Col xl="4" lg="5" md="6">
+                      <Label className="form-label" htmlFor="search">
+                        جستجو
                       </Label>
                       <InputGroup>
                         <InputGroupText>
-                          <i className="bx bx-building" />
+                          <i className="bx bx-search" />
                         </InputGroupText>
                         <Input
-                          id="name"
-                          name="name"
-                          value={filters.name}
+                          id="search"
+                          name="search"
+                          value={filters.search}
                           onChange={handleFilterChange}
-                          placeholder="مثلاً دبیرستان آیسوق"
+                          placeholder="نام، کد، تلفن یا مدیر مجموعه"
                         />
                       </InputGroup>
                     </Col>
 
                     <Col xl="3" lg="4" md="6">
-                      <Label className="form-label" htmlFor="code">
-                        کد مجموعه
+                      <Label className="form-label" htmlFor="managerId">
+                        شناسه مدیر (فقط ادمین)
                       </Label>
                       <InputGroup>
                         <InputGroupText>
-                          <i className="bx bx-barcode" />
+                          <i className="bx bx-id-card" />
                         </InputGroupText>
                         <Input
-                          id="code"
-                          name="code"
-                          value={filters.code}
+                          id="managerId"
+                          name="managerId"
+                          type="number"
+                          value={filters.managerId}
                           onChange={handleFilterChange}
-                          placeholder="مثلاً SCH-1001"
-                        />
-                      </InputGroup>
-                    </Col>
-
-                  <Col xl="3" lg="4" md="6">
-                    <Label className="form-label" htmlFor="city">
-                      شهر
-                    </Label>
-                    <InputGroup>
-                        <InputGroupText>
-                          <i className="bx bx-map" />
-                        </InputGroupText>
-                        <Input
-                          id="city"
-                          name="city"
-                          value={filters.city}
-                          onChange={handleFilterChange}
-                          placeholder="مثلاً تهران"
-                        />
-                      </InputGroup>
-                    </Col>
-
-                    <Col xl="3" lg="4" md="6">
-                      <Label className="form-label" htmlFor="managerName">
-                        نام مدیر مجموعه
-                      </Label>
-                      <InputGroup>
-                        <InputGroupText>
-                          <i className="bx bx-user" />
-                        </InputGroupText>
-                        <Input
-                          id="managerName"
-                          name="managerName"
-                          value={filters.managerName}
-                          onChange={handleFilterChange}
-                          placeholder="مثلاً علی رضایی"
+                          placeholder="مثلاً 157"
                         />
                       </InputGroup>
                     </Col>
@@ -384,25 +392,6 @@ const SchoolList = () => {
                       >
                         ریست
                       </Button>
-                    </Col>
-
-                    <Col xl="3" lg="4" md="6">
-                      <Label className="form-label" htmlFor="managerId">
-                        شناسه مدیر (فقط ادمین)
-                      </Label>
-                      <InputGroup>
-                        <InputGroupText>
-                          <i className="bx bx-id-card" />
-                        </InputGroupText>
-                        <Input
-                          id="managerId"
-                          name="managerId"
-                          type="number"
-                          value={filters.managerId}
-                          onChange={handleFilterChange}
-                          placeholder="مثلاً 157"
-                        />
-                      </InputGroup>
                     </Col>
                   </Row>
                 </Form>
