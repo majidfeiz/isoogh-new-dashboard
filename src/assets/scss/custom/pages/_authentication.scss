@@ -36,6 +36,37 @@
     }
 }
 
+.auth-input-icon-btn {
+    align-items: center;
+    border-color: $input-border-color;
+    color: $input-color;
+    display: inline-flex;
+    flex: 0 0 52px;
+    font-size: 20px;
+    justify-content: center;
+    line-height: 1;
+    min-height: $input-height;
+    padding: 0;
+
+    i {
+        display: block;
+        line-height: 1;
+    }
+
+    &:hover,
+    &:focus {
+        border-color: $input-border-color;
+        color: $input-color;
+    }
+}
+
+.auth-captcha-inputgroup {
+    .input-group-text {
+        min-width: 72px;
+        justify-content: center;
+    }
+}
+
 // authentication full page
 
 .auth-full-bg{

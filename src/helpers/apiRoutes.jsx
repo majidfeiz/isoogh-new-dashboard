@@ -74,6 +74,8 @@ export const API_ROUTES = {
     syncRoles: (id) => `/authorization/users/${id}/roles`,
     syncPermissions: (id) => `/authorization/users/${id}/permissions`,
     export: "/users/export",
+    archive: (id) => `/users/${id}/archive`,
+    unarchive: (id) => `/users/${id}/unarchive`,
   },
   students: {
     list: "/students",
@@ -83,6 +85,10 @@ export const API_ROUTES = {
     delete: (id) => `/students/${id}`,
     export: "/students/export",
     import: "/students/import",
+    archive: (id) => `/students/${id}/archive`,
+    unarchive: (id) => `/students/${id}/unarchive`,
+    archiveImport: "/students/archive/import",
+    unarchiveImport: "/students/unarchive/import",
   },
   managers: {
     list: "/managers",
