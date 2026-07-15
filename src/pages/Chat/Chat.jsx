@@ -819,6 +819,34 @@ const shouldGroupWithPreviousMessage = (previous = {}, message = {}) => {
   return currentTime - previousTime < 5 * 60 * 1000;
 };
 
+const getReadReceiptConversationId = (payload = {}) =>
+  payload.conversationId ?? payload.conversation_id ?? payload.receipt?.conversationId ?? payload.receipt?.conversation_id ?? null;
+
+const getReadReceiptUserId = (payload = {}) =>
+  payload.userId ??
+  payload.user_id ??
+  payload.readerUserId ??
+  payload.reader_user_id ??
+  payload.receipt?.userId ??
+  payload.receipt?.user_id ??
+  payload.receipt?.readerUserId ??
+  payload.receipt?.reader_user_id ??
+  null;
+
+const getReadReceiptMessageId = (payload = {}) =>
+  payload.messageId ??
+  payload.message_id ??
+  payload.lastReadMessageId ??
+  payload.last_read_message_id ??
+  payload.receipt?.messageId ??
+  payload.receipt?.message_id ??
+  payload.receipt?.lastReadMessageId ??
+  payload.receipt?.last_read_message_id ??
+  null;
+
+const getReadReceiptReadAt = (payload = {}) =>
+  payload.readAt ?? payload.read_at ?? payload.receipt?.readAt ?? payload.receipt?.read_at ?? new Date().toISOString();
+
 const collectUserSummaries = ({ conversations = [], messages = [] } = {}) => {
   const next = {};
   conversations.forEach((conversation) => {
@@ -861,6 +889,12 @@ const Chat = () => {
   const canManagePersonalBlocks = auth?.hasAnyPermission?.(["chat.personal-blocks.manage"]);
 
   const socketRef = useRef(null);
+  const activeConversationIdRef = useRef(null);
+  const visibleConversationIdsRef = useRef([]);
+  const fetchMessagesRef = useRef(null);
+  const fetchConversationPresenceRef = useRef(null);
+  const fetchConversationsRef = useRef(null);
+  const playIncomingMessageSoundRef = useRef(null);
   const messageListRef = useRef(null);
   const composerInputRef = useRef(null);
   const stickerPickerRef = useRef(null);
@@ -874,6 +908,8 @@ const Chat = () => {
   const previousActiveConversationRef = useRef(null);
   const typingTimerRef = useRef(null);
   const typingSentRef = useRef(false);
+  const readReceiptTimerRef = useRef(null);
+  const readReceiptLastSentRef = useRef({});
   const localConversationTitlesRef = useRef({});
   const confirmResolverRef = useRef(null);
 
@@ -917,6 +953,7 @@ const Chat = () => {
 
   const [connection, setConnection] = useState("disconnected");
   const [typingByConversationId, setTypingByConversationId] = useState({});
+  const [readReceiptsByConversationId, setReadReceiptsByConversationId] = useState({});
   const [presenceByUserId, setPresenceByUserId] = useState({});
   const [loadingPresenceByConversationId, setLoadingPresenceByConversationId] = useState({});
   const [mobilePane, setMobilePane] = useState("list");
@@ -1079,6 +1116,18 @@ const Chat = () => {
               ? "فقط ادمین‌ها می‌توانند در این گفتگو پیام ارسال کنند."
               : "";
 
+  const getDirectMessageDeliveryLabel = useCallback(
+    (message = {}) => {
+      if (activeConversation?.type !== "direct") return "";
+      if (String(message.senderUserId) !== String(currentUserId)) return "";
+      if (!message.id || message.pending) return "در حال ارسال...";
+      const peerUserId = activeDirectPeerUserId;
+      const receipt = peerUserId ? readReceiptsByConversationId[activeConversation.id]?.[peerUserId] : null;
+      return Number(receipt?.messageId || 0) >= Number(message.id) ? "خوانده شده" : "ارسال شد";
+    },
+    [activeConversation, activeDirectPeerUserId, currentUserId, readReceiptsByConversationId]
+  );
+
   const syncConversationMembers = useCallback((conversationId, members = []) => {
     const normalizedMembers = members.map(normalizeConversationMember).filter((member) => member.userId);
     setMembersByConversationId((prev) => ({ ...prev, [conversationId]: normalizedMembers }));
@@ -1092,6 +1141,96 @@ const Chat = () => {
       setUserNamesById((prev) => ({ ...prev, ...nextUsers }));
     }
   }, []);
+
+  const joinConversationRooms = useCallback((conversationIds = []) => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return;
+    Array.from(new Set(conversationIds.map(Number).filter(Boolean))).forEach((conversationId) => {
+      socket.emit("conversation.join", { conversationId });
+    });
+  }, []);
+
+  const applyReadReceipt = useCallback(({ conversationId, userId, messageId, readAt } = {}) => {
+    if (!conversationId || !userId || !messageId) return;
+    setReadReceiptsByConversationId((prev) => {
+      const current = prev[conversationId]?.[userId];
+      const nextMessageId = Math.max(Number(current?.messageId || 0), Number(messageId || 0));
+      return {
+        ...prev,
+        [conversationId]: {
+          ...(prev[conversationId] || {}),
+          [userId]: {
+            messageId: nextMessageId,
+            readAt: readAt || current?.readAt || new Date().toISOString(),
+          },
+        },
+      };
+    });
+  }, []);
+
+  const upsertMessageToState = useCallback((message = {}, { incrementUnread = false } = {}) => {
+    const conversationId = message.conversationId || activeConversationIdRef.current;
+    if (!conversationId || !message.id) return;
+
+    setMessagesByConversationId((prev) => {
+      const existing = prev[conversationId] || [];
+      const duplicateIndex = existing.findIndex(
+        (item) =>
+          String(item.id) === String(message.id) ||
+          (item.clientId && message.clientId && item.clientId === message.clientId)
+      );
+      const nextList =
+        duplicateIndex >= 0
+          ? existing.map((item, index) => (index === duplicateIndex ? { ...item, ...message } : item))
+          : [...existing, message];
+      return { ...prev, [conversationId]: nextList };
+    });
+
+    setConversations((prev) =>
+      prev.map((item) =>
+        String(item.id) === String(conversationId)
+          ? {
+              ...item,
+              lastMessage: message,
+              lastMessageAt: message.createdAt || item.lastMessageAt,
+              unreadCount: incrementUnread ? Number(item.unreadCount || 0) + 1 : item.unreadCount,
+            }
+          : item
+      )
+    );
+  }, []);
+
+  const queueReadReceipt = useCallback(
+    (conversationId, messageId) => {
+      if (!conversationId || !messageId) return;
+      if (Number(readReceiptLastSentRef.current[conversationId] || 0) >= Number(messageId)) return;
+      if (readReceiptTimerRef.current) clearTimeout(readReceiptTimerRef.current);
+      readReceiptTimerRef.current = setTimeout(() => {
+        readReceiptLastSentRef.current[conversationId] = Number(messageId);
+        socketRef.current?.emit("message.read", {
+          conversationId,
+          receipt: { messageId },
+        });
+        markChatConversationRead(conversationId, messageId)
+          .then((res) => {
+            const payload = res?.receipt || res?.readReceipt || res;
+            applyReadReceipt({
+              conversationId,
+              userId: currentUserId,
+              messageId,
+              readAt: payload?.readAt || payload?.read_at || new Date().toISOString(),
+            });
+          })
+          .catch(() => {
+            readReceiptLastSentRef.current[conversationId] = Math.max(
+              Number(readReceiptLastSentRef.current[conversationId] || 0),
+              Number(messageId)
+            );
+          });
+      }, 500);
+    },
+    [applyReadReceipt, currentUserId]
+  );
 
   const fetchConversationMembers = useCallback(
     async (conversationId = activeConversationId) => {
@@ -1570,18 +1709,14 @@ const Chat = () => {
 
         const lastMessageId = items[items.length - 1]?.id;
         if (lastMessageId) {
-          markChatConversationRead(conversationId, lastMessageId).catch(() => {});
-          socketRef.current?.emit("message.read", {
-            conversationId,
-            receipt: { messageId: lastMessageId },
-          });
+          queueReadReceipt(conversationId, lastMessageId);
         }
       } finally {
         setMessagesLoading(false);
         setLoadingOlder(false);
       }
     },
-    [debouncedMessageSearch]
+    [debouncedMessageSearch, queueReadReceipt]
   );
 
   useEffect(() => {
@@ -1590,9 +1725,32 @@ const Chat = () => {
   }, [activeConversationId, debouncedMessageSearch, fetchMessages]);
 
   useEffect(() => {
+    activeConversationIdRef.current = activeConversationId;
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    visibleConversationIdsRef.current = conversations.map((conversation) => conversation.id).filter(Boolean);
+  }, [conversations]);
+
+  useEffect(() => {
+    fetchMessagesRef.current = fetchMessages;
+    fetchConversationPresenceRef.current = fetchConversationPresence;
+    fetchConversationsRef.current = fetchConversations;
+    playIncomingMessageSoundRef.current = playIncomingMessageSound;
+  }, [fetchConversationPresence, fetchConversations, fetchMessages, playIncomingMessageSound]);
+
+  useEffect(() => {
     if (!activeConversationId || !isManageableConversation) return;
     fetchConversationMembers(activeConversationId);
   }, [activeConversationId, fetchConversationMembers, isManageableConversation]);
+
+  useEffect(
+    () => () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+      if (readReceiptTimerRef.current) clearTimeout(readReceiptTimerRef.current);
+    },
+    []
+  );
 
   useEffect(() => {
     if (!activeConversationId || activeConversation?.type !== "direct") return;
@@ -1698,19 +1856,28 @@ const Chat = () => {
 
     sock.on("connect", () => {
       setConnection("connected");
-      if (activeConversationId) {
-        sock.emit("conversation.join", { conversationId: activeConversationId });
-        fetchMessages({ conversationId: activeConversationId, page: 1 });
-        fetchConversationPresence(activeConversationId);
-        setTypingByConversationId((prev) => ({ ...prev, [activeConversationId]: {} }));
+      const conversationIds = [...visibleConversationIdsRef.current];
+      if (activeConversationIdRef.current) conversationIds.push(activeConversationIdRef.current);
+      joinConversationRooms(conversationIds);
+      if (activeConversationIdRef.current) {
+        fetchMessagesRef.current?.({ conversationId: activeConversationIdRef.current, page: 1 });
+        fetchConversationPresenceRef.current?.(activeConversationIdRef.current);
+        setTypingByConversationId((prev) => ({ ...prev, [activeConversationIdRef.current]: {} }));
       }
     });
+
+    const handleReconnect = () => {
+      const conversationIds = [...visibleConversationIdsRef.current];
+      if (activeConversationIdRef.current) conversationIds.push(activeConversationIdRef.current);
+      joinConversationRooms(conversationIds);
+    };
+    sock.io.on("reconnect", handleReconnect);
 
     sock.on("disconnect", () => setConnection("disconnected"));
     sock.on("connect_error", () => setConnection("disconnected"));
 
     sock.on("message.created", (payload) => {
-      const message = normalizeMessage(payload?.message || payload);
+      const message = normalizeMessage(payload?.data?.message || payload?.message || payload?.data || payload);
       if (!message.conversationId) return;
 
       const nextUsers = collectUserSummaries({ messages: [message] });
@@ -1718,39 +1885,24 @@ const Chat = () => {
         setUserNamesById((prev) => ({ ...prev, ...nextUsers }));
       }
 
-      setMessagesByConversationId((prev) => {
-        const existing = prev[message.conversationId] || [];
-        if (existing.some((item) => item.id === message.id)) return prev;
-        return { ...prev, [message.conversationId]: [...existing, message] };
+      const isActive = String(message.conversationId) === String(activeConversationIdRef.current);
+      const isOwnMessage = String(message.senderUserId) === String(currentUserId);
+      upsertMessageToState(message, { incrementUnread: !isActive && !isOwnMessage });
+
+      setConversations((prev) => {
+        const exists = prev.some((item) => String(item.id) === String(message.conversationId));
+        if (!exists) fetchConversationsRef.current?.();
+        return isActive
+          ? prev.map((item) => (String(item.id) === String(message.conversationId) ? { ...item, unreadCount: 0 } : item))
+          : prev;
       });
 
-      setConversations((prev) =>
-        {
-          const exists = prev.some((item) => item.id === message.conversationId);
-          if (!exists) {
-            fetchConversations();
-            return prev;
-          }
-          return prev.map((item) =>
-            item.id === message.conversationId
-              ? {
-                  ...item,
-                  lastMessage: message,
-                  lastMessageAt: message.createdAt || item.lastMessageAt,
-                  unreadCount:
-                    item.id === activeConversationId ? 0 : Number(item.unreadCount || 0) + 1,
-                }
-              : item
-          );
-        }
-      );
-
-      if (String(message.senderUserId) !== String(currentUserId)) {
-        playIncomingMessageSound();
+      if (!isOwnMessage) {
+        playIncomingMessageSoundRef.current?.();
       }
 
-      if (message.conversationId === activeConversationId) {
-        markChatConversationRead(message.conversationId, message.id).catch(() => {});
+      if (isActive && !isOwnMessage) {
+        queueReadReceipt(message.conversationId, message.id);
       }
     });
 
@@ -1781,40 +1933,63 @@ const Chat = () => {
       }));
     });
 
-    sock.on("message.read", ({ conversationId }) => {
-      if (conversationId === activeConversationId) {
+    sock.on("message.read", (payload = {}) => {
+      const receiptPayload = payload?.data || payload;
+      const conversationId = getReadReceiptConversationId(receiptPayload);
+      const userId = getReadReceiptUserId(receiptPayload);
+      const messageId = getReadReceiptMessageId(receiptPayload);
+      if (conversationId && userId && messageId) {
+        applyReadReceipt({
+          conversationId,
+          userId,
+          messageId,
+          readAt: getReadReceiptReadAt(receiptPayload),
+        });
+      }
+      if (String(conversationId) === String(activeConversationIdRef.current)) {
         setConversations((prev) =>
-          prev.map((item) => (item.id === conversationId ? { ...item, unreadCount: 0 } : item))
+          prev.map((item) => (String(item.id) === String(conversationId) ? { ...item, unreadCount: 0 } : item))
         );
       }
     });
 
     return () => {
+      sock.io.off("reconnect", handleReconnect);
       sock.removeAllListeners();
       sock.disconnect();
       if (socketRef.current === sock) socketRef.current = null;
     };
   }, [
     activeSchoolId,
-    activeConversationId,
+    applyReadReceipt,
     currentUserId,
-    fetchConversationPresence,
-    fetchConversations,
-    fetchMessages,
-    playIncomingMessageSound,
+    joinConversationRooms,
+    queueReadReceipt,
+    upsertMessageToState,
   ]);
 
   useEffect(() => {
     if (!activeConversationId) return;
     if (socketRef.current?.connected) {
-      socketRef.current.emit("conversation.join", { conversationId: activeConversationId });
+      joinConversationRooms([activeConversationId]);
     }
     fetchConversationPresence(activeConversationId);
     setTypingByConversationId((prev) => ({ ...prev, [activeConversationId]: {} }));
     setConversations((prev) =>
-      prev.map((item) => (item.id === activeConversationId ? { ...item, unreadCount: 0 } : item))
+      prev.map((item) => (String(item.id) === String(activeConversationId) ? { ...item, unreadCount: 0 } : item))
     );
-  }, [activeConversationId, fetchConversationPresence]);
+  }, [activeConversationId, fetchConversationPresence, joinConversationRooms]);
+
+  useEffect(() => {
+    if (!socketRef.current?.connected) return;
+    joinConversationRooms(conversations.map((conversation) => conversation.id));
+  }, [conversations, joinConversationRooms]);
+
+  useEffect(() => {
+    if (!activeConversationId || !activeMessages.length) return;
+    const lastMessage = activeMessages[activeMessages.length - 1];
+    if (lastMessage?.id) queueReadReceipt(activeConversationId, lastMessage.id);
+  }, [activeConversationId, activeMessages, queueReadReceipt]);
 
   useEffect(() => {
     const el = messageListRef.current;
@@ -1955,6 +2130,10 @@ const Chat = () => {
   const handleMessageScroll = (e) => {
     const el = e.currentTarget;
     isNearMessageBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 140;
+    if (isNearMessageBottomRef.current) {
+      const lastMessage = activeMessages[activeMessages.length - 1];
+      if (lastMessage?.id) queueReadReceipt(activeConversationId, lastMessage.id);
+    }
     if (e.currentTarget.scrollTop > 40 || loadingOlder || messagesLoading) return;
     if (activeMessagesMeta.page >= activeMessagesMeta.lastPage) return;
     fetchMessages({
@@ -2189,17 +2368,7 @@ const Chat = () => {
   });
 
   const appendMessageToState = (message) => {
-    setMessagesByConversationId((prev) => ({
-      ...prev,
-      [message.conversationId || activeConversationId]: [...(prev[message.conversationId || activeConversationId] || []), message],
-    }));
-    setConversations((prev) =>
-      prev.map((item) =>
-        item.id === (message.conversationId || activeConversationId)
-          ? { ...item, lastMessage: message, lastMessageAt: message.createdAt || item.lastMessageAt }
-          : item
-      )
-    );
+    upsertMessageToState(message);
   };
 
   const sendChatPayload = async (payload) => {
@@ -3273,6 +3442,7 @@ const Chat = () => {
                         });
                         const senderDirectLoading =
                           canOpenSenderDirect && openingDirectUserId === Number(message.senderUserId);
+                        const directDeliveryLabel = getDirectMessageDeliveryLabel(message);
                         return (
                           <div
                             key={message.id}
@@ -3326,6 +3496,12 @@ const Chat = () => {
                               <div className="school-chat-message-meta">
                                 {isEdited && <span>ویرایش‌شده</span>}
                                 <span>{formatChatDate(message.createdAt)}</span>
+                                {!!directDeliveryLabel && (
+                                  <span className={`school-chat-seen-state ${directDeliveryLabel === "خوانده شده" ? "seen" : ""}`}>
+                                    <i className={`bx ${directDeliveryLabel === "خوانده شده" ? "bx-check-double" : "bx-check"}`} />
+                                    {directDeliveryLabel}
+                                  </span>
+                                )}
                               </div>
                               {!!reactions.length && (
                                 <div className="school-chat-reactions">
