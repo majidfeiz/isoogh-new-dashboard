@@ -941,6 +941,22 @@
     justify-content: flex-end;
 }
 
+.school-chat-seen-state {
+    align-items: center;
+    color: var(--#{$prefix}secondary-color);
+    display: inline-flex;
+    gap: 3px;
+
+    i {
+        font-size: 15px;
+    }
+
+    &.seen {
+        color: #0ea5e9;
+        font-weight: $font-weight-semibold;
+    }
+}
+
 .school-chat-message-actions {
     border-top: 1px solid rgba($black, 0.04);
     max-height: 0;
