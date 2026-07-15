@@ -15,6 +15,7 @@ export async function getUsers({
   roleId,
   sortBy,
   sortOrder,
+  archiveStatus,
 } = {}) {
   const url = getApiUrl(API_ROUTES.users.list);
 
@@ -26,6 +27,7 @@ export async function getUsers({
       roleId: roleId || undefined,
       sortBy: sortBy || undefined,
       sortOrder: sortOrder || undefined,
+      archiveStatus: archiveStatus || undefined,
     },
   });
 
@@ -58,6 +60,7 @@ export async function exportUsers({
   roleId,
   sortBy = "id",
   sortOrder = "DESC",
+  archiveStatus,
   onDownloadProgress,
 } = {}) {
   const url = getApiUrl(API_ROUTES.users.export);
@@ -72,6 +75,7 @@ export async function exportUsers({
       roleId: roleId || undefined,
       sortBy: sortBy || undefined,
       sortOrder: sortOrder || undefined,
+      archiveStatus: archiveStatus || undefined,
     },
   });
 
@@ -103,6 +107,18 @@ export async function updateUser(id, payload) {
 export async function deleteUser(id) {
   const url = getApiUrl(API_ROUTES.users.delete(id));
   const res = await apiDelete(url);
+  return res.data;
+}
+
+export async function archiveUser(id) {
+  const url = getApiUrl(API_ROUTES.users.archive(id));
+  const res = await apiPatch(url);
+  return res.data;
+}
+
+export async function unarchiveUser(id) {
+  const url = getApiUrl(API_ROUTES.users.unarchive(id));
+  const res = await apiPatch(url);
   return res.data;
 }
 

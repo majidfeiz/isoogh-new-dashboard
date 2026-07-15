@@ -13,6 +13,7 @@ export async function getStudents({
   userId,
   tag,
   tagId,
+  archiveStatus = "active",
 } = {}) {
   const url = getApiUrl(API_ROUTES.students.list);
 
@@ -27,6 +28,7 @@ export async function getStudents({
       userId: userId || undefined,
       tag: tag || undefined,
       tagId: tagId || undefined,
+      archiveStatus: archiveStatus || undefined,
     },
   });
 
@@ -81,6 +83,36 @@ export async function deleteStudent(id) {
 // ایمپورت اکسل دانش‌آموزان
 export async function importStudents(formData, config = {}) {
   const url = getApiUrl(API_ROUTES.students.import);
+  const res = await apiPost(url, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    ...config,
+  });
+  return res.data;
+}
+
+export async function archiveStudent(id) {
+  const url = getApiUrl(API_ROUTES.students.archive(id));
+  const res = await apiPatch(url);
+  return res.data;
+}
+
+export async function unarchiveStudent(id) {
+  const url = getApiUrl(API_ROUTES.students.unarchive(id));
+  const res = await apiPatch(url);
+  return res.data;
+}
+
+export async function importStudentArchive(formData, config = {}) {
+  const url = getApiUrl(API_ROUTES.students.archiveImport);
+  const res = await apiPost(url, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    ...config,
+  });
+  return res.data;
+}
+
+export async function importStudentUnarchive(formData, config = {}) {
+  const url = getApiUrl(API_ROUTES.students.unarchiveImport);
   const res = await apiPost(url, formData, {
     headers: { "Content-Type": "multipart/form-data" },
     ...config,
