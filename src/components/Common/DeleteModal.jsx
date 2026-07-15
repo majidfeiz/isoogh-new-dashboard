@@ -2,7 +2,18 @@ import PropTypes from 'prop-types'
 import React from "react"
 import { Modal, ModalBody } from "reactstrap"
 
-const DeleteModal = ({ show, onDeleteClick, onCloseClick, loading = false }) => {
+const DeleteModal = ({
+  show,
+  onDeleteClick,
+  onCloseClick,
+  loading = false,
+  message = "آیا مطمئن هستید که می خواهید کار را برای همیشه پاک کنید",
+  confirmText = "پاک کردن",
+  loadingText = "در حال حذف...",
+  cancelText = "بستن",
+  confirmColor = "danger",
+  icon = "mdi mdi-trash-can-outline",
+}) => {
   return (
     <Modal size="md" isOpen={show} toggle={onCloseClick} centered={true}>
       <div className="modal-content">
@@ -15,21 +26,21 @@ const DeleteModal = ({ show, onDeleteClick, onCloseClick, loading = false }) => 
           ></button>
           <div className="avatar-sm mb-4 mx-auto">
             <div className="avatar-title bg-primary text-primary bg-opacity-10 font-size-20 rounded-3">
-              <i className="mdi mdi-trash-can-outline"></i>
+              <i className={icon}></i>
             </div>
           </div>
           <p className="text-muted font-size-16 mb-4">
-            آیا مطمئن هستید که می خواهید کار را برای همیشه پاک کنید
+            {message}
           </p>
 
           <div className="hstack gap-2 justify-content-center mb-0">
             <button
               type="button"
-              className="btn btn-danger"
+              className={`btn btn-${confirmColor}`}
               onClick={onDeleteClick}
               disabled={loading}
             >
-              {loading ? "در حال حذف..." : "پاک کردن"}
+              {loading ? loadingText : confirmText}
             </button>
             <button
               type="button"
@@ -37,7 +48,7 @@ const DeleteModal = ({ show, onDeleteClick, onCloseClick, loading = false }) => 
               onClick={onCloseClick}
               disabled={loading}
             >
-              بستن
+              {cancelText}
             </button>
           </div>
         </ModalBody>
@@ -50,7 +61,13 @@ DeleteModal.propTypes = {
   onCloseClick: PropTypes.func,
   onDeleteClick: PropTypes.func,
   show: PropTypes.any,
-  loading: PropTypes.bool
+  loading: PropTypes.bool,
+  message: PropTypes.string,
+  confirmText: PropTypes.string,
+  loadingText: PropTypes.string,
+  cancelText: PropTypes.string,
+  confirmColor: PropTypes.string,
+  icon: PropTypes.string
 }
 
 export default DeleteModal

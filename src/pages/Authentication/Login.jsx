@@ -41,6 +41,7 @@ const Login = (props) => {
   const [otpCode, setOtpCode] = useState("");
   const [serverErrors, setServerErrors] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [captcha, setCaptcha] = useState({ enabled: false });
   const [captchaAnswer, setCaptchaAnswer] = useState("");
   const [captchaLoading, setCaptchaLoading] = useState(true);
@@ -379,18 +380,31 @@ const Login = (props) => {
 
                         <div className="mb-3">
                           <Label className="form-label">رمز عبور</Label>
-                          <Input
-                            name="password"
-                            autoComplete="off"
-                            value={validation.values.password}
-                            type="password"
-                            placeholder="رمز عبور را وارد کنید"
-                            onChange={validation.handleChange}
-                            onBlur={validation.handleBlur}
-                            invalid={
-                              validation.touched.password && !!validation.errors.password
-                            }
-                          />
+                          <div className="input-group auth-pass-inputgroup">
+                            <Input
+                              name="password"
+                              autoComplete="off"
+                              value={validation.values.password}
+                              type={showPassword ? "text" : "password"}
+                              placeholder="رمز عبور را وارد کنید"
+                              onChange={validation.handleChange}
+                              onBlur={validation.handleBlur}
+                              invalid={
+                                validation.touched.password && !!validation.errors.password
+                              }
+                            />
+                            <button
+                              type="button"
+                              className="btn btn-light auth-input-icon-btn"
+                              onClick={() => setShowPassword((visible) => !visible)}
+                              aria-label={
+                                showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"
+                              }
+                              title={showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"}
+                            >
+                              <i className={`bx ${showPassword ? "bx-hide" : "bx-show"}`} />
+                            </button>
+                          </div>
                           {validation.touched.password && validation.errors.password && (
                             <FormFeedback type="invalid">
                               {validation.errors.password}
@@ -416,7 +430,7 @@ const Login = (props) => {
                             <Label className="form-label">کپچا</Label>
                             <div className="d-flex align-items-start gap-2">
                               <div className="flex-grow-1">
-                                <div className="input-group">
+                                <div className="input-group auth-captcha-inputgroup">
                                   <span className="input-group-text fw-bold" dir="ltr">
                                     {captcha.question}
                                   </span>
@@ -437,9 +451,10 @@ const Login = (props) => {
                                   />
                                   <button
                                     type="button"
-                                    className="btn btn-light"
+                                    className="btn btn-light auth-input-icon-btn"
                                     onClick={refreshCaptcha}
                                     disabled={captchaLoading}
+                                    aria-label="دریافت کپچای جدید"
                                     title="دریافت کپچای جدید"
                                   >
                                     {captchaLoading ? (
@@ -448,7 +463,7 @@ const Login = (props) => {
                                         role="status"
                                       />
                                     ) : (
-                                      <i className="bx bx-refresh" />
+                                      <i className="bx bx-reset" />
                                     )}
                                   </button>
                                 </div>
