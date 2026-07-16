@@ -14,10 +14,12 @@ export async function getStudents({
   tag,
   tagId,
   archiveStatus = "active",
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.students.list);
 
   const response = await apiGet(url, {
+    signal,
     params: {
       page,
       limit,
@@ -118,4 +120,52 @@ export async function importStudentUnarchive(formData, config = {}) {
     ...config,
   });
   return res.data;
+}
+
+export async function getStudentRegistrationAvailability({ phone, username, signal } = {}) {
+  const url = getApiUrl(API_ROUTES.students.registrationAvailability);
+  const res = await apiGet(url, {
+    params: {
+      phone: phone || undefined,
+      username: username || undefined,
+    },
+    signal,
+  });
+  return res.data?.data || res.data || {};
+}
+
+let contactSubjectsCache = null;
+
+export async function getStudentContactSubjects({ force = false } = {}) {
+  if (!force && contactSubjectsCache) return contactSubjectsCache;
+  const res = await apiGet(getApiUrl(API_ROUTES.students.contactSubjects));
+  const data = res.data?.data || res.data || [];
+  contactSubjectsCache = Array.isArray(data) ? data : data.items || [];
+  return contactSubjectsCache;
+}
+
+export async function getStudentContacts(studentId) {
+  const res = await apiGet(getApiUrl(API_ROUTES.students.contacts(studentId)));
+  const data = res.data?.data || res.data || [];
+  return Array.isArray(data) ? data : data.items || [];
+}
+
+export async function createStudentContact(studentId, payload) {
+  const res = await apiPost(getApiUrl(API_ROUTES.students.contacts(studentId)), payload);
+  return res.data?.data || res.data;
+}
+
+export async function updateStudentContact(studentId, contactId, payload) {
+  const res = await apiPatch(getApiUrl(API_ROUTES.students.contact(studentId, contactId)), payload);
+  return res.data?.data || res.data;
+}
+
+export async function setDefaultStudentContact(studentId, contactId) {
+  const res = await apiPatch(getApiUrl(API_ROUTES.students.contactSetDefault(studentId, contactId)));
+  return res.data?.data || res.data;
+}
+
+export async function deleteStudentContact(studentId, contactId) {
+  const res = await apiDelete(getApiUrl(API_ROUTES.students.contact(studentId, contactId)));
+  return res.data?.data || res.data;
 }

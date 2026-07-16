@@ -57,7 +57,15 @@ const StudentList = () => {
     lastPage: 1,
   });
   const [filters, setFilters] = useState(
-    saved?.filters ?? { name: "", username: "", ssn: "", tag: "", tagId: "" }
+    saved?.filters ?? {
+      name: searchParams.get("search") || "",
+      username: "",
+      ssn: "",
+      tag: searchParams.get("tag") || "",
+      tagId: searchParams.get("tagId") || "",
+      schoolId: searchParams.get("schoolId") || "",
+      userId: searchParams.get("userId") || "",
+    }
   );
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -66,6 +74,8 @@ const StudentList = () => {
   const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
   const initialPageRef = useRef(saved?.page ?? 1);
   const approxTotalRef = useRef(null);
+  const requestControllerRef = useRef(null);
+  const filterReadyRef = useRef(false);
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState("");
   const [importSchoolId, setImportSchoolId] = useState("");
@@ -130,7 +140,6 @@ const StudentList = () => {
       "religion",
       "relationship",
       "group_id",
-      "voip_phone",
       "work_shift_id",
     ];
   }, [importMode]);
@@ -164,7 +173,7 @@ const StudentList = () => {
       uploadLabel: "آپلود و ایمپورت",
       successLabel: "ایمپورت با موفقیت انجام شد",
       supportedColumns:
-        "username (الزامی)، name، password، phone، ssn، email، birthday، point، phone_2، phone_3، shift، city، province، region، institute_type، institute_name، gpa، emergency_phone، village، religion، relationship، group_id، voip_phone، work_shift_id",
+        "username (الزامی)، name، password، phone، ssn، email، birthday، point، phone_2، phone_3، shift، city، province، region، institute_type، institute_name، gpa، emergency_phone، village، religion، relationship، group_id، work_shift_id",
       helpText:
         "ستون code خودکار از username ساخته می‌شود — نیازی به وارد کردن ندارد. حجم فایل: حداکثر ۱۵ مگابایت.",
     };
@@ -185,7 +194,9 @@ const StudentList = () => {
   const previewColumns = useMemo(() => {
     const keys = new Set(baseImportColumns);
     importRows.forEach((row) => {
-      Object.keys(row || {}).forEach((k) => keys.add(k));
+      Object.keys(row || {}).forEach((k) => {
+        if (k !== "voip_phone") keys.add(k);
+      });
     });
     return Array.from(keys);
   }, [baseImportColumns, importRows]);
@@ -204,6 +215,9 @@ const StudentList = () => {
 
   const fetchData = useCallback(
     async (page = 1, currentFilters = {}, currentSort = sort) => {
+      requestControllerRef.current?.abort();
+      const controller = new AbortController();
+      requestControllerRef.current = controller;
       setLoading(true);
       try {
         const searchQuery = buildSearchQuery(currentFilters);
@@ -213,9 +227,12 @@ const StudentList = () => {
           search: searchQuery,
           tag: currentFilters.tag,
           tagId: currentFilters.tagId,
+          schoolId: currentFilters.schoolId,
+          userId: currentFilters.userId,
           sortBy: currentSort?.by,
           sortOrder: currentSort?.order,
           archiveStatus,
+          signal: controller.signal,
         });
 
         setData(res.items || []);
@@ -228,11 +245,12 @@ const StudentList = () => {
           }
         );
       } catch (e) {
+        if (e?.code === "ERR_CANCELED") return;
         console.error("خطا در دریافت دانش‌آموزان", e);
         setData([]);
         setMeta((prev) => ({ ...prev, total: 0 }));
       } finally {
-        setLoading(false);
+        if (requestControllerRef.current === controller) setLoading(false);
       }
     },
     [meta.limit, sort, buildSearchQuery, archiveStatus]
@@ -244,6 +262,28 @@ const StudentList = () => {
     fetchData(page, filters, sort);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, sort]);
+
+  useEffect(() => () => requestControllerRef.current?.abort(), []);
+
+  useEffect(() => {
+    if (!filterReadyRef.current) {
+      filterReadyRef.current = true;
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      const nextParams = new URLSearchParams(searchParams);
+      const search = buildSearchQuery(filters);
+      const queryValues = { search, tag: filters.tag, tagId: filters.tagId, schoolId: filters.schoolId, userId: filters.userId };
+      Object.entries(queryValues).forEach(([key, value]) => value ? nextParams.set(key, value) : nextParams.delete(key));
+      nextParams.set("archiveStatus", archiveStatus);
+      setSearchParams(nextParams, { replace: true });
+      setMeta((prev) => ({ ...prev, page: 1 }));
+      saveState({ page: 1, filters, sort, sorting });
+      fetchData(1, filters, sort);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
 
   useEffect(() => {
     if (!auth?.user) return;
@@ -309,7 +349,7 @@ const StudentList = () => {
   };
 
   const handleResetFilters = () => {
-    const reset = { name: "", username: "", ssn: "", tag: "", tagId: "" };
+    const reset = { name: "", username: "", ssn: "", tag: "", tagId: "", schoolId: "", userId: "" };
     setFilters(reset);
     saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
@@ -344,6 +384,8 @@ const StudentList = () => {
       if (searchQuery) params.append("search", searchQuery);
       if (filters.tag) params.append("tag", filters.tag);
       if (filters.tagId) params.append("tagId", filters.tagId);
+      if (filters.schoolId) params.append("schoolId", filters.schoolId);
+      if (filters.userId) params.append("userId", filters.userId);
       params.append("archiveStatus", archiveStatus);
 
       const url = `${getApiUrl(API_ROUTES.students.export)}?${params.toString()}`;
@@ -498,7 +540,11 @@ const StudentList = () => {
         const sheetName = workbook.SheetNames?.[0];
         if (!sheetName) throw new Error("Sheet not found");
         const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }).map((row) => {
+          const supportedRow = { ...row };
+          delete supportedRow.voip_phone;
+          return supportedRow;
+        });
         setImportRows(rows);
         setImportFileName(file.name);
         setImportPreviewPage(1);
@@ -527,7 +573,7 @@ const StudentList = () => {
               shift: "", city: "تهران", province: "تهران", region: "",
               institute_type: "", institute_name: "", gpa: "", emergency_phone: "",
               village: "", religion: "", relationship: "", group_id: "",
-              voip_phone: "", work_shift_id: "",
+              work_shift_id: "",
             },
             {
               username: "09198765432", name: "زهرا حسینی", password: "Pass5678",
@@ -536,7 +582,7 @@ const StudentList = () => {
               shift: "", city: "اصفهان", province: "اصفهان", region: "",
               institute_type: "", institute_name: "", gpa: "", emergency_phone: "",
               village: "", religion: "", relationship: "", group_id: "",
-              voip_phone: "", work_shift_id: "",
+              work_shift_id: "",
             },
           ]
         : [{ username: "student001" }, { username: "student002" }]
@@ -574,6 +620,16 @@ const StudentList = () => {
 
     if (importMode === "create" && needsSchoolSelect && !importSchoolId) {
       setImportError("انتخاب مجموعه الزامی است.");
+      return;
+    }
+
+    if (importMode === "create" && !isAdminLike && !schoolsLoading && schools.length === 0) {
+      setImportError("هیچ مدرسه‌ای به حساب شما اختصاص داده نشده است.");
+      return;
+    }
+
+    if (importMode === "create" && importDefaultPassword && importDefaultPassword.trim().length < 6) {
+      setImportError("رمز عبور پیش‌فرض باید حداقل ۶ کاراکتر باشد.");
       return;
     }
 
@@ -1342,7 +1398,7 @@ const StudentList = () => {
                   <Button
                     color="primary"
                     onClick={handleUploadImport}
-                    disabled={importLoading || importRows.length === 0}
+                    disabled={importLoading || importRows.length === 0 || (importMode === "create" && !isAdminLike && !schoolsLoading && schools.length === 0)}
                   >
                     {importLoading ? (
                       <>
@@ -1383,6 +1439,13 @@ const StudentList = () => {
                     >
                       آرشیو
                     </Button>
+                    <Button
+                      color={archiveStatus === "all" ? "primary" : "light"}
+                      onClick={() => handleArchiveStatusChange("all")}
+                      disabled={loading}
+                    >
+                      همه
+                    </Button>
                   </div>
                 </div>
                 <div className="d-flex flex-wrap gap-2">
@@ -1394,7 +1457,7 @@ const StudentList = () => {
                   >
                     {exportLoading ? "در حال دریافت..." : "خروجی CSV"}
                   </Button>
-                  {canCreate && (
+                  {canCreate && (isAdminLike || schoolsLoading || schools.length > 0) && (
                     <Button
                       color="primary"
                       onClick={handleCreateClick}
@@ -1497,6 +1560,19 @@ const StudentList = () => {
                           placeholder="مثلاً 1234567890"
                         />
                       </InputGroup>
+                    </Col>
+
+                    <Col xl="3" lg="4" md="6">
+                      <Label className="form-label">مدرسه</Label>
+                      <Input type="select" name="schoolId" value={filters.schoolId} onChange={handleFilterChange} disabled={schoolsLoading}>
+                        <option value="">همه مدرسه‌ها</option>
+                        {schools.map((school) => <option key={school.id} value={school.id}>{school.name || school.title || `مدرسه ${school.id}`}</option>)}
+                      </Input>
+                    </Col>
+
+                    <Col xl="3" lg="4" md="6">
+                      <Label className="form-label">شناسه کاربر</Label>
+                      <Input type="number" min="1" name="userId" value={filters.userId} onChange={handleFilterChange} placeholder="شناسه دقیق user" />
                     </Col>
 
                     <Col xl="3" lg="4" md="6" className="d-flex gap-2">
