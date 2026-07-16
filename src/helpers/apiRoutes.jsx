@@ -89,6 +89,12 @@ export const API_ROUTES = {
     unarchive: (id) => `/students/${id}/unarchive`,
     archiveImport: "/students/archive/import",
     unarchiveImport: "/students/unarchive/import",
+    registrationAvailability: "/students/registration-availability",
+    contactSubjects: "/students/contact-subjects",
+    contacts: (studentId) => `/students/${studentId}/contacts`,
+    contact: (studentId, contactId) => `/students/${studentId}/contacts/${contactId}`,
+    contactSetDefault: (studentId, contactId) =>
+      `/students/${studentId}/contacts/${contactId}/set-default`,
   },
   managers: {
     list: "/managers",
