@@ -360,6 +360,14 @@ const ExternalApiDocs = () => {
                   <strong>Scope مجموعه:</strong> اگر <code>school_id</code> روی کلاینت تنظیم شده باشد، تمام پاسخ‌ها فقط داده‌های آن مجموعه را برمی‌گردانند.
                 </div>
 
+                <div className="alert alert-warning mb-4">
+                  <i className="bx bx-shield-quarter me-1" />
+                  <strong>امنیت کلاینت‌های مرورگری:</strong> کلید API را در bundle فرانت،
+                  localStorage، URL یا درخواست مرورگر قرار ندهید. داشبوردهایی مانند گزارش بنیاد باید
+                  از backend/BFF و IP ثبت‌شده خود درخواست server-to-server ارسال کنند و کلید را فقط
+                  در secret یا env سمت سرور نگه دارند.
+                </div>
+
                 <Section title="Endpoint های خارجی">
                   <div className="table-responsive">
                     <Table bordered size="sm">
@@ -395,6 +403,18 @@ const ExternalApiDocs = () => {
                           <td><code>/external-api/v1/advisers/:adviserId/students</code></td>
                           <td><code>page, per_page</code></td>
                           <td>دانش‌آموزان یک مشاور</td>
+                        </tr>
+                        <tr>
+                          <td><MethodBadge method="GET" /></td>
+                          <td><code>/external-api/v1/foundation/calls/by-national-code</code></td>
+                          <td><code>national_code, page, per_page</code></td>
+                          <td>تماس‌های بنیاد بر اساس کد ملی</td>
+                        </tr>
+                        <tr>
+                          <td><MethodBadge method="GET" /></td>
+                          <td><code>/external-api/v1/foundation/calls/by-date</code></td>
+                          <td><code>from, to, page, per_page</code></td>
+                          <td>تماس‌های بنیاد در بازه تاریخ</td>
                         </tr>
                       </tbody>
                     </Table>
@@ -491,6 +511,78 @@ const ExternalApiDocs = () => {
     }
   ],
   "meta": { "page": 1, "per_page": 15, "total": 12, "last_page": 1 }
+}`}</CodeBlock>
+                </Section>
+
+                <Section title="Foundation Calls API — جستجوی تماس‌های بنیاد">
+                  <p>
+                    این endpointها فقط‌خواندنی هستند و از همان <code>X-API-Key</code>، محدودیت IP،
+                    scope مجموعه، rate limit و request log سایر APIهای خارجی استفاده می‌کنند.
+                  </p>
+                  <div className="table-responsive">
+                    <Table bordered size="sm">
+                      <thead className="table-light">
+                        <tr>
+                          <th>حالت</th>
+                          <th>Endpoint و پارامترهای الزامی</th>
+                          <th>اعتبارسنجی</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>کد ملی</td>
+                          <td>
+                            <code>/external-api/v1/foundation/calls/by-national-code</code>
+                            <br />
+                            <code>national_code=0012345678&page=1&per_page=15</code>
+                          </td>
+                          <td>
+                            <code>national_code</code> باید string شامل دقیقاً ۱۰ رقم باشد؛ صفر ابتدا
+                            باید حفظ شود.
+                          </td>
+                        </tr>
+                        <tr>
+                          <td>بازه تاریخ</td>
+                          <td>
+                            <code>/external-api/v1/foundation/calls/by-date</code>
+                            <br />
+                            <code>from=2026-07-01&to=2026-07-31&page=1&per_page=15</code>
+                          </td>
+                          <td>
+                            <code>from</code> و <code>to</code> الزامی و ISO 8601 هستند؛ تاریخ شروع
+                            نباید بعد از تاریخ پایان باشد و روز پایانی به‌طور کامل محاسبه می‌شود.
+                          </td>
+                        </tr>
+                      </tbody>
+                    </Table>
+                  </div>
+                  <p className="text-muted small">
+                    در هر دو حالت <code>page</code> حداقل ۱ و پیش‌فرض ۱ است. <code>per_page</code> بین
+                    ۱ تا ۱۰۰ و پیش‌فرض ۱۵ است. <code>school_id</code> را در query ارسال نکنید؛ scope از
+                    تنظیمات کلاینت اعمال می‌شود.
+                  </p>
+                </Section>
+
+                <Section title="پاسخ Foundation Calls API">
+                  <p className="text-muted small">
+                    فیلدهای <code>national_code</code>، <code>student_name</code>، <code>called_at</code>،
+                    <code>adviser_name</code> و <code>recording_url</code> ممکن است <code>null</code> باشند.
+                    وضعیت فقط <code>answered</code> یا <code>unanswered</code> است.
+                  </p>
+                  <CodeBlock>{`{
+  "data": [
+    {
+      "id": 100,
+      "national_code": "0012345678",
+      "student_name": "علی محمدی",
+      "called_at": "2026-07-17T08:30:00.000Z",
+      "duration_seconds": 87,
+      "adviser_name": "مریم احمدی",
+      "status": "answered",
+      "recording_url": "https://cdn.example.com/files/call-recording.mp3"
+    }
+  ],
+  "meta": { "page": 1, "per_page": 15, "total": 120, "last_page": 8 }
 }`}</CodeBlock>
                 </Section>
               </TabPane>
