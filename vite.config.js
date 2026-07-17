@@ -8,6 +8,9 @@ const require = createRequire(import.meta.url)
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  build: {
+    sourcemap: false,
+  },
   define: {
     // react-draggable uses process.env.NODE_ENV — must match actual mode so HMR works in dev
     "process.env.NODE_ENV": JSON.stringify(mode === "production" ? "production" : "development"),
