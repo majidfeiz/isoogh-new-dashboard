@@ -140,7 +140,7 @@ const ExternalApiDocs = () => {
                   <ul>
                     <li>یک <code>api_key</code> یکتا ۶۴ کاراکتری (خودکار تولید می‌شود)</li>
                     <li>لیست <strong>IP های مجاز</strong> (فقط از این IPها اجازه دسترسی)</li>
-                    <li><code>school_id</code> — اگر تنظیم شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند؛ اگر <code>null</code> باشد همه داده‌ها</li>
+                    <li><code>school_ids</code> — آرایه غیرخالی مدارس مجاز؛ هیچ کلاینتی دسترسی سراسری ندارد</li>
                     <li>محدودیت درخواست‌ها: تعداد درخواست ۲۴ ساعت، درخواست همزمان، و حداقل فاصله بین درخواست‌ها؛ مقدار <code>null</code> یعنی نامحدود</li>
                   </ul>
                 </Section>
@@ -160,7 +160,7 @@ const ExternalApiDocs = () => {
                         <EndpointRow method="GET"    path="/external-api-clients"                    permission="external-api.index"  description="لیست همه کلاینت‌ها + IPها" />
                         <EndpointRow method="POST"   path="/external-api-clients"                    permission="external-api.create" description="ایجاد کلاینت جدید" />
                         <EndpointRow method="GET"    path="/external-api-clients/:id"                permission="external-api.show"   description="نمایش یک کلاینت" />
-                        <EndpointRow method="PATCH"  path="/external-api-clients/:id"                permission="external-api.update" description="ویرایش نام/توضیح/وضعیت/school_id و محدودیت درخواست‌ها" />
+                        <EndpointRow method="PATCH"  path="/external-api-clients/:id"                permission="external-api.update" description="ویرایش نام، توضیح، وضعیت، school_ids و محدودیت درخواست‌ها" />
                         <EndpointRow method="DELETE" path="/external-api-clients/:id"                permission="external-api.delete" description="حذف کلاینت" />
                         <EndpointRow method="POST"   path="/external-api-clients/:id/regenerate-key" permission="external-api.update" description="تولید مجدد API Key" />
                         <EndpointRow method="POST"   path="/external-api-clients/:id/ips"            permission="external-api.update" description="افزودن IP مجاز" />
@@ -176,13 +176,14 @@ const ExternalApiDocs = () => {
   "name": "مجموعه شهید بهشتی",
   "description": "توضیحات اختیاری",
   "is_active": true,
-  "school_id": 3,
+  "school_ids": [3, 8],
   "daily_request_limit": 10000,
   "max_concurrent_requests": 5,
   "min_request_interval_seconds": 2
 }`}</CodeBlock>
                   <p className="text-muted small mt-2">
-                    برای نامحدود کردن هر محدودیت مقدار همان فیلد را <code>null</code> بفرستید. مقدار <code>0</code> معتبر نیست.
+                    <code>school_ids</code> الزامی و غیرخالی است. برای نامحدود کردن هر محدودیت مقدار همان
+                    فیلد را <code>null</code> بفرستید. مقدار <code>0</code> معتبر نیست.
                   </p>
                   <div className="alert alert-warning mt-2">
                     <i className="bx bx-error-circle me-1" />
@@ -200,6 +201,7 @@ const ExternalApiDocs = () => {
       "is_active": true,
       "description": "دسترسی سامانه مرکزی",
       "school_id": 3,
+      "school_ids": [3, 8],
       "daily_request_limit": 10000,
       "max_concurrent_requests": 5,
       "min_request_interval_seconds": 2,
@@ -357,7 +359,9 @@ const ExternalApiDocs = () => {
 
                 <div className="alert alert-info mb-4">
                   <i className="bx bx-info-circle me-1" />
-                  <strong>Scope مجموعه:</strong> اگر <code>school_id</code> روی کلاینت تنظیم شده باشد، تمام پاسخ‌ها فقط داده‌های آن مجموعه را برمی‌گردانند.
+                  <strong>Scope مجموعه:</strong> اگر کلاینت یک مدرسه مجاز دارد، <code>school_id</code> را
+                  نفرستید. برای کلاینت چندمدرسه‌ای، شناسه یکی از اعضای <code>school_ids</code> را در query
+                  بفرستید؛ حذف آن با 400 و مقدار خارج از لیست با 403 رد می‌شود.
                 </div>
 
                 <div className="alert alert-warning mb-4">
@@ -383,42 +387,45 @@ const ExternalApiDocs = () => {
                         <tr>
                           <td><MethodBadge method="GET" /></td>
                           <td><code>/external-api/v1/students</code></td>
-                          <td><code>page, per_page, search</code></td>
+                          <td><code>page, per_page, search, school_id*</code></td>
                           <td>لیست دانش‌آموزان</td>
                         </tr>
                         <tr>
                           <td><MethodBadge method="GET" /></td>
                           <td><code>/external-api/v1/advisers</code></td>
-                          <td><code>page, per_page, search</code></td>
+                          <td><code>page, per_page, search, school_id*</code></td>
                           <td>لیست مشاوران</td>
                         </tr>
                         <tr>
                           <td><MethodBadge method="GET" /></td>
                           <td><code>/external-api/v1/calls</code></td>
-                          <td><code>page, per_page, adviser_id, disposition, start_date, end_date</code></td>
+                          <td><code>page, per_page, adviser_id, disposition, start_date, end_date, school_id*</code></td>
                           <td>لیست تماس‌ها</td>
                         </tr>
                         <tr>
                           <td><MethodBadge method="GET" /></td>
                           <td><code>/external-api/v1/advisers/:adviserId/students</code></td>
-                          <td><code>page, per_page</code></td>
+                          <td><code>page, per_page, school_id*</code></td>
                           <td>دانش‌آموزان یک مشاور</td>
                         </tr>
                         <tr>
                           <td><MethodBadge method="GET" /></td>
                           <td><code>/external-api/v1/foundation/calls/by-national-code</code></td>
-                          <td><code>national_code, page, per_page</code></td>
+                          <td><code>national_code, page, per_page, school_id*</code></td>
                           <td>تماس‌های بنیاد بر اساس کد ملی</td>
                         </tr>
                         <tr>
                           <td><MethodBadge method="GET" /></td>
                           <td><code>/external-api/v1/foundation/calls/by-date</code></td>
-                          <td><code>from, to, page, per_page</code></td>
+                          <td><code>from, to, page, per_page, school_id*</code></td>
                           <td>تماس‌های بنیاد در بازه تاریخ</td>
                         </tr>
                       </tbody>
                     </Table>
                   </div>
+                  <p className="text-muted small">
+                    * <code>school_id</code> فقط برای کلاینتی که چند مدرسه مجاز دارد الزامی است.
+                  </p>
                 </Section>
 
                 <Section title="GET /external-api/v1/students — پاسخ">
@@ -558,8 +565,8 @@ const ExternalApiDocs = () => {
                   </div>
                   <p className="text-muted small">
                     در هر دو حالت <code>page</code> حداقل ۱ و پیش‌فرض ۱ است. <code>per_page</code> بین
-                    ۱ تا ۱۰۰ و پیش‌فرض ۱۵ است. <code>school_id</code> را در query ارسال نکنید؛ scope از
-                    تنظیمات کلاینت اعمال می‌شود.
+                    ۱ تا ۱۰۰ و پیش‌فرض ۱۵ است. برای توکن تک‌مدرسه‌ای <code>school_id</code> را نفرستید؛
+                    برای توکن چندمدرسه‌ای شناسه مدرسه انتخاب‌شده و مجاز را ارسال کنید.
                   </p>
                 </Section>
 
@@ -616,6 +623,16 @@ const ExternalApiDocs = () => {
                           <td>IP سرور در لیست مجاز نیست</td>
                         </tr>
                         <tr>
+                          <td><Badge color="danger">400</Badge></td>
+                          <td>نیاز به <code>school_id</code></td>
+                          <td>کلاینت چند مدرسه مجاز دارد اما مدرسه انتخاب نشده است</td>
+                        </tr>
+                        <tr>
+                          <td><Badge color="danger">403</Badge></td>
+                          <td>مدرسه غیرمجاز</td>
+                          <td><code>school_id</code> ارسالی عضو مدارس مجاز کلاینت نیست</td>
+                        </tr>
+                        <tr>
                           <td><Badge color="warning">429</Badge></td>
                           <td><code>External API daily request limit exceeded</code></td>
                           <td>سقف درخواست در ۲۴ ساعت برای کلاینت پر شده است</td>
@@ -644,7 +661,7 @@ const ExternalApiDocs = () => {
                   <ul className="list-unstyled">
                     {[
                       { icon: "bx-key", text: "API Key: بعد از ایجاد یا regenerate فقط یک بار نمایش بده (modal با copy button)" },
-                      { icon: "bx-buildings", text: "school_id: یک dropdown از لیست مجموعه‌ها — اگر خالی باشد، کلاینت همه داده‌ها را می‌بیند" },
+                      { icon: "bx-buildings", text: "school_ids: انتخاب چندگانه و اجباری از مدارس؛ حذف آخرین مدرسه مجاز مسدود است" },
                       { icon: "bx-timer", text: "Rate limit: مقدار null یعنی نامحدود؛ input خالی بدون toggle نامحدود نباید ارسال شود" },
                       { icon: "bx-chip", text: "IPها: به صورت chip/tag نمایش بده با دکمه حذف کنار هر کدام" },
                       { icon: "bx-list-ul", text: "لاگ‌ها: در یک table با ستون‌های: تاریخ، IP، متد، path، status، زمان پاسخ" },
