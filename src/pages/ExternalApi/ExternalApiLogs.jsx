@@ -160,7 +160,9 @@ const ExternalApiLogs = () => {
                                 <td>
                                   <Badge
                                     color={
-                                      log.response_status >= 200 && log.response_status < 300
+                                      log.response_status === 429
+                                        ? "warning"
+                                        : log.response_status >= 200 && log.response_status < 300
                                         ? "success"
                                         : log.response_status >= 400
                                         ? "danger"
