@@ -22,6 +22,9 @@ const normalizeClient = (item = {}) => ({
   api_key: item?.api_key ?? "",
   is_active: normalizeBoolean(item?.is_active ?? item?.isActive, true),
   school_id: item?.school_id ?? null,
+  school_ids: Array.isArray(item?.school_ids)
+    ? item.school_ids.map(Number).filter(Number.isInteger)
+    : [],
   daily_request_limit: item?.daily_request_limit ?? null,
   max_concurrent_requests: item?.max_concurrent_requests ?? null,
   min_request_interval_seconds: item?.min_request_interval_seconds ?? null,

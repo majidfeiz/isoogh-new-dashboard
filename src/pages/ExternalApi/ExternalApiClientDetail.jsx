@@ -76,6 +76,12 @@ const buildRateLimitPayload = (form) => ({
   ),
 });
 
+const haveSameSchoolIds = (first = [], second = []) => {
+  if (first.length !== second.length) return false;
+  const secondIds = new Set(second.map(Number));
+  return first.every((schoolId) => secondIds.has(Number(schoolId)));
+};
+
 const ExternalApiClientDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -95,7 +101,7 @@ const ExternalApiClientDetail = () => {
     name: "",
     description: "",
     is_active: true,
-    school_id: "",
+    school_ids: [],
     dailyUnlimited: true,
     dailyRequestLimit: "",
     concurrentUnlimited: true,
@@ -129,7 +135,7 @@ const ExternalApiClientDetail = () => {
         name: data.name,
         description: data.description,
         is_active: data.is_active,
-        school_id: data.school_id ?? "",
+        school_ids: data.school_ids,
         dailyUnlimited: data.daily_request_limit == null,
         dailyRequestLimit: data.daily_request_limit == null ? "" : String(data.daily_request_limit),
         concurrentUnlimited: data.max_concurrent_requests == null,
@@ -181,6 +187,15 @@ const ExternalApiClientDetail = () => {
     setEditForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  const handleSchoolChange = (e) => {
+    const schoolIds = Array.from(e.target.selectedOptions, (option) => Number(option.value));
+    if (!schoolIds.length) {
+      toast.warning("حذف آخرین مجموعه مجاز امکان‌پذیر نیست");
+      return;
+    }
+    setEditForm((prev) => ({ ...prev, school_ids: schoolIds }));
+  };
+
   const toggleEditFlag = (name) => {
     setEditForm((prev) => ({ ...prev, [name]: !prev[name] }));
   };
@@ -199,14 +214,20 @@ const ExternalApiClientDetail = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     if (!editForm.name.trim()) return toast.warning("نام الزامی است");
+    if (!editForm.school_ids.length) {
+      return toast.warning("حذف آخرین مجموعه مجاز امکان‌پذیر نیست");
+    }
     setSaving(true);
     try {
       const rateLimitPayload = buildRateLimitPayload(editForm);
+      const schoolPayload = haveSameSchoolIds(editForm.school_ids, client.school_ids)
+        ? {}
+        : { school_ids: editForm.school_ids };
       await updateExternalApiClient(id, {
         name: editForm.name.trim(),
         description: editForm.description.trim(),
         is_active: editForm.is_active,
-        school_id: editForm.school_id ? Number(editForm.school_id) : null,
+        ...schoolPayload,
         ...rateLimitPayload,
       });
       await fetchClient();
@@ -263,10 +284,20 @@ const ExternalApiClientDetail = () => {
     }
   };
 
-  const schoolName = (sid) => {
-    if (!sid) return <span className="text-muted">همه مجموعه‌ها (بدون محدودیت)</span>;
-    const s = schools.find((x) => x.id === sid);
-    return s ? s.name : `#${sid}`;
+  const schoolNames = (schoolIds = []) => {
+    if (!schoolIds.length) return <span className="text-danger">بدون مجموعه مجاز</span>;
+    return (
+      <div className="d-flex flex-wrap gap-1">
+        {schoolIds.map((schoolId) => {
+          const school = schools.find((item) => Number(item.id) === Number(schoolId));
+          return (
+            <Badge key={schoolId} color="light" className="text-dark border">
+              {school?.name || `#${schoolId}`}
+            </Badge>
+          );
+        })}
+      </div>
+    );
   };
 
   if (loading) {
@@ -383,20 +414,24 @@ const ExternalApiClientDetail = () => {
                           />
                         </FormGroup>
                         <FormGroup>
-                          <Label>مجموعه (اختیاری)</Label>
+                          <Label>
+                            مجموعه‌های مجاز این توکن <span className="text-danger">*</span>
+                          </Label>
                           <Input
                             type="select"
-                            name="school_id"
-                            value={editForm.school_id}
-                            onChange={handleEditChange}
+                            name="school_ids"
+                            value={editForm.school_ids.map(String)}
+                            onChange={handleSchoolChange}
+                            multiple
+                            required
+                            size={Math.min(Math.max(schools.length, 3), 7)}
                           >
-                            <option value="">همه مجموعه‌ها (بدون محدودیت)</option>
                             {schools.map((s) => (
                               <option key={s.id} value={s.id}>{s.name}</option>
                             ))}
                           </Input>
                           <small className="text-muted">
-                            اگر مجموعه انتخاب شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند.
+                            حداقل یک مجموعه باید باقی بماند. برای انتخاب چند مورد از Ctrl یا Command استفاده کنید.
                           </small>
                         </FormGroup>
                         <div className="border-top pt-3 mt-3 mb-3">
@@ -561,8 +596,8 @@ const ExternalApiClientDetail = () => {
                             <td>{client.description || "—"}</td>
                           </tr>
                           <tr>
-                            <th>مجموعه</th>
-                            <td>{schoolName(client.school_id)}</td>
+                            <th>مدارس مجاز</th>
+                            <td>{schoolNames(client.school_ids)}</td>
                           </tr>
                           <tr>
                             <th>وضعیت</th>

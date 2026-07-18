@@ -70,7 +70,7 @@ const EMPTY_FORM = {
   name: "",
   description: "",
   is_active: true,
-  school_id: "",
+  school_ids: [],
   dailyUnlimited: true,
   dailyRequestLimit: "",
   concurrentUnlimited: true,
@@ -127,6 +127,11 @@ const ExternalApiClientList = () => {
     setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
   };
 
+  const handleSchoolChange = (e) => {
+    const schoolIds = Array.from(e.target.selectedOptions, (option) => Number(option.value));
+    setForm((prev) => ({ ...prev, school_ids: schoolIds }));
+  };
+
   const toggleFormFlag = (name) => {
     setForm((prev) => ({ ...prev, [name]: !prev[name] }));
   };
@@ -141,6 +146,9 @@ const ExternalApiClientList = () => {
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!form.name.trim()) return toast.warning("نام کلاینت الزامی است");
+    if (!form.school_ids.length) {
+      return toast.warning("انتخاب حداقل یک مجموعه مجاز الزامی است");
+    }
     setSaving(true);
     try {
       const rateLimitPayload = buildRateLimitPayload(form);
@@ -148,7 +156,7 @@ const ExternalApiClientList = () => {
         name: form.name.trim(),
         description: form.description.trim(),
         is_active: form.is_active,
-        school_id: form.school_id ? Number(form.school_id) : null,
+        school_ids: form.school_ids,
         ...rateLimitPayload,
       });
       setNewApiKey(created.api_key || "");
@@ -205,16 +213,30 @@ const ExternalApiClientList = () => {
         cell: (info) => info.getValue() || "-",
       },
       {
-        id: "school_id",
-        header: "مجموعه",
-        accessorKey: "school_id",
+        id: "school_ids",
+        header: "مدارس مجاز",
+        accessorKey: "school_ids",
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => {
-          const sid = info.getValue();
-          if (!sid) return <span className="text-muted small">همه مجموعه‌ها</span>;
-          const school = schools.find((s) => s.id === sid);
-          return school ? school.name : `#${sid}`;
+          const schoolIds = info.getValue() || [];
+          if (!schoolIds.length) return <span className="text-danger small">بدون مجموعه مجاز</span>;
+          const visibleIds = schoolIds.slice(0, 3);
+          return (
+            <div className="d-flex flex-wrap gap-1">
+              {visibleIds.map((schoolId) => {
+                const school = schools.find((item) => Number(item.id) === Number(schoolId));
+                return (
+                  <Badge key={schoolId} color="light" className="text-dark border">
+                    {school?.name || `#${schoolId}`}
+                  </Badge>
+                );
+              })}
+              {schoolIds.length > visibleIds.length && (
+                <Badge color="primary">+{schoolIds.length - visibleIds.length}</Badge>
+              )}
+            </div>
+          );
         },
       },
       {
@@ -443,20 +465,24 @@ const ExternalApiClientList = () => {
                 />
               </FormGroup>
               <FormGroup>
-                <Label>مجموعه (اختیاری)</Label>
+                <Label>
+                  مجموعه‌های مجاز این توکن <span className="text-danger">*</span>
+                </Label>
                 <Input
                   type="select"
-                  name="school_id"
-                  value={form.school_id}
-                  onChange={handleFormChange}
+                  name="school_ids"
+                  value={form.school_ids.map(String)}
+                  onChange={handleSchoolChange}
+                  multiple
+                  required
+                  size={Math.min(Math.max(schools.length, 3), 7)}
                 >
-                  <option value="">همه مجموعه‌ها (بدون محدودیت)</option>
                   {schools.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </Input>
                 <small className="text-muted">
-                  اگر انتخاب شود، کلاینت فقط داده‌های همان مجموعه را می‌بیند.
+                  حداقل یک مجموعه انتخاب کنید. برای انتخاب چند مورد از Ctrl یا Command استفاده کنید.
                 </small>
               </FormGroup>
               <FormGroup
