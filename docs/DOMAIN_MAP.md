@@ -15,6 +15,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Grades | `pages/Grades` | `gradeService` | `grades` | `/grades*` |
 | Parent tags | `pages/ParentTags` | `parentTagService` | `parentTags` | `/parent-tags*` |
 | Support forms | `pages/SupportForms` | `supportFormService` | `supportForms` | `/support-forms*` |
+| Answer sheets | `pages/AnswerSheets` | `answerSheetService` | `answerSheets` | `/answer-sheets` |
 | Files | `pages/Files` | `fileService` | `files` | `/files*` |
 | School chat | `pages/Chat` | `chatService` | `chat` | `/chat` |
 | Notifications | `pages/Notifications` | `notificationService` | `notifications` | `/notifications*` |
