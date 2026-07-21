@@ -23,4 +23,11 @@ export const API_ROUTES = {
     inactiveAdvisers: "/reports/inactive-advisers",
     inactiveAdvisersExport: "/reports/inactive-advisers/export",
   },
+  answerSheets: {
+    list: "/answer-sheets",
+    detail: (sessionId) => `/answer-sheets/${sessionId}`,
+    call: (sessionId) => `/answer-sheets/${sessionId}/call`,
+    exportTable: "/answer-sheets/export/table",
+    exportAnswers: "/answer-sheets/export/answers",
+  },
 }

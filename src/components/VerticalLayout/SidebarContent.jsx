@@ -437,6 +437,13 @@ const SidebarContent = (props) => {
         ],
       },
       {
+        type: "item",
+        label: "پاسخ‌نامه‌ها",
+        icon: "bx bx-task",
+        to: "/answer-sheets",
+        permission: "answer-sheets.index",
+      },
+      {
         type: "group",
         label: "تماس مشاوران",
         icon: "bx bx-headphone",

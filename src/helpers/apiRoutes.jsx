@@ -198,6 +198,13 @@ export const API_ROUTES = {
     detachAdviserStudents: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/students`,
   },
+  answerSheets: {
+    list: "/answer-sheets",
+    detail: (sessionId) => `/answer-sheets/${encodeURIComponent(sessionId)}`,
+    call: (sessionId) => `/answer-sheets/${encodeURIComponent(sessionId)}/call`,
+    exportTable: "/answer-sheets/export/table",
+    exportAnswers: "/answer-sheets/export/answers",
+  },
   files: {
     list: "/files",
     create: "/files",
