@@ -1,0 +1,35 @@
+.dynamic-report-date-input {
+  direction: ltr;
+  unicode-bidi: plaintext;
+}
+
+.dynamic-report-date-trigger {
+  min-height: 38px;
+  direction: ltr;
+  white-space: nowrap;
+}
+
+.dynamic-report-date-modal .rmdp-wrapper {
+  box-shadow: none;
+}
+
+.dynamic-report-checkbox {
+  width: max-content;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  user-select: none;
+
+  .form-check-input {
+    pointer-events: none;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+  }
+}
