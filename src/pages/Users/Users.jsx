@@ -36,6 +36,7 @@ import {
 import { getRoles } from "../../services/roleService.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import SwitchUserButton from "../../components/Common/SwitchUserButton.jsx";
+import UserRoleImportModal from "./UserRoleImportModal.jsx";
 
 const UserList = () => {
   const navigate = useNavigate();
@@ -71,6 +72,7 @@ const UserList = () => {
   const [loading, setLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState(null);
+  const [roleImportOpen, setRoleImportOpen] = useState(false);
   const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
   const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
   const initialPageRef = useRef(saved?.page ?? 1);
@@ -329,6 +331,10 @@ const UserList = () => {
     navigate("/users/create");
   };
 
+  const handleRoleImportCompleted = useCallback(async () => {
+    await fetchData(meta.page, filters, sort, roleId);
+  }, [fetchData, meta.page, filters, sort, roleId]);
+
   const handleEdit = useCallback(
     (id) => {
       navigate(`/users/${id}/edit`);
@@ -559,6 +565,16 @@ const UserList = () => {
               <CardHeader className="d-flex flex-wrap align-items-center justify-content-between gap-2">
                 <h4 className="card-title mb-0">لیست کاربران</h4>
                 <div className="d-flex flex-wrap gap-2">
+                  {hasPermission("users.roles.import") ? (
+                    <Button
+                      color="info"
+                      outline
+                      onClick={() => setRoleImportOpen(true)}
+                    >
+                      <i className="bx bx-spreadsheet ms-1" />
+                      تخصیص گروهی نقش با اکسل
+                    </Button>
+                  ) : null}
                   <Button
                     color="success"
                     outline
@@ -735,6 +751,13 @@ const UserList = () => {
             </Card>
           </Col>
         </Row>
+        {hasPermission("users.roles.import") ? (
+          <UserRoleImportModal
+            isOpen={roleImportOpen}
+            toggle={() => setRoleImportOpen(false)}
+            onImported={handleRoleImportCompleted}
+          />
+        ) : null}
       </div>
     </div>
   );

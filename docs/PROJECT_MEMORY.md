@@ -69,6 +69,7 @@ Use `apiPatch` for partial updates and `getApiUrl(API_ROUTES...)` for every endp
 
 - CSV downloads: native streaming `fetch`, bearer token from `authStorage`, UTF-8 BOM, progress from content-length headers. References: `Users.jsx`, `OutboundCallHistories.jsx`.
 - Excel import: lazy `import("xlsx")`, virtualized preview, multipart upload with `onUploadProgress`. Reference: `StudentList.jsx`.
+- User role Excel import: `UserRoleImportModal.jsx` uses the protected `users.roles.import` action, downloads the backend xlsx template, submits `file` plus numeric `roleId`, and reports partial row issues without replacing existing roles.
 - Back-navigation list restoration: `src/hooks/useListState.js`, which persists under `sessionStorage` keys prefixed with `list:` and restores only on POP navigation.
 - User impersonation: `userSwitchService.jsx` plus `ImpersonationBanner`/`SwitchUserButton`; treat token switching as auth-sensitive work.
 - Realtime VoIP view uses socket.io; inspect `OutboundCallHistoriesLive.jsx` and socket docs service before changing event handling.

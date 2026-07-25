@@ -11,6 +11,11 @@ export const API_ROUTES = {
     contact: (studentId, contactId) => `/students/${studentId}/contacts/${contactId}`,
     contactSetDefault: (studentId, contactId) => `/students/${studentId}/contacts/${contactId}/set-default`,
   },
+  users: {
+    list: "/users",
+    importRoles: "/authorization/users/roles/import",
+    importRolesTemplate: "/authorization/users/roles/import/template",
+  },
   reports: {
     callsByAdviser: "/reports/calls-by-adviser",
     callsByAdviserExport: "/reports/calls-by-adviser/export",

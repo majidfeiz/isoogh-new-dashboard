@@ -7,7 +7,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Dashboard | `pages/Dashboard`, `pages/Admin/DashboardWidgets` | `dashboardService` | `dashboard` | `/dashboard`, `/admin/dashboard-widgets` |
 | Auth/profile/sessions | `pages/Authentication`, `pages/Sessions` | `authService`, `profileService`, `sessionService` | `auth`, `profile` | `/login`, `/profile`, `/admin/users/:userId/sessions` |
 | Authorization | `pages/Permissions`, `pages/Roles` | `permissionService`, `roleService` | `permissions`, `roles` | `/permissions*`, `/roles*` |
-| Users/impersonation | `pages/Users` | `userService`, `userSwitchService` | `users`, `userSwitch` | `/users*` |
+| Users/impersonation/role import | `pages/Users` | `userService`, `userSwitchService` | `users`, `userSwitch` | `/users*` |
 | Managers | `pages/Managers` | `managerService` | `managers` | `/managers*` |
 | Advisers | `pages/Advisers` | `adviserService` | `advisers` | `/advisers*` |
 | Students | `pages/Students` | `studentService` | `students` | `/students*` |

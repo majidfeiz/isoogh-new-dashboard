@@ -73,6 +73,8 @@ export const API_ROUTES = {
 
     syncRoles: (id) => `/authorization/users/${id}/roles`,
     syncPermissions: (id) => `/authorization/users/${id}/permissions`,
+    importRoles: "/authorization/users/roles/import",
+    importRolesTemplate: "/authorization/users/roles/import/template",
     export: "/users/export",
     archive: (id) => `/users/${id}/archive`,
     unarchive: (id) => `/users/${id}/unarchive`,
