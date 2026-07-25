@@ -258,6 +258,11 @@ import ContactFormsComprehensive from "../pages/Reports/ContactFormsComprehensiv
 import ContactFormsOnline from "../pages/Reports/ContactFormsOnline.jsx";
 import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.jsx";
 import InactiveAdvisers from "../pages/Reports/InactiveAdvisers.jsx";
+import DynamicReportList from "../pages/DynamicReports/DynamicReportList.jsx";
+import DynamicReportWizard from "../pages/DynamicReports/DynamicReportWizard.jsx";
+import DynamicReportView from "../pages/DynamicReports/DynamicReportView.jsx";
+import AccessDenied from "../pages/DynamicReports/AccessDenied.jsx";
+import ProtectedRoute from "../components/Access/ProtectedRoute.jsx";
 
 // admin - dashboard widgets
 import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
@@ -288,6 +293,7 @@ import AdviserPortalInterruptedCalls from "../pages/AdviserPortal/InterruptedCal
 
 
 const authProtectedRoutes = [
+  { path: "/403", component: <AccessDenied /> },
   { path: "/dashboard", component: <Dashboard /> },
   { path: "/dashboard-saas", component: <DashboardSaas /> },
   { path: "/dashboard-crypto", component: <DashboardCrypto /> },
@@ -421,6 +427,10 @@ const authProtectedRoutes = [
   { path: "/reports/contact-forms-online", component: <ContactFormsOnline /> },
   { path: "/reports/student-voip-comprehensive", component: <StudentVoipComprehensive /> },
   { path: "/reports/inactive-advisers", component: <InactiveAdvisers /> },
+  { path: "/dynamic-reports", component: <ProtectedRoute permission="dynamic-reports.index"><DynamicReportList /></ProtectedRoute> },
+  { path: "/dynamic-reports/create", component: <ProtectedRoute permission="dynamic-reports.create"><DynamicReportWizard /></ProtectedRoute> },
+  { path: "/dynamic-reports/:id/edit", component: <ProtectedRoute permission="dynamic-reports.update"><DynamicReportWizard /></ProtectedRoute> },
+  { path: "/dynamic-reports/:id", component: <ProtectedRoute permission="dynamic-reports.show"><DynamicReportView /></ProtectedRoute> },
 
   // admin - dashboard widgets
   { path: "/admin/dashboard-widgets", component: <DashboardWidgetsAdmin /> },

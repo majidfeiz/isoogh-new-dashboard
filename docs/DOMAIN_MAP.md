@@ -7,7 +7,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Dashboard | `pages/Dashboard`, `pages/Admin/DashboardWidgets` | `dashboardService` | `dashboard` | `/dashboard`, `/admin/dashboard-widgets` |
 | Auth/profile/sessions | `pages/Authentication`, `pages/Sessions` | `authService`, `profileService`, `sessionService` | `auth`, `profile` | `/login`, `/profile`, `/admin/users/:userId/sessions` |
 | Authorization | `pages/Permissions`, `pages/Roles` | `permissionService`, `roleService` | `permissions`, `roles` | `/permissions*`, `/roles*` |
-| Users/impersonation | `pages/Users` | `userService`, `userSwitchService` | `users`, `userSwitch` | `/users*` |
+| Users/impersonation/role import | `pages/Users` | `userService`, `userSwitchService` | `users`, `userSwitch` | `/users*` |
 | Managers | `pages/Managers` | `managerService` | `managers` | `/managers*` |
 | Advisers | `pages/Advisers` | `adviserService` | `advisers` | `/advisers*` |
 | Students | `pages/Students` | `studentService` | `students` | `/students*` |
@@ -24,6 +24,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | VoIP webhooks | `pages/VoipWebhooks` | `voipWebhookService` | `voipWebhooks` | `/voip-webhooks*` |
 | External API clients | `pages/ExternalApi` | `externalApiService` | `externalApiClients` | `/external-api-clients*` |
 | Reports | `pages/Reports` | `reportService` | `reports` | `/reports`, `/reports/adviser-call-performance`, `/reports/contact-forms-comprehensive`, `/reports/contact-forms-online`, `/reports/student-voip-comprehensive`, `/reports/inactive-advisers` |
+| Dynamic reports | `pages/DynamicReports` | `dynamicReportService` | `dynamicReports` | `/dynamic-reports*` |
 | Adviser portal | `pages/AdviserPortal` | `adviserPortalService` | `adviserPortal` | `/adviser-calls*` |
 | Super-adviser portal | `pages/SuperAdviserPortal` | `superAdviserPortalService` | `superAdviserPortal` | `/super-adviser-portal*` |
 
