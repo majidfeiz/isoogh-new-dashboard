@@ -258,6 +258,8 @@ import ContactFormsComprehensive from "../pages/Reports/ContactFormsComprehensiv
 import ContactFormsOnline from "../pages/Reports/ContactFormsOnline.jsx";
 import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.jsx";
 import InactiveAdvisers from "../pages/Reports/InactiveAdvisers.jsx";
+import StudentContactRecords from "../pages/Reports/StudentContactRecords.jsx";
+import StudentContactRecordDetail from "../pages/Reports/StudentContactRecordDetail.jsx";
 import DynamicReportList from "../pages/DynamicReports/DynamicReportList.jsx";
 import DynamicReportWizard from "../pages/DynamicReports/DynamicReportWizard.jsx";
 import DynamicReportView from "../pages/DynamicReports/DynamicReportView.jsx";
@@ -426,6 +428,8 @@ const authProtectedRoutes = [
   { path: "/reports/contact-forms-comprehensive", component: <ContactFormsComprehensive /> },
   { path: "/reports/contact-forms-online", component: <ContactFormsOnline /> },
   { path: "/reports/student-voip-comprehensive", component: <StudentVoipComprehensive /> },
+  { path: "/reports/student-contact-records", component: <StudentContactRecords /> },
+  { path: "/reports/student-contact-records/:studentId", component: <StudentContactRecordDetail /> },
   { path: "/reports/inactive-advisers", component: <InactiveAdvisers /> },
   { path: "/dynamic-reports", component: <ProtectedRoute permission="dynamic-reports.index"><DynamicReportList /></ProtectedRoute> },
   { path: "/dynamic-reports/create", component: <ProtectedRoute permission="dynamic-reports.create"><DynamicReportWizard /></ProtectedRoute> },
