@@ -35,4 +35,9 @@ export const API_ROUTES = {
     exportTable: "/answer-sheets/export/table",
     exportAnswers: "/answer-sheets/export/answers",
   },
+  dynamicReports: {
+    preview: "/dynamic-reports/preview",
+    execute: (id) => `/dynamic-reports/${id}/execute`,
+    widgetData: (id, widgetId) => `/dynamic-reports/${id}/widgets/${widgetId}/data`,
+  },
 }

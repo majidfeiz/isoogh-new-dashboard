@@ -45,5 +45,6 @@ export const restoreDynamicReport = async (id) => unwrap(await apiPost(getApiUrl
 export const validateDefinition = async (definition, signal) => unwrap(await apiPost(getApiUrl(API_ROUTES.dynamicReports.validate), definition, { signal, silent: true }));
 export const estimateDefinition = async (definition, signal) => unwrap(await apiPost(getApiUrl(API_ROUTES.dynamicReports.estimate), definition, { signal, silent: true }));
 export const previewDefinition = async (payload, signal) => unwrap(await apiPost(getApiUrl(API_ROUTES.dynamicReports.preview), payload, { signal, silent: true }));
-export const executeDynamicReport = async (id, payload = {}) => unwrap(await apiPost(getApiUrl(API_ROUTES.dynamicReports.execute(id)), payload));
+export const executeDynamicReport = async (id, payload = {}, signal) => unwrap(await apiPost(getApiUrl(API_ROUTES.dynamicReports.execute(id)), payload, { signal, silent: true }));
+export const getDynamicReportWidgetData = async (id, widgetId, payload = {}, signal) => unwrap(await apiPost(getApiUrl(API_ROUTES.dynamicReports.widgetData(id, widgetId)), payload, { signal, silent: true }));
 export const exportDynamicReport = (id, payload, onDownloadProgress) => http.post(getApiUrl(API_ROUTES.dynamicReports.exports(id)), payload, { responseType: "blob", onDownloadProgress });

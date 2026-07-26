@@ -17,6 +17,7 @@ import { getSupportForms } from "../../services/supportFormService.jsx";
 import { exportAnswerSheets, getAnswerSheets } from "../../services/answerSheetService.jsx";
 import AnswerSheetDetailModal from "./AnswerSheetDetailModal.jsx";
 import AnswerSheetCallModal from "./AnswerSheetCallModal.jsx";
+import AnswerSheetActions from "./AnswerSheetActions.jsx";
 import {
   EMPTY_FILTERS,
   formatJalaliDateTime,
@@ -49,8 +50,7 @@ const AnswerSheetList = () => {
   const [dateFrom, setDateFrom] = useState(() => toDateObject(query.dateFrom));
   const [dateTo, setDateTo] = useState(() => toDateObject(query.dateTo));
   const [filterError, setFilterError] = useState("");
-  const [detailSessionId, setDetailSessionId] = useState(null);
-  const [callSessionId, setCallSessionId] = useState(null);
+  const [activeAction, setActiveAction] = useState(null);
   const [exporting, setExporting] = useState({ table: false, answers: false });
   const requestRef = useRef(null);
 
@@ -120,6 +120,7 @@ const AnswerSheetList = () => {
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
+    setActiveAction(null);
     setLoading(true);
     setError("");
     try {
@@ -179,11 +180,16 @@ const AnswerSheetList = () => {
     { id: "studentSsn", accessorKey: "studentSsn", header: "کد ملی", enableSorting: false, cell: ({ getValue }) => getValue() || "—" },
     { id: "adviserName", accessorKey: "adviserName", header: "نام مشاور", enableSorting: false, cell: ({ getValue }) => getValue() || "—" },
     { id: "submittedAt", accessorKey: "submittedAt", header: "تاریخ ثبت", enableSorting: false, cell: ({ getValue }) => formatJalaliDateTime(getValue()) },
-    { id: "actions", header: "عملیات", enableSorting: false, cell: ({ row }) => <div className="d-flex flex-wrap gap-2">
-      {canShow && <Button color="primary" outline size="sm" onClick={() => setDetailSessionId(row.original.sessionId)}><i className="bx bx-show me-1" />مشاهده پاسخ‌ها</Button>}
-      {canShowCall && <Button color="info" outline size="sm" onClick={() => setCallSessionId(row.original.sessionId)}><i className="bx bx-phone-call me-1" />مشاهده تماس</Button>}
-    </div> },
-  ], [canShow, canShowCall]);
+    { id: "actions", header: "عملیات", enableSorting: false, cell: ({ row }) => (
+      <AnswerSheetActions
+        sessionId={row.original.sessionId}
+        activeAction={activeAction}
+        canShow={canShow}
+        canShowCall={canShowCall}
+        onSelect={setActiveAction}
+      />
+    ) },
+  ], [activeAction, canShow, canShowCall]);
 
   if (!hasPermission("answer-sheets.index")) return <Navigate to="/" replace />;
 
@@ -221,8 +227,8 @@ const AnswerSheetList = () => {
         <Paginations perPageData={meta.limit} data={items} totalRecords={meta.total} currentPage={meta.page} setCurrentPage={(page) => updateQuery({ page })} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" />
       </CardBody>
     </Card>
-    <AnswerSheetDetailModal sessionId={detailSessionId} isOpen={Boolean(detailSessionId)} toggle={() => setDetailSessionId(null)} />
-    <AnswerSheetCallModal sessionId={callSessionId} isOpen={Boolean(callSessionId)} toggle={() => setCallSessionId(null)} />
+    <AnswerSheetDetailModal sessionId={activeAction?.type === "answers" ? activeAction.sessionId : null} isOpen={activeAction?.type === "answers"} toggle={() => setActiveAction(null)} />
+    <AnswerSheetCallModal sessionId={activeAction?.type === "call" ? activeAction.sessionId : null} isOpen={activeAction?.type === "call"} toggle={() => setActiveAction(null)} />
   </div></div>;
 };
 

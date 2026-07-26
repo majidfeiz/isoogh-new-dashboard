@@ -57,6 +57,40 @@ export const normalizeDefinition = (definition) => {
   if (!clean.visualization?.type || clean.visualization.type === "table") delete clean.visualization;
   return clean;
 };
+export const getTableRows = (result) =>
+  Array.isArray(result?.displayRows)
+    ? result.displayRows
+    : Array.isArray(result?.rows)
+      ? result.rows
+      : [];
+export const hasDisplayRows = (result) => Array.isArray(result?.displayRows);
+export const getDisplaySummary = (result) =>
+  result?.displaySummary ?? result?.summary ?? {};
+export const hasDisplaySummary = (result) =>
+  result?.displaySummary !== undefined && result?.displaySummary !== null;
+export const getExecutionMeta = (result, fallback = {}) => {
+  const meta = result?.meta ?? result?.pagination ?? {};
+  const limit = Math.min(100, Math.max(1, Number(meta.limit ?? fallback.limit ?? 20)));
+  const total = Math.max(0, Number(meta.total ?? 0));
+  return {
+    page: Math.max(1, Number(meta.page ?? fallback.page ?? 1)),
+    limit,
+    total,
+    lastPage: Math.max(1, Number((meta.lastPage ?? Math.ceil(total / limit)) || 1)),
+  };
+};
+export const formatBackendDisplayValue = (value) => {
+  if (value == null) return "—";
+  if (typeof value === "boolean") return value ? "بله" : "خیر";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+};
 export const formatValue = (value, type, options = {}) => {
   if (value == null) return "—";
   if (type === "datetime" || type === "date") return new Intl.DateTimeFormat("fa-IR-u-ca-persian", { dateStyle: "medium", ...(type === "datetime" ? { timeStyle: "short", timeZone: "Asia/Tehran" } : {}) }).format(new Date(value));

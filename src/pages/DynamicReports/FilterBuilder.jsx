@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from "react";
 import { Button, Col, Input, Label, Modal, ModalBody, ModalFooter, ModalHeader, Row } from "reactstrap";
 import { Calendar } from "react-multi-date-picker";
-import TimePicker from "react-multi-date-picker/plugins/time_picker";
 import DateObject from "react-date-object";
 import persian from "react-date-object/calendars/persian";
 import persianFa from "react-date-object/locales/persian_fa";
 import { makeCondition, makeGroup, removeFilterNode, updateFilterNode } from "./utils.js";
+import {
+  createPersianPickerDate,
+  displayPersianFilterDate,
+  serializePersianFilterDate,
+} from "./dateFilterUtils.js";
 import { normalizeCatalogList, normalizeIdList } from "./catalogUtils.js";
 import { getFieldOptions } from "../../services/dynamicReportService.jsx";
 import "./dynamic-reports.scss";
@@ -36,22 +40,12 @@ const typedValue = (raw, field) => {
   return raw;
 };
 
-const makePersianDate = (value) => new DateObject({
-  date: value && !Number.isNaN(new Date(value).getTime()) ? new Date(value) : new Date(),
-  calendar: persian,
-  locale: persianFa,
-  format: "YYYY/MM/DD HH:mm",
-});
-
-const JalaliDateTimeInput = ({ value, onChange, placeholder }) => {
+const JalaliDateInput = ({ value, onChange, placeholder }) => {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(null);
-  const validValue = value && !Number.isNaN(new Date(value).getTime()) ? value : "";
-  const displayValue = validValue
-    ? new DateObject({ date: new Date(validValue), calendar: persian, locale: persianFa }).format("YYYY/MM/DD HH:mm")
-    : "";
+  const displayValue = displayPersianFilterDate(value);
   const openPicker = () => {
-    setDraft(makePersianDate(validValue));
+    setDraft(createPersianPickerDate(value));
     setOpen(true);
   };
   return <>
@@ -60,7 +54,7 @@ const JalaliDateTimeInput = ({ value, onChange, placeholder }) => {
       {displayValue || placeholder}
     </Button>
     <Modal isOpen={open} toggle={() => setOpen(false)} centered className="dynamic-report-date-modal">
-      <ModalHeader toggle={() => setOpen(false)}>انتخاب تاریخ و ساعت شمسی</ModalHeader>
+      <ModalHeader toggle={() => setOpen(false)}>انتخاب تاریخ شمسی</ModalHeader>
       <ModalBody className="d-flex justify-content-center">
         <Calendar
           calendar={persian}
@@ -72,12 +66,11 @@ const JalaliDateTimeInput = ({ value, onChange, placeholder }) => {
             if (current) next.set({ day: Math.min(current.day, next.month.length), hour: current.hour, minute: current.minute });
             return next;
           })}
-          format="YYYY/MM/DD HH:mm"
-          plugins={[<TimePicker key="time" position="bottom" hideSeconds />]}
+          format="YYYY/MM/DD"
         />
       </ModalBody>
       <ModalFooter>
-        <Button color="primary" disabled={!draft} onClick={() => { onChange(draft.toDate().toISOString()); setOpen(false); }}>تأیید تاریخ</Button>
+        <Button color="primary" disabled={!draft} onClick={() => { onChange(serializePersianFilterDate(draft)); setOpen(false); }}>تأیید تاریخ</Button>
         <Button color="light" onClick={() => { onChange(""); setOpen(false); }}>پاک کردن</Button>
         <Button color="secondary" outline onClick={() => setOpen(false)}>انصراف</Button>
       </ModalFooter>
@@ -95,12 +88,12 @@ const FilterValueControl = ({ sourceId, field, condition, onValue }) => {
   }, [sourceId, field?.id, field?.type]);
   if (condition.operator === "between") {
     const values = Array.isArray(condition.value) ? condition.value : ["", ""];
-    if (field?.type === "datetime") return <div className="d-flex gap-2"><JalaliDateTimeInput value={values[0]} onChange={(value) => onValue([value, values[1] ?? ""])} placeholder="ابتدای بازه شمسی" /><JalaliDateTimeInput value={values[1]} onChange={(value) => onValue([values[0] ?? "", value])} placeholder="انتهای بازه شمسی" /></div>;
+    if (field?.type === "datetime") return <div className="d-flex gap-2"><JalaliDateInput value={values[0]} onChange={(value) => onValue([value, values[1] ?? ""])} placeholder="ابتدای بازه شمسی" /><JalaliDateInput value={values[1]} onChange={(value) => onValue([values[0] ?? "", value])} placeholder="انتهای بازه شمسی" /></div>;
     return <div className="d-flex gap-2"><Input type="number" value={values[0] ?? ""} onChange={(e) => onValue([typedValue(e.target.value, field), values[1] ?? ""])} aria-label="ابتدای بازه" /><Input type="number" value={values[1] ?? ""} onChange={(e) => onValue([values[0] ?? "", typedValue(e.target.value, field)])} aria-label="انتهای بازه" /></div>;
   }
   if (options.length) return <Input type="select" value={condition.value ?? ""} onChange={(e) => onValue(typedValue(e.target.value, field))}><option value="">انتخاب کنید</option>{options.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</Input>;
   if (["in", "not_in"].includes(condition.operator)) return <Input value={Array.isArray(condition.value) ? condition.value.join(", ") : ""} onChange={(e) => onValue(e.target.value.split(",").map((item) => typedValue(item.trim(), field)).filter((item) => item !== ""))} placeholder="مقادیر را با ویرگول جدا کنید" />;
-  if (field?.type === "datetime") return <JalaliDateTimeInput value={condition.value} onChange={onValue} placeholder="تاریخ و زمان شمسی" />;
+  if (field?.type === "datetime") return <JalaliDateInput value={condition.value} onChange={onValue} placeholder="تاریخ شمسی" />;
   return <Input type={["integer", "decimal", "duration"].includes(field?.type) ? "number" : "text"} value={condition.value ?? ""} onChange={(e) => onValue(typedValue(e.target.value, field))} />;
 };
 
