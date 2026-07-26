@@ -23,7 +23,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | VoIP analytics | `pages/Voip/Analytics` | `voipAnalyticsService` | `voipAnalytics` | `/voip/analytics` |
 | VoIP webhooks | `pages/VoipWebhooks` | `voipWebhookService` | `voipWebhooks` | `/voip-webhooks*` |
 | External API clients | `pages/ExternalApi` | `externalApiService` | `externalApiClients` | `/external-api-clients*` |
-| Reports | `pages/Reports` | `reportService` | `reports` | `/reports`, `/reports/adviser-call-performance`, `/reports/contact-forms-comprehensive`, `/reports/contact-forms-online`, `/reports/student-voip-comprehensive`, `/reports/inactive-advisers` |
+| Reports | `pages/Reports` | `reportService`, `studentContactRecordService` | `reports` | `/reports`, `/reports/adviser-call-performance`, `/reports/contact-forms-comprehensive`, `/reports/contact-forms-online`, `/reports/student-voip-comprehensive`, `/reports/student-contact-records*`, `/reports/inactive-advisers` |
 | Dynamic reports | `pages/DynamicReports` | `dynamicReportService` | `dynamicReports` | `/dynamic-reports*` |
 | Adviser portal | `pages/AdviserPortal` | `adviserPortalService` | `adviserPortal` | `/adviser-calls*` |
 | Super-adviser portal | `pages/SuperAdviserPortal` | `superAdviserPortalService` | `superAdviserPortal` | `/super-adviser-portal*` |

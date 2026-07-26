@@ -25,6 +25,11 @@ export const API_ROUTES = {
     contactFormsOnlineExport: "/reports/contact-forms-online/export",
     studentVoipComprehensive: "/reports/student-voip-comprehensive",
     studentVoipComprehensiveExport: "/reports/student-voip-comprehensive/export",
+    studentContactRecords: "/reports/student-contact-records",
+    studentContactRecordsExport: "/reports/student-contact-records/export",
+    studentContactRecord: (studentId) => `/reports/student-contact-records/${studentId}`,
+    studentContactCallAnswers: (studentId, callId) =>
+      `/reports/student-contact-records/${studentId}/calls/${callId}/answers`,
     inactiveAdvisers: "/reports/inactive-advisers",
     inactiveAdvisersExport: "/reports/inactive-advisers/export",
   },
