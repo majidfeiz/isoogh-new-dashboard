@@ -1,0 +1,35 @@
+.answer-sheet-action-button {
+  min-height: 32px;
+  border-width: 1px;
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+
+  &:hover:not(:disabled):not(.is-active) {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(85, 110, 230, 0.16);
+  }
+
+  &.is-active,
+  &[aria-pressed="true"] {
+    color: #fff;
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.2);
+    font-weight: 600;
+  }
+
+  &.is-active i,
+  &[aria-pressed="true"] i {
+    color: currentColor;
+  }
+
+  &:focus-visible {
+    box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.28);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    box-shadow: none;
+    transform: none;
+    cursor: not-allowed;
+  }
+}
