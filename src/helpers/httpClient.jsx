@@ -99,7 +99,12 @@ http.interceptors.response.use(
     }
 
     // eslint-disable-next-line no-console
-    console.error("[API ERROR]", msg, error);
+    console.error("[API ERROR]", msg, {
+      status,
+      code: error?.code,
+      method: error?.config?.method,
+      url: error?.config?.url,
+    });
 
     return Promise.reject(error);
   }

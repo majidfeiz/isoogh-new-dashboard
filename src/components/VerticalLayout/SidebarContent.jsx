@@ -405,10 +405,15 @@ const SidebarContent = (props) => {
           "reports.contact-forms-comprehensive.index",
           "reports.contact-forms-online.index",
           "reports.student-voip-comprehensive.index",
+          "reports.student-contact-records.index",
           "reports.inactive-advisers.index",
+          "dynamic-reports.index",
+          "dynamic-reports.create",
         ],
         children: [
           { label: "داشبورد گزارشات", to: "/reports", permission: "reports.index" },
+          { label: "گزارش‌ساز پویا", to: "/dynamic-reports", permission: "dynamic-reports.index" },
+          { label: "ساخت گزارش پویا", to: "/dynamic-reports/create", permission: "dynamic-reports.create" },
           {
             label: "عملکرد تماس مشاوران",
             to: "/reports/adviser-call-performance",
@@ -428,6 +433,11 @@ const SidebarContent = (props) => {
             label: "گزارش جامع VoIP دانش‌آموزی",
             to: "/reports/student-voip-comprehensive",
             permission: "reports.student-voip-comprehensive.index",
+          },
+          {
+            label: "لیست دانش‌آموزان و پرونده تماس",
+            to: "/reports/student-contact-records",
+            permission: "reports.student-contact-records.index",
           },
           {
             label: "مشاوران غیرفعال",

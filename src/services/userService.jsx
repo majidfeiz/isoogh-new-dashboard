@@ -122,6 +122,28 @@ export async function unarchiveUser(id) {
   return res.data;
 }
 
+export async function importUserRoles({ file, roleId, onUploadProgress } = {}) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("roleId", String(roleId));
+
+  const url = getApiUrl(API_ROUTES.users.importRoles);
+  const res = await apiPost(url, formData, { onUploadProgress });
+  return res?.data?.data || res?.data;
+}
+
+export async function downloadUserRoleImportTemplate() {
+  const url = getApiUrl(API_ROUTES.users.importRolesTemplate);
+  const res = await apiGet(url, {
+    responseType: "blob",
+    headers: {
+      Accept:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    },
+  });
+  return res?.data;
+}
+
 // همگام‌سازی نقش‌های یک کاربر
 export async function syncUserRoles(id, roleIds) {
   const url = getApiUrl(API_ROUTES.users.syncRoles(id));

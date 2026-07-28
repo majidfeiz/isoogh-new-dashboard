@@ -11,6 +11,11 @@ export const API_ROUTES = {
     contact: (studentId, contactId) => `/students/${studentId}/contacts/${contactId}`,
     contactSetDefault: (studentId, contactId) => `/students/${studentId}/contacts/${contactId}/set-default`,
   },
+  users: {
+    list: "/users",
+    importRoles: "/authorization/users/roles/import",
+    importRolesTemplate: "/authorization/users/roles/import/template",
+  },
   reports: {
     callsByAdviser: "/reports/calls-by-adviser",
     callsByAdviserExport: "/reports/calls-by-adviser/export",
@@ -20,6 +25,11 @@ export const API_ROUTES = {
     contactFormsOnlineExport: "/reports/contact-forms-online/export",
     studentVoipComprehensive: "/reports/student-voip-comprehensive",
     studentVoipComprehensiveExport: "/reports/student-voip-comprehensive/export",
+    studentContactRecords: "/reports/student-contact-records",
+    studentContactRecordsExport: "/reports/student-contact-records/export",
+    studentContactRecord: (studentId) => `/reports/student-contact-records/${studentId}`,
+    studentContactCallAnswers: (studentId, callId) =>
+      `/reports/student-contact-records/${studentId}/calls/${callId}/answers`,
     inactiveAdvisers: "/reports/inactive-advisers",
     inactiveAdvisersExport: "/reports/inactive-advisers/export",
   },
@@ -29,5 +39,10 @@ export const API_ROUTES = {
     call: (sessionId) => `/answer-sheets/${sessionId}/call`,
     exportTable: "/answer-sheets/export/table",
     exportAnswers: "/answer-sheets/export/answers",
+  },
+  dynamicReports: {
+    preview: "/dynamic-reports/preview",
+    execute: (id) => `/dynamic-reports/${id}/execute`,
+    widgetData: (id, widgetId) => `/dynamic-reports/${id}/widgets/${widgetId}/data`,
   },
 }
