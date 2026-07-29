@@ -16,9 +16,13 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
  */
 
 /**
+ * @typedef {"NO ANSWER"|"ANSWERED"|"BUSY"|"FAILED"} OutboundDisposition
+ */
+
+/**
  * @typedef {Object} OutboundCallHistory
  * @property {number|string|null} id
- * @property {string} disposition
+ * @property {OutboundDisposition} [disposition]
  * @property {OutboundCallHistoryFile[]} files
  */
 
@@ -53,6 +57,7 @@ export async function getOutboundCallHistories({
   per_page = 15,
   type = "",
   q = "",
+  disposition = "ALL",
   sortBy = "",
   sortOrder = "",
   start_date = "",
@@ -66,6 +71,7 @@ export async function getOutboundCallHistories({
       per_page,
       type: type || undefined,
       q: q || undefined,
+      disposition: disposition && disposition !== "ALL" ? disposition : undefined,
       // API فقط snake_case می‌خواهد
       sort_by: sortBy || undefined,
       sort_order: sortOrder || undefined,
@@ -101,6 +107,7 @@ export async function exportOutboundCallHistories({
   per_page = 15,
   type = "",
   q = "",
+  disposition = "ALL",
   start_date = "",
   end_date = "",
   onDownloadProgress,
@@ -115,6 +122,7 @@ export async function exportOutboundCallHistories({
       per_page,
       type: type || undefined,
       q: q || undefined,
+      disposition: disposition && disposition !== "ALL" ? disposition : undefined,
       start_date: start_date || undefined,
       end_date: end_date || undefined,
     },

@@ -3,6 +3,7 @@ import React, { useMemo } from "react"
 import { Badge, Card, CardBody, CardHeader, Spinner } from "reactstrap"
 
 const faNum = (v) => (v == null ? "—" : Number(v).toLocaleString("fa-IR"))
+const formatCount = (value) => Number(value ?? 0).toLocaleString("fa-IR")
 const faPct = (v) => (v == null ? "—" : `${Number(v).toFixed(1)}٪`)
 
 function healthScore(row) {
@@ -81,6 +82,7 @@ const SummaryTable = ({ data, loading, error, onSchoolClick }) => {
               <thead className="table-light">
                 <tr className="text-center">
                   <th className="text-end">مجموعه</th>
+                  <th>کل تماس‌ها</th>
                   <th>تماس ANSWERED</th>
                   <th>اختلاف Duration</th>
                   <th>فایل ناموفق</th>
@@ -102,6 +104,7 @@ const SummaryTable = ({ data, loading, error, onSchoolClick }) => {
                         {row.school_name || `مجموعه ${row.school_id}`}
                       </button>
                     </td>
+                    <td className="text-center">{formatCount(row.total_calls)}</td>
                     <td className="text-center">{faNum(row.total_answered_calls)}</td>
                     <td className="text-center">{pctBadge(row.duration_mismatch_percent)}</td>
                     <td className="text-center">{pctBadge(row.failed_file_percent)}</td>
@@ -115,6 +118,7 @@ const SummaryTable = ({ data, loading, error, onSchoolClick }) => {
                 <tfoot className="table-secondary fw-bold">
                   <tr>
                     <td>مجموع</td>
+                    <td className="text-center">{formatCount(data.totals.total_calls)}</td>
                     <td className="text-center">{faNum(data.totals.total_answered_calls)}</td>
                     <td className="text-center">{pctBadge(data.totals.duration_mismatch_percent)}</td>
                     <td className="text-center">{pctBadge(data.totals.failed_file_percent)}</td>

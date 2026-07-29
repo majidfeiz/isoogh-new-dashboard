@@ -38,6 +38,21 @@ const INITIAL_EXPORT_STATE = {
   errorMessage: null,
 };
 
+const DISPOSITION_OPTIONS = [
+  { value: "ALL", label: "همه وضعیت‌ها" },
+  { value: "ANSWERED", label: "پاسخ داده شد" },
+  { value: "NO ANSWER", label: "بدون پاسخ" },
+  { value: "BUSY", label: "مشغول" },
+  { value: "FAILED", label: "ناموفق" },
+];
+
+const DISPOSITION_META = {
+  ANSWERED: { label: "پاسخ داده شد", color: "success" },
+  "NO ANSWER": { label: "بدون پاسخ", color: "warning" },
+  BUSY: { label: "مشغول", color: "info" },
+  FAILED: { label: "ناموفق", color: "danger" },
+};
+
 const formatDateObjectGregorian = (dateObject) => {
   if (!dateObject) return "";
   const pad = (n) => String(n).padStart(2, "0");
@@ -53,6 +68,7 @@ const OutboundCallHistories = () => {
 
   const [type, setType] = useState("");
   const [q, setQ] = useState("");
+  const [disposition, setDisposition] = useState("ALL");
   const [loading, setLoading] = useState(false);
   const [sorting, setSorting] = useState([]);
   const [sort, setSort] = useState({ by: null, order: null });
@@ -84,6 +100,7 @@ const OutboundCallHistories = () => {
       page = 1,
       currentType = "",
       currentQ = "",
+      currentDisposition = "ALL",
       currentSortBy = "",
       currentSortOrder = "",
       currentStart = "",
@@ -97,6 +114,7 @@ const OutboundCallHistories = () => {
           per_page: meta.limit,
           type: currentType,
           q: cleanedQ,
+          disposition: currentDisposition,
           sortBy: currentSortBy,
           sortOrder: currentSortOrder,
           start_date: currentStart,
@@ -122,7 +140,7 @@ const OutboundCallHistories = () => {
   );
 
   useEffect(() => {
-    fetchData({ page: 1, currentType: "", currentQ: "" });
+    fetchData({ page: 1, currentType: "", currentQ: "", currentDisposition: "ALL" });
   }, [fetchData]);
 
   const handleSearch = useCallback(() => {
@@ -139,12 +157,13 @@ const OutboundCallHistories = () => {
       page: 1,
       currentType: type,
       currentQ: q,
+      currentDisposition: disposition,
       currentSortBy: sort.by,
       currentSortOrder: sort.order,
       currentStart: start,
       currentEnd: end,
     });
-  }, [fetchData, sort.by, sort.order, type, q, startDate, endDate]);
+  }, [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate]);
 
   const handlePageChange = useCallback(
     (page) => {
@@ -155,13 +174,31 @@ const OutboundCallHistories = () => {
         page,
         currentType: type,
         currentQ: q,
+        currentDisposition: disposition,
         currentSortBy: sort.by,
         currentSortOrder: sort.order,
         currentStart: start,
         currentEnd: end,
       });
     },
-    [fetchData, sort.by, sort.order, type, q, startDate, endDate]
+    [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate]
+  );
+
+  const handleDispositionChange = useCallback(
+    (value) => {
+      setDisposition(value);
+      fetchData({
+        page: 1,
+        currentType: type,
+        currentQ: q,
+        currentDisposition: value,
+        currentSortBy: sort.by,
+        currentSortOrder: sort.order,
+        currentStart: formatDateObjectGregorian(startDate),
+        currentEnd: formatDateObjectGregorian(endDate),
+      });
+    },
+    [fetchData, q, sort.by, sort.order, startDate, endDate, type]
   );
 
   const onKeyDown = (e) => {
@@ -173,6 +210,7 @@ const OutboundCallHistories = () => {
       if (e) e.preventDefault();
       setType("");
       setQ("");
+      setDisposition("ALL");
       setStartDate(null);
       setEndDate(null);
       setSearchError("");
@@ -180,6 +218,7 @@ const OutboundCallHistories = () => {
         page: 1,
         currentType: "",
         currentQ: "",
+        currentDisposition: "ALL",
         currentSortBy: sort.by,
         currentSortOrder: sort.order,
         currentStart: "",
@@ -262,6 +301,7 @@ const OutboundCallHistories = () => {
       if (sort?.order) params.append("sort_order", sort.order);
       if (type) params.append("type", type);
       if (cleanedQ) params.append("q", cleanedQ);
+      if (disposition !== "ALL") params.append("disposition", disposition);
       if (start) params.append("start_date", start);
       if (end) params.append("end_date", end);
 
@@ -314,7 +354,7 @@ const OutboundCallHistories = () => {
     } finally {
       exportAbortRef.current = null;
     }
-  }, [endDate, meta.limit, meta.total, q, sort.by, sort.order, startDate, type]);
+  }, [disposition, endDate, meta.limit, meta.total, q, sort.by, sort.order, startDate, type]);
 
   const handleCancelExport = useCallback(() => {
     if (exportAbortRef.current) {
@@ -348,13 +388,11 @@ const OutboundCallHistories = () => {
   };
 
   const dispositionFa = (val) => {
-    if (!val) return { label: "-", color: "secondary" };
-    const v = String(val).toUpperCase();
-    if (v === "ANSWERED") return { label: "پاسخ داده شد", color: "success" };
-    if (v === "NO ANSWER") return { label: "بی‌پاسخ", color: "warning" };
-    if (v === "BUSY") return { label: "مشغول", color: "info" };
-    if (v === "FAILED") return { label: "ناموفق", color: "danger" };
-    return { label: val, color: "secondary" };
+    const normalized = val ? String(val).toUpperCase() : "";
+    return DISPOSITION_META[normalized] || {
+      label: val || "نامشخص",
+      color: "secondary",
+    };
   };
 
   const columns = useMemo(
@@ -406,7 +444,6 @@ const OutboundCallHistories = () => {
         enableColumnFilter: false,
         cell: ({ row }) => {
           const { label, color } = dispositionFa(row.original?.disposition);
-          if (label === "-") return <span className="text-muted">-</span>;
           return (
             <Badge color={color} pill className="px-2 py-1" style={{ fontSize: "0.78rem" }}>
               {label}
@@ -587,7 +624,16 @@ const OutboundCallHistories = () => {
       if (!sortKey) {
         setSorting([]);
         setSort({ by: null, order: null });
-        fetchData({ page: 1, currentType: type, currentQ: q, currentSortBy: "", currentSortOrder: "" });
+        fetchData({
+          page: 1,
+          currentType: type,
+          currentQ: q,
+          currentDisposition: disposition,
+          currentSortBy: "",
+          currentSortOrder: "",
+          currentStart: formatDateObjectGregorian(startDate),
+          currentEnd: formatDateObjectGregorian(endDate),
+        });
         return;
       }
 
@@ -597,9 +643,9 @@ const OutboundCallHistories = () => {
       const start = formatDateObjectGregorian(startDate);
       const end = formatDateObjectGregorian(endDate);
 
-      fetchData({ page: 1, currentType: type, currentQ: q, currentSortBy: sortKey, currentSortOrder: sortDirection, currentStart: start, currentEnd: end });
+      fetchData({ page: 1, currentType: type, currentQ: q, currentDisposition: disposition, currentSortBy: sortKey, currentSortOrder: sortDirection, currentStart: start, currentEnd: end });
     },
-    [columnSortKeyMap, fetchData, q, type, startDate, endDate]
+    [columnSortKeyMap, disposition, fetchData, q, type, startDate, endDate]
   );
 
   const isExportBusy = exportState.status === "preparing" || exportState.status === "downloading";
@@ -725,9 +771,28 @@ const OutboundCallHistories = () => {
                       </Col>
                     </Row>
 
-                    {/* Row 2: Date range */}
+                    {/* Row 2: Disposition + date range */}
                     <Row className="g-3 align-items-end">
-                      <Col md="12">
+                      <Col md="3" sm="6">
+                        <Label className="form-label fw-medium mb-2" style={{ fontSize: "0.85rem" }}>
+                          <i className="mdi mdi-phone-check-outline me-1 text-muted" />
+                          وضعیت تماس
+                        </Label>
+                        <Input
+                          type="select"
+                          bsSize="sm"
+                          value={disposition}
+                          onChange={(e) => handleDispositionChange(e.target.value)}
+                          className="border-0 shadow-sm"
+                        >
+                          {DISPOSITION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Input>
+                      </Col>
+                      <Col md="9">
                         <Label className="form-label fw-medium mb-2" style={{ fontSize: "0.85rem" }}>
                           <i className="mdi mdi-calendar-range me-1 text-muted" />
                           بازه زمانی (شمسی)

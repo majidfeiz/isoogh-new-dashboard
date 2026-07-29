@@ -93,8 +93,8 @@ const OutboundCallHistoriesLive = () => {
     () => [
       { value: "ALL", label: "همه وضعیت‌ها" },
       { value: "ANSWERED", label: "پاسخ داده شد" },
-      { value: "NO ANSWER", label: "بی‌پاسخ" },
-      { value: "BUSY", label: "اشغال" },
+      { value: "NO ANSWER", label: "بدون پاسخ" },
+      { value: "BUSY", label: "مشغول" },
       { value: "FAILED", label: "ناموفق" },
     ],
     []
@@ -113,13 +113,13 @@ const OutboundCallHistoriesLive = () => {
   );
 
   const dispositionBadge = useCallback((val) => {
-    if (!val) return <span className="text-muted">-</span>;
+    if (!val) return <Badge color="secondary" pill>نامشخص</Badge>;
     const v = String(val).toUpperCase();
     if (v === "ANSWERED") return <Badge color="success" pill>پاسخ داده شد</Badge>;
-    if (v === "NO ANSWER") return <Badge color="secondary" pill>بی‌پاسخ</Badge>;
-    if (v === "BUSY") return <Badge color="warning" pill>مشغول</Badge>;
+    if (v === "NO ANSWER") return <Badge color="warning" pill>بدون پاسخ</Badge>;
+    if (v === "BUSY") return <Badge color="info" pill>مشغول</Badge>;
     if (v === "FAILED") return <Badge color="danger" pill>ناموفق</Badge>;
-    return <Badge color="light" pill className="text-dark">{val}</Badge>;
+    return <Badge color="secondary" pill>{val}</Badge>;
   }, []);
 
   const columns = useMemo(
@@ -385,7 +385,11 @@ const OutboundCallHistoriesLive = () => {
   }, []);
 
   const handleFilterChange = useCallback((field, value) => {
-    setFilters((prev) => ({ ...prev, [field]: value }));
+    setFilters((prev) => ({
+      ...prev,
+      [field]: value,
+      ...(field === "disposition" ? { page: 1 } : {}),
+    }));
   }, []);
 
   const handleApplyFilters = useCallback((e) => {
