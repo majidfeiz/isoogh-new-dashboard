@@ -5,6 +5,7 @@ import { API_ROUTES } from "../../../../helpers/apiRoutes.jsx"
 import { downloadVoipAnalyticsCsv } from "../../../../services/voipAnalyticsService.jsx"
 
 const faNum = (v) => (v == null ? "—" : Number(v).toLocaleString("fa-IR"))
+const formatCount = (value) => Number(value ?? 0).toLocaleString("fa-IR")
 const faPct = (v) => (v == null ? "—" : `${Number(v).toFixed(1)}٪`)
 
 function pctColor(pct) {
@@ -103,7 +104,12 @@ const AnalyticsKpiCards = ({
   if (loading) {
     return (
       <Row className="g-3 mb-4">
-        {[...KPI_DEFS, { key: "answeredCalls" }, { key: "unanswered" }].map((d) => (
+        {[
+          { key: "totalCalls" },
+          ...KPI_DEFS,
+          { key: "answeredCalls" },
+          { key: "unanswered" },
+        ].map((d) => (
           <Col key={d.key} xs="12" sm="6" xl="auto" style={{ flex: "1 1 0" }}>
             <SkeletonCard />
           </Col>
@@ -122,11 +128,41 @@ const AnalyticsKpiCards = ({
   }
 
   const totals = data?.totals || {}
-  const totalCalls = totals.total_answered_calls
+  const totalCalls = totals.total_calls
+  const totalAnsweredCalls = totals.total_answered_calls
   const unansweredTotals = unansweredData?.totals || {}
 
   return (
     <Row className="g-3 mb-4">
+      <Col xs="12" sm="6" xl="auto" style={{ flex: "1 1 0" }}>
+        <Card className="shadow-sm h-100">
+          <CardBody>
+            <div className="d-flex align-items-start justify-content-between mb-2">
+              <div>
+                <p className="text-muted mb-1" style={{ fontSize: "0.82rem" }}>
+                  تعداد کل تماس‌ها
+                </p>
+                <h3 className="mb-0 fw-bold" style={{ color: "#50a5f1" }}>
+                  {formatCount(totalCalls)}
+                  <small className="text-muted fw-normal" style={{ fontSize: "0.85rem" }}>
+                    {" "}تماس
+                  </small>
+                </h3>
+              </div>
+              <div
+                className="rounded-circle d-flex align-items-center justify-content-center text-white"
+                style={{ width: 42, height: 42, backgroundColor: "#50a5f1", flexShrink: 0 }}
+              >
+                <i className="mdi mdi-phone-outline fs-5" />
+              </div>
+            </div>
+            <small className="text-muted d-block" style={{ fontSize: "0.78rem" }}>
+              کل تماس‌های ثبت‌شده در بازه انتخاب‌شده
+            </small>
+          </CardBody>
+        </Card>
+      </Col>
+
       {KPI_DEFS.map((def) => {
         const count = totals[def.countField]
         const pct = totals[def.pctField]
@@ -162,9 +198,9 @@ const AnalyticsKpiCards = ({
                   <span className={`badge bg-${badgeClass} bg-opacity-10 text-${badgeClass} fw-semibold`}>
                     {faPct(pct)} از کل
                   </span>
-                  {totalCalls != null && (
+                  {totalAnsweredCalls != null && (
                     <small className="text-muted" style={{ fontSize: "0.78rem" }}>
-                      از {faNum(totalCalls)} تماس
+                      از {faNum(totalAnsweredCalls)} تماس
                     </small>
                   )}
                 </div>
@@ -200,7 +236,7 @@ const AnalyticsKpiCards = ({
                   تماس‌های پاسخ‌داده‌شده
                 </p>
                 <h3 className="mb-0 fw-bold" style={{ color: "#34c38f" }}>
-                  {faNum(totalCalls)}
+                  {faNum(totalAnsweredCalls)}
                   <small className="text-muted fw-normal" style={{ fontSize: "0.85rem" }}>
                     {" "}تماس
                   </small>
@@ -223,7 +259,7 @@ const AnalyticsKpiCards = ({
                 onClick={() =>
                   handleDownload("answeredCalls", "exportAnsweredCalls", "answered-calls.csv")
                 }
-                disabled={!!downloadingKey || !totalCalls}
+                disabled={!!downloadingKey || !totalAnsweredCalls}
               >
                 {downloadingKey === "answeredCalls" ? (
                   <Spinner size="sm" />
