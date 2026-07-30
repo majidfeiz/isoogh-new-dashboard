@@ -335,7 +335,7 @@ const SidebarContent = (props) => {
         type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
-        permissionAny: ["voip.outbound.index", "voip.analytics.index"],
+        permissionAny: ["voip.outbound.index", "voip.analytics.index", "voip.call-traces.index"],
         children: [
           {
             label: "تماس خروجی",
@@ -346,6 +346,11 @@ const SidebarContent = (props) => {
             label: "تماس خروجی آنلاین",
             to: "/voip/outbound-call-histories/online",
             permission: "voip.outbound.index",
+          },
+          {
+            label: "رهگیری تماس‌ها",
+            to: "/voip/call-traces",
+            permission: "voip.call-traces.index",
           },
           {
             label: "آنالیز وویپ",
@@ -407,6 +412,7 @@ const SidebarContent = (props) => {
           "reports.student-voip-comprehensive.index",
           "reports.student-contact-records.index",
           "reports.inactive-advisers.index",
+          "reports.support-form-answers.index",
           "dynamic-reports.index",
           "dynamic-reports.create",
         ],
@@ -443,6 +449,11 @@ const SidebarContent = (props) => {
             label: "مشاوران غیرفعال",
             to: "/reports/inactive-advisers",
             permission: "reports.inactive-advisers.index",
+          },
+          {
+            label: "پاسخ‌های فرم پشتیبانی",
+            to: "/reports/support-form-answers",
+            permission: "reports.support-form-answers.index",
           },
         ],
       },
