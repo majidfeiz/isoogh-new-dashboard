@@ -19,11 +19,11 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Files | `pages/Files` | `fileService` | `files` | `/files*` |
 | School chat | `pages/Chat` | `chatService` | `chat` | `/chat` |
 | Notifications | `pages/Notifications` | `notificationService` | `notifications` | `/notifications*` |
-| VoIP history/live | `pages/Voip` | `voipService` | `voip` | `/voip/outbound-call-histories*` |
+| VoIP history/live/traces | `pages/Voip` | `voipService` | `voip` | `/voip/outbound-call-histories*`, `/voip/call-traces` |
 | VoIP analytics | `pages/Voip/Analytics` | `voipAnalyticsService` | `voipAnalytics` | `/voip/analytics` |
 | VoIP webhooks | `pages/VoipWebhooks` | `voipWebhookService` | `voipWebhooks` | `/voip-webhooks*` |
 | External API clients | `pages/ExternalApi` | `externalApiService` | `externalApiClients` | `/external-api-clients*` |
-| Reports | `pages/Reports` | `reportService`, `studentContactRecordService` | `reports` | `/reports`, `/reports/adviser-call-performance`, `/reports/contact-forms-comprehensive`, `/reports/contact-forms-online`, `/reports/student-voip-comprehensive`, `/reports/student-contact-records*`, `/reports/inactive-advisers` |
+| Reports | `pages/Reports` | `reportService`, `studentContactRecordService` | `reports` | `/reports`, `/reports/adviser-call-performance`, `/reports/contact-forms-comprehensive`, `/reports/contact-forms-online`, `/reports/student-voip-comprehensive`, `/reports/student-contact-records*`, `/reports/inactive-advisers`, `/reports/support-form-answers` |
 | Dynamic reports | `pages/DynamicReports` | `dynamicReportService` | `dynamicReports` | `/dynamic-reports*` |
 | Adviser portal | `pages/AdviserPortal` | `adviserPortalService` | `adviserPortal` | `/adviser-calls*` |
 | Super-adviser portal | `pages/SuperAdviserPortal` | `superAdviserPortalService` | `superAdviserPortal` | `/super-adviser-portal*` |

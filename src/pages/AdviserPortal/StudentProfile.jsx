@@ -789,6 +789,11 @@ const StudentProfile = () => {
     setTimeout(() => { cooldown.current = false; }, 5000);
     try {
       const result = await makeCall({ supportFormId: Number(formId), studentId: Number(studentId) });
+      if (result?.traceId) {
+        toast.info(result?.message || "درخواست تماس ثبت شد");
+        navigate(`/voip/call-traces?traceId=${encodeURIComponent(result.traceId)}`);
+        return;
+      }
       if (!hasValidCallGroupId(result?.callGroupId)) {
         setCallTrackingWarningOpen(true);
         return;

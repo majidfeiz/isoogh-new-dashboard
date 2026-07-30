@@ -130,3 +130,100 @@ export async function exportOutboundCallHistories({
 
   return response?.data;
 }
+
+/**
+ * @typedef {"in_progress"|"waiting_for_cdr"|"completed"|"failed"} CallTraceStatus
+ * @typedef {"info"|"success"|"warning"|"error"} CallTraceEventLevel
+ *
+ * @typedef {Object} CallTraceParty
+ * @property {number} id
+ * @property {string|null} code
+ * @property {string|null} name
+ * @property {string|null} phone
+ *
+ * @typedef {Object} CallTraceEvent
+ * @property {number} id
+ * @property {number} sequence
+ * @property {string} step
+ * @property {number} progress
+ * @property {CallTraceEventLevel} level
+ * @property {string} title
+ * @property {string|null} message
+ * @property {Record<string, unknown>|null} payload
+ * @property {Record<string, unknown>|null} response
+ * @property {number|null} httpStatus
+ * @property {number|null} durationMs
+ * @property {string} createdAt
+ *
+ * @typedef {Object} CallTrace
+ * @property {number} id
+ * @property {number} voipCallId
+ * @property {string} correlationId
+ * @property {CallTraceStatus} status
+ * @property {number} progress
+ * @property {string} currentStep
+ * @property {string|null} callGroupId
+ * @property {string|null} errorMessage
+ * @property {CallTraceParty} adviser
+ * @property {CallTraceParty} student
+ * @property {{id: number, title: string|null}} supportForm
+ * @property {string} createdAt
+ * @property {string} updatedAt
+ * @property {CallTraceEvent[]} [events]
+ */
+
+const unwrapData = (response) => {
+  const payload = response?.data;
+  return payload?.data ?? payload ?? {};
+};
+
+/**
+ * @param {{page?: number, limit?: number, search?: string, status?: CallTraceStatus|string,
+ * adviserId?: string|number, studentId?: string|number, supportFormId?: string|number,
+ * from?: string, to?: string, signal?: AbortSignal}} filters
+ */
+export async function getCallTraces({
+  page = 1,
+  limit = 15,
+  search = "",
+  status = "",
+  adviserId = "",
+  studentId = "",
+  supportFormId = "",
+  from = "",
+  to = "",
+  signal,
+} = {}) {
+  const response = await apiGet(getApiUrl(API_ROUTES.voip.callTraces), {
+    signal,
+    params: {
+      page,
+      limit,
+      search: search || undefined,
+      status: status || undefined,
+      adviserId: adviserId || undefined,
+      studentId: studentId || undefined,
+      supportFormId: supportFormId || undefined,
+      from: from || undefined,
+      to: to || undefined,
+    },
+  });
+  const data = unwrapData(response);
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const meta = data?.meta || {};
+  return {
+    items,
+    meta: {
+      page: meta.page ?? page,
+      limit: meta.limit ?? limit,
+      total: meta.total ?? items.length,
+      lastPage: meta.lastPage ?? 1,
+    },
+  };
+}
+
+/** @param {number|string} id @param {{signal?: AbortSignal}} options */
+export async function getCallTrace(id, { signal } = {}) {
+  const response = await apiGet(getApiUrl(API_ROUTES.voip.callTrace(id)), { signal });
+  return unwrapData(response);
+}

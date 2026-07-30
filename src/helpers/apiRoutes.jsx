@@ -151,6 +151,8 @@ export const API_ROUTES = {
     outboundCallHistories: "/voip/outbound-call-histories",
     exportOutboundCallHistories: "/voip/outbound-call-histories/export",
     outboundCallHistoriesSocketDocs: "/voip/outbound-call-histories/socket-docs",
+    callTraces: "/voip/call-traces",
+    callTrace: (id) => `/voip/call-traces/${id}`,
   },
   voipAnalytics: {
     summary: "/voip/analytics/summary",
@@ -359,6 +361,8 @@ export const API_ROUTES = {
       `/reports/student-contact-records/${studentId}/calls/${callId}/answers`,
     inactiveAdvisers: "/reports/inactive-advisers",
     inactiveAdvisersExport: "/reports/inactive-advisers/export",
+    supportFormAnswers: "/reports/support-form-answers",
+    supportFormAnswersExport: "/reports/support-form-answers/export",
     callsByHour: "/reports/calls-by-hour",
     studentsCoverage: "/reports/students-coverage",
     uncontactedStudents: "/reports/uncontacted-students",

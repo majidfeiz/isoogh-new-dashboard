@@ -250,6 +250,44 @@ export async function exportInactiveAdvisersReport(params = {}) {
   return res.data
 }
 
+function buildSupportFormAnswersParams(params, includePagination = true) {
+  const query = new URLSearchParams()
+  const keys = ["from", "to", "studentName", "adviserName", "adviserNumber", "ssn", "studentUsername"]
+  if (includePagination) keys.push("page", "limit")
+  keys.forEach((key) => {
+    const value = params[key]
+    if (value !== "" && value != null) query.set(key, String(value))
+  })
+  return query
+}
+
+export async function getSupportFormAnswersReport(params = {}, signal) {
+  const res = await apiGet(getApiUrl(API_ROUTES.reports.supportFormAnswers), {
+    params: buildSupportFormAnswersParams(params),
+    signal,
+    timeout: 30000,
+  })
+  const data = unwrap(res)
+  return {
+    items: data?.items || [],
+    meta: data?.meta || {
+      page: params.page || 1,
+      limit: params.limit || 10,
+      total: 0,
+      lastPage: 1,
+    },
+  }
+}
+
+export async function exportSupportFormAnswersReport(params = {}) {
+  const res = await apiGet(getApiUrl(API_ROUTES.reports.supportFormAnswersExport), {
+    params: buildSupportFormAnswersParams(params, false),
+    responseType: "blob",
+    timeout: 60000,
+  })
+  return res.data
+}
+
 export async function getReportsCallsByHour({ from, to, schoolId } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.callsByHour), {
     params: buildParams({ from, to, schoolId }),
