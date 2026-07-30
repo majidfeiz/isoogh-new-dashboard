@@ -237,6 +237,7 @@ import FileForm from "../pages/Files/FileForm.jsx";
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
+import CallTraces from "../pages/Voip/CallTraces/CallTraces.jsx";
 import AnswerSheetList from "../pages/AnswerSheets/AnswerSheetList.jsx";
 import VoipAnalytics from "../pages/Voip/Analytics/VoipAnalytics.jsx";
 
@@ -260,6 +261,7 @@ import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.
 import InactiveAdvisers from "../pages/Reports/InactiveAdvisers.jsx";
 import StudentContactRecords from "../pages/Reports/StudentContactRecords.jsx";
 import StudentContactRecordDetail from "../pages/Reports/StudentContactRecordDetail.jsx";
+import SupportFormAnswers from "../pages/Reports/SupportFormAnswers.jsx";
 import DynamicReportList from "../pages/DynamicReports/DynamicReportList.jsx";
 import DynamicReportWizard from "../pages/DynamicReports/DynamicReportWizard.jsx";
 import DynamicReportView from "../pages/DynamicReports/DynamicReportView.jsx";
@@ -407,6 +409,10 @@ const authProtectedRoutes = [
   // voip
   { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
   { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
+  {
+    path: "/voip/call-traces",
+    component: <ProtectedRoute permission="voip.call-traces.index"><CallTraces /></ProtectedRoute>,
+  },
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
 
@@ -431,6 +437,7 @@ const authProtectedRoutes = [
   { path: "/reports/student-contact-records", component: <StudentContactRecords /> },
   { path: "/reports/student-contact-records/:studentId", component: <StudentContactRecordDetail /> },
   { path: "/reports/inactive-advisers", component: <InactiveAdvisers /> },
+  { path: "/reports/support-form-answers", component: <ProtectedRoute permission="reports.support-form-answers.index"><SupportFormAnswers /></ProtectedRoute> },
   { path: "/dynamic-reports", component: <ProtectedRoute permission="dynamic-reports.index"><DynamicReportList /></ProtectedRoute> },
   { path: "/dynamic-reports/create", component: <ProtectedRoute permission="dynamic-reports.create"><DynamicReportWizard /></ProtectedRoute> },
   { path: "/dynamic-reports/:id/edit", component: <ProtectedRoute permission="dynamic-reports.update"><DynamicReportWizard /></ProtectedRoute> },
