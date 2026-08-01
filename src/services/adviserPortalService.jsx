@@ -41,7 +41,35 @@ const normalizeQuestion = (q = {}) => ({
   order: q?.order ?? q?.sort_order ?? 0,
 });
 
+/**
+ * @typedef {Object} AdviserFormStudent
+ * @property {number} successfulCallCount
+ * @property {number} failedCallCount
+ * @property {number} totalCallCount
+ * @property {number|null} workShiftId
+ * @property {{id: number, name: string}|null} workShift
+ */
+
+const normalizeCallCount = (value, fallback = 0) => {
+  const count = Number(value);
+  return Number.isFinite(count) ? Math.max(0, count) : fallback;
+};
+
+/** @returns {AdviserFormStudent & Record<string, *>} */
 const normalizeStudent = (item = {}) => ({
+  ...(() => {
+    const successfulCallCount = normalizeCallCount(
+      item?.successfulCallCount ?? item?.successful_call_count
+    );
+    const totalCallCount = normalizeCallCount(
+      item?.totalCallCount ?? item?.total_call_count ?? item?.callCount ?? item?.call_count
+    );
+    const failedCallCount = normalizeCallCount(
+      item?.failedCallCount ?? item?.failed_call_count,
+      Math.max(0, totalCallCount - successfulCallCount)
+    );
+    return { successfulCallCount, failedCallCount, totalCallCount };
+  })(),
   id: item?.id ?? null,
   studentId: item?.studentId ?? item?.student_id ?? item?.id ?? null,
   name: item?.name ?? `${item?.first_name ?? ""} ${item?.last_name ?? ""}`.trim(),
@@ -248,6 +276,7 @@ export async function getAdviserFormStudents({
   status,
   sortBy = "id",
   sortOrder = "ASC",
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.adviserPortal.supportFormStudents(formId));
   const res = await apiGet(url, {
@@ -259,6 +288,7 @@ export async function getAdviserFormStudents({
       sortBy,
       sortOrder,
     },
+    signal,
   });
   const payload = res?.data;
   const data = payload?.data || {};

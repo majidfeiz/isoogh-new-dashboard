@@ -20,15 +20,25 @@ import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { toGregorian } from "jalaali-js";
+import Select from "react-select";
+import { useSearchParams } from "react-router-dom";
+import { toast } from "react-toastify";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
-import { getOutboundCallHistories } from "../../services/voipService.jsx";
+import { getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
+import {
+  mergeOutboundTagOptions,
+  outboundDateObject,
+  parseOutboundCallQuery,
+  serializeOutboundCallQuery,
+} from "./outboundCallHistoryFilterUtils.js";
 
 const INITIAL_EXPORT_STATE = {
   status: "idle",
@@ -62,19 +72,31 @@ const formatDateObjectGregorian = (dateObject) => {
 
 const OutboundCallHistories = () => {
   document.title = "تماس‌های خروجی | داشبورد آیسوق";
+  const { hasPermission } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQuery = useMemo(() => parseOutboundCallQuery(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
 
-  const [type, setType] = useState("");
-  const [q, setQ] = useState("");
-  const [disposition, setDisposition] = useState("ALL");
+  const [type, setType] = useState(initialQuery.type);
+  const [q, setQ] = useState(initialQuery.q);
+  const [ssn, setSsn] = useState(initialQuery.ssn);
+  const [tagId, setTagId] = useState(initialQuery.tagId);
+  const [disposition, setDisposition] = useState(initialQuery.disposition);
   const [loading, setLoading] = useState(false);
-  const [sorting, setSorting] = useState([]);
-  const [sort, setSort] = useState({ by: null, order: null });
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+  const [sorting, setSorting] = useState(initialQuery.sortBy ? [{ id: initialQuery.sortBy, desc: initialQuery.sortOrder === "DESC" }] : []);
+  const [sort, setSort] = useState({ by: initialQuery.sortBy || null, order: initialQuery.sortOrder || null });
+  const [startDate, setStartDate] = useState(() => outboundDateObject(initialQuery.startDate));
+  const [endDate, setEndDate] = useState(() => outboundDateObject(initialQuery.endDate));
   const [searchError, setSearchError] = useState("");
+  const [tagOptions, setTagOptions] = useState([]);
+  const [tagSearch, setTagSearch] = useState("");
+  const [tagMeta, setTagMeta] = useState({ page: 1, lastPage: 1 });
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState("");
+  const callsAbortRef = useRef(null);
+  const tagsAbortRef = useRef(null);
 
   const [exportState, setExportState] = useState(INITIAL_EXPORT_STATE);
   const exportAbortRef = useRef(null);
@@ -87,10 +109,8 @@ const OutboundCallHistories = () => {
     () => [
       { value: "", label: "نوع جستجو..." },
       { value: "StudentName", label: "نام دانش‌آموز" },
-      { value: "ssn", label: "کد ملی" },
       { value: "AdviserName", label: "نام مشاور" },
       { value: "AdviserPhone", label: "شماره مشاور" },
-      { value: "tags", label: "تگ‌ها" },
     ],
     []
   );
@@ -105,7 +125,12 @@ const OutboundCallHistories = () => {
       currentSortOrder = "",
       currentStart = "",
       currentEnd = "",
+      currentSsn = "",
+      currentTagId = "",
     } = {}) => {
+      callsAbortRef.current?.abort();
+      const controller = new AbortController();
+      callsAbortRef.current = controller;
       setLoading(true);
       try {
         const cleanedQ = currentQ?.trim?.() || "";
@@ -119,8 +144,11 @@ const OutboundCallHistories = () => {
           sortOrder: currentSortOrder,
           start_date: currentStart,
           end_date: currentEnd,
+          ssn: currentSsn,
+          tagId: currentTagId ? Number(currentTagId) : "",
+          signal: controller.signal,
         });
-
+        if (controller.signal.aborted) return;
         setData(res.items || []);
         setMeta((prev) => ({
           page: res.pagination?.page ?? page,
@@ -128,20 +156,95 @@ const OutboundCallHistories = () => {
           total: res.pagination?.total ?? 0,
           lastPage: res.pagination?.lastPage ?? 1,
         }));
+        setSearchParams(serializeOutboundCallQuery({
+          page,
+          type: currentType,
+          q: cleanedQ,
+          ssn: currentSsn,
+          tagId: currentTagId,
+          disposition: currentDisposition,
+          sortBy: currentSortBy,
+          sortOrder: currentSortOrder,
+          startDate: currentStart,
+          endDate: currentEnd,
+        }), { replace: true });
       } catch (e) {
+        if (e?.code === "ERR_CANCELED" || controller.signal.aborted) return;
         console.error("خطا در دریافت تماس‌های خروجی", e);
         setData([]);
         setMeta((prev) => ({ ...prev, total: 0, lastPage: 1 }));
       } finally {
-        setLoading(false);
+        if (callsAbortRef.current === controller && !controller.signal.aborted) setLoading(false);
       }
     },
-    [meta.limit]
+    [meta.limit, setSearchParams]
   );
 
   useEffect(() => {
-    fetchData({ page: 1, currentType: "", currentQ: "", currentDisposition: "ALL" });
+    fetchData({
+      page: initialQuery.page,
+      currentType: initialQuery.type,
+      currentQ: initialQuery.q,
+      currentDisposition: initialQuery.disposition,
+      currentSortBy: initialQuery.sortBy,
+      currentSortOrder: initialQuery.sortOrder,
+      currentStart: initialQuery.startDate,
+      currentEnd: initialQuery.endDate,
+      currentSsn: initialQuery.ssn,
+      currentTagId: initialQuery.tagId,
+    });
+    return () => callsAbortRef.current?.abort();
   }, [fetchData]);
+
+  const loadTags = useCallback(async (page = 1, search = tagSearch, append = false) => {
+    tagsAbortRef.current?.abort();
+    const controller = new AbortController();
+    tagsAbortRef.current = controller;
+    setTagsLoading(true);
+    setTagsError("");
+    try {
+      const result = await getOutboundCallHistoryTags({ page, limit: 20, search, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setTagOptions((current) => mergeOutboundTagOptions(append ? current : [], result.items));
+      setTagMeta(result.meta);
+    } catch (error) {
+      if (error?.code !== "ERR_CANCELED" && !controller.signal.aborted) setTagsError("دریافت تگ‌ها با خطا مواجه شد.");
+    } finally {
+      if (tagsAbortRef.current === controller && !controller.signal.aborted) setTagsLoading(false);
+    }
+  }, [tagSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => loadTags(1, tagSearch, false), tagSearch ? 400 : 0);
+    return () => { clearTimeout(timer); tagsAbortRef.current?.abort(); };
+  }, [loadTags, tagSearch]);
+
+  const selectedTag = useMemo(
+    () => tagOptions.find((option) => String(option.id) === String(tagId)) || null,
+    [tagId, tagOptions]
+  );
+
+  useEffect(() => {
+    if (!tagId || selectedTag || tagsLoading || tagsError || tagMeta.page >= tagMeta.lastPage) return;
+    loadTags(tagMeta.page + 1, tagSearch, true);
+  }, [loadTags, selectedTag, tagId, tagMeta.lastPage, tagMeta.page, tagSearch, tagsError, tagsLoading]);
+
+  const handleTagChange = useCallback((option) => {
+    const nextTagId = option?.id ? String(option.id) : "";
+    setTagId(nextTagId);
+    fetchData({
+      page: 1,
+      currentType: type,
+      currentQ: q,
+      currentDisposition: disposition,
+      currentSortBy: sort.by,
+      currentSortOrder: sort.order,
+      currentStart: formatDateObjectGregorian(startDate),
+      currentEnd: formatDateObjectGregorian(endDate),
+      currentSsn: ssn,
+      currentTagId: nextTagId,
+    });
+  }, [disposition, endDate, fetchData, q, sort.by, sort.order, ssn, startDate, type]);
 
   const handleSearch = useCallback(() => {
     setSearchError("");
@@ -162,8 +265,10 @@ const OutboundCallHistories = () => {
       currentSortOrder: sort.order,
       currentStart: start,
       currentEnd: end,
+      currentSsn: ssn,
+      currentTagId: tagId,
     });
-  }, [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate]);
+  }, [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate, ssn, tagId]);
 
   const handlePageChange = useCallback(
     (page) => {
@@ -179,9 +284,11 @@ const OutboundCallHistories = () => {
         currentSortOrder: sort.order,
         currentStart: start,
         currentEnd: end,
+        currentSsn: ssn,
+        currentTagId: tagId,
       });
     },
-    [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate]
+    [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate, ssn, tagId]
   );
 
   const handleDispositionChange = useCallback(
@@ -196,9 +303,11 @@ const OutboundCallHistories = () => {
         currentSortOrder: sort.order,
         currentStart: formatDateObjectGregorian(startDate),
         currentEnd: formatDateObjectGregorian(endDate),
+        currentSsn: ssn,
+        currentTagId: tagId,
       });
     },
-    [fetchData, q, sort.by, sort.order, startDate, endDate, type]
+    [fetchData, q, sort.by, sort.order, startDate, endDate, type, ssn, tagId]
   );
 
   const onKeyDown = (e) => {
@@ -211,6 +320,8 @@ const OutboundCallHistories = () => {
       setType("");
       setQ("");
       setDisposition("ALL");
+      setSsn("");
+      setTagId("");
       setStartDate(null);
       setEndDate(null);
       setSearchError("");
@@ -223,8 +334,10 @@ const OutboundCallHistories = () => {
         currentSortOrder: sort.order,
         currentStart: "",
         currentEnd: "",
+        currentSsn: "",
+        currentTagId: "",
       });
-    },
+  },
     [fetchData, sort.by, sort.order]
   );
 
@@ -288,15 +401,12 @@ const OutboundCallHistories = () => {
     const start = formatDateObjectGregorian(startDate);
     const end = formatDateObjectGregorian(endDate);
     const cleanedQ = q?.trim?.() || "";
-    const perPage = meta?.total && meta.total > 0 ? meta.total : meta.limit;
 
     setSearchError("");
     setExportState({ status: "preparing", receivedBytes: 0, totalBytes: null, percent: null, errorMessage: null });
 
     try {
       const params = new URLSearchParams();
-      params.append("page", "1");
-      params.append("per_page", String(perPage));
       if (sort?.by) params.append("sort_by", sort.by);
       if (sort?.order) params.append("sort_order", sort.order);
       if (type) params.append("type", type);
@@ -304,8 +414,11 @@ const OutboundCallHistories = () => {
       if (disposition !== "ALL") params.append("disposition", disposition);
       if (start) params.append("start_date", start);
       if (end) params.append("end_date", end);
+      if (ssn.trim()) params.append("ssn", ssn.trim());
+      if (tagId) params.append("tagId", String(Number(tagId)));
 
-      const url = `${getApiUrl(API_ROUTES.voip.exportOutboundCallHistories)}?${params.toString()}`;
+      const queryString = params.toString();
+      const url = `${getApiUrl(API_ROUTES.voip.exportOutboundCallHistories)}${queryString ? `?${queryString}` : ""}`;
       const token = getAccessToken();
       const controller = new AbortController();
       exportAbortRef.current = controller;
@@ -317,7 +430,16 @@ const OutboundCallHistories = () => {
 
       if (!res.ok || !res.body) {
         const text = await res.text();
-        throw new Error(text || "خطا در خروجی گرفتن");
+        let message = res.status === 403 ? "شما اجازه دریافت خروجی تماس‌های خروجی را ندارید." : "خطا در خروجی گرفتن";
+        try {
+          const parsed = JSON.parse(text);
+          message = parsed?.message || parsed?.error || message;
+        } catch {
+          if (text) message = text;
+        }
+        const error = new Error(message);
+        error.status = res.status;
+        throw error;
       }
 
       const totalBytes = parseTotalBytes(res.headers);
@@ -350,11 +472,12 @@ const OutboundCallHistories = () => {
         return;
       }
       console.error("خطا در خروجی CSV تماس خروجی", e);
+      toast.error(e?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید.");
       setExportState((prev) => ({ ...prev, status: "error", errorMessage: e?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید." }));
     } finally {
       exportAbortRef.current = null;
     }
-  }, [disposition, endDate, meta.limit, meta.total, q, sort.by, sort.order, startDate, type]);
+  }, [disposition, endDate, q, sort.by, sort.order, ssn, startDate, tagId, type]);
 
   const handleCancelExport = useCallback(() => {
     if (exportAbortRef.current) {
@@ -633,6 +756,8 @@ const OutboundCallHistories = () => {
           currentSortOrder: "",
           currentStart: formatDateObjectGregorian(startDate),
           currentEnd: formatDateObjectGregorian(endDate),
+          currentSsn: ssn,
+          currentTagId: tagId,
         });
         return;
       }
@@ -643,9 +768,20 @@ const OutboundCallHistories = () => {
       const start = formatDateObjectGregorian(startDate);
       const end = formatDateObjectGregorian(endDate);
 
-      fetchData({ page: 1, currentType: type, currentQ: q, currentDisposition: disposition, currentSortBy: sortKey, currentSortOrder: sortDirection, currentStart: start, currentEnd: end });
+      fetchData({
+        page: 1,
+        currentType: type,
+        currentQ: q,
+        currentDisposition: disposition,
+        currentSortBy: sortKey,
+        currentSortOrder: sortDirection,
+        currentStart: start,
+        currentEnd: end,
+        currentSsn: ssn,
+        currentTagId: tagId,
+      });
     },
-    [columnSortKeyMap, disposition, fetchData, q, type, startDate, endDate]
+    [columnSortKeyMap, disposition, fetchData, q, type, startDate, endDate, ssn, tagId]
   );
 
   const isExportBusy = exportState.status === "preparing" || exportState.status === "downloading";
@@ -741,7 +877,7 @@ const OutboundCallHistories = () => {
 
                       <Col md="4" className="d-flex align-items-end">
                         <div className="d-flex gap-2 w-100 justify-content-end">
-                          <Button
+                          {hasPermission("voip.outbound.index.export") && <Button
                             color="success"
                             size="sm"
                             type="button"
@@ -752,7 +888,7 @@ const OutboundCallHistories = () => {
                           >
                             <i className={`mdi ${isExportBusy ? "mdi-loading mdi-spin" : "mdi-file-download-outline"}`} />
                             {isExportBusy ? "در حال دریافت..." : "خروجی CSV"}
-                          </Button>
+                          </Button>}
                           {isExportBusy && (
                             <Button
                               color="danger"
@@ -771,7 +907,7 @@ const OutboundCallHistories = () => {
                       </Col>
                     </Row>
 
-                    {/* Row 2: Disposition + date range */}
+                    {/* Row 2: independent student filters */}
                     <Row className="g-3 align-items-end">
                       <Col md="3" sm="6">
                         <Label className="form-label fw-medium mb-2" style={{ fontSize: "0.85rem" }}>
@@ -792,7 +928,54 @@ const OutboundCallHistories = () => {
                           ))}
                         </Input>
                       </Col>
-                      <Col md="9">
+                      <Col md="3" sm="6">
+                        <Label className="form-label fw-medium mb-2" style={{ fontSize: "0.85rem" }}>
+                          <i className="mdi mdi-card-account-details-outline me-1 text-muted" />
+                          کد ملی دانش‌آموز
+                        </Label>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          bsSize="sm"
+                          value={ssn}
+                          onChange={(event) => setSsn(event.target.value)}
+                          onKeyDown={onKeyDown}
+                          placeholder="مثلاً 0012345678"
+                          className="border-0 shadow-sm"
+                        />
+                      </Col>
+                      <Col md="6">
+                        <Label className="form-label fw-medium mb-2" style={{ fontSize: "0.85rem" }}>
+                          <i className="mdi mdi-tag-outline me-1 text-muted" />
+                          تگ دانش‌آموز
+                        </Label>
+                        <Select
+                          isRtl
+                          isClearable
+                          value={selectedTag}
+                          options={tagOptions}
+                          getOptionValue={(option) => String(option.id)}
+                          getOptionLabel={(option) => option.name}
+                          onChange={handleTagChange}
+                          onInputChange={(value, action) => {
+                            if (action.action === "input-change") setTagSearch(value);
+                          }}
+                          onMenuScrollToBottom={() => {
+                            if (!tagsLoading && tagMeta.page < tagMeta.lastPage) loadTags(tagMeta.page + 1, tagSearch, true);
+                          }}
+                          isLoading={tagsLoading}
+                          placeholder={tagId && !selectedTag ? `در حال دریافت تگ ${tagId}...` : "انتخاب یا جستجوی تگ"}
+                          loadingMessage={() => "در حال دریافت تگ‌ها..."}
+                          noOptionsMessage={() => tagsError ? "دریافت تگ‌ها ناموفق بود" : "تگی یافت نشد"}
+                          classNamePrefix="react-select"
+                        />
+                        {tagsError && <button type="button" className="btn btn-link btn-sm p-0 mt-1"
+                          onClick={() => loadTags(1, tagSearch, false)}>تلاش مجدد</button>}
+                      </Col>
+                    </Row>
+
+                    <Row className="g-3 align-items-end mt-1">
+                      <Col md="12">
                         <Label className="form-label fw-medium mb-2" style={{ fontSize: "0.85rem" }}>
                           <i className="mdi mdi-calendar-range me-1 text-muted" />
                           بازه زمانی (شمسی)

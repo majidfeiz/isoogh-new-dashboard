@@ -255,6 +255,7 @@ import VoipWebhookLogs from "../pages/VoipWebhooks/VoipWebhookLogs.jsx";
 // reports
 import ReportsDashboard from "../pages/Reports/ReportsDashboard.jsx";
 import AdviserCallPerformance from "../pages/Reports/AdviserCallPerformance.jsx";
+import AdviserPerformance from "../pages/Reports/AdviserPerformance.jsx";
 import ContactFormsComprehensive from "../pages/Reports/ContactFormsComprehensive.jsx";
 import ContactFormsOnline from "../pages/Reports/ContactFormsOnline.jsx";
 import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.jsx";
@@ -407,7 +408,7 @@ const authProtectedRoutes = [
   { path: "/files/:id/edit", component: <FileForm /> },
 
   // voip
-  { path: "/voip/outbound-call-histories", component: <OutboundCallHistories /> },
+  { path: "/voip/outbound-call-histories", component: <ProtectedRoute permission="voip.outbound.index"><OutboundCallHistories /></ProtectedRoute> },
   { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
   {
     path: "/voip/call-traces",
@@ -431,6 +432,7 @@ const authProtectedRoutes = [
   // reports
   { path: "/reports", component: <ReportsDashboard /> },
   { path: "/reports/adviser-call-performance", component: <AdviserCallPerformance /> },
+  { path: "/reports/adviser-performance", component: <ProtectedRoute permission="reports.adviser-performance.index"><AdviserPerformance /></ProtectedRoute> },
   { path: "/reports/contact-forms-comprehensive", component: <ContactFormsComprehensive /> },
   { path: "/reports/contact-forms-online", component: <ContactFormsOnline /> },
   { path: "/reports/student-voip-comprehensive", component: <StudentVoipComprehensive /> },
@@ -452,8 +454,8 @@ const authProtectedRoutes = [
   // super adviser portal
   { path: "/super-adviser-portal/schools", component: <SuperAdviserSchools /> },
   { path: "/super-adviser-portal/advisers", component: <SuperAdviserAdvisers /> },
-  { path: "/super-adviser-portal/support-forms", component: <SuperAdviserSupportForms /> },
-  { path: "/super-adviser-portal/students", component: <SuperAdviserStudents /> },
+  { path: "/super-adviser-portal/support-forms", component: <ProtectedRoute permission="super-adviser-portal.support-forms.index"><SuperAdviserSupportForms /></ProtectedRoute> },
+  { path: "/super-adviser-portal/students", component: <ProtectedRoute permission="super-adviser-portal.students.index"><SuperAdviserStudents /></ProtectedRoute> },
   { path: "/super-adviser-portal/performance-report", component: <SuperAdviserPerformanceReport /> },
   { path: "/super-adviser-portal/monitoring", component: <SuperAdviserMonitoring /> },
   { path: "/super-adviser-portal/salary", component: <SuperAdviserSalary /> },
@@ -464,7 +466,7 @@ const authProtectedRoutes = [
   { path: "/adviser-calls/schools/:schoolId", component: <AdviserPortalSchoolTasks /> },
   { path: "/adviser-calls/schools/:schoolId/planned-calls", component: <AdviserPortalSupportForms /> },
   { path: "/adviser-calls/schools/:schoolId/incomplete-calls", component: <AdviserPortalIncompleteCalls /> },
-  { path: "/adviser-calls/forms/:formId", component: <AdviserPortalFormDetail /> },
+  { path: "/adviser-calls/forms/:formId", component: <ProtectedRoute permission="adviser-portal.students.index"><AdviserPortalFormDetail /></ProtectedRoute> },
   { path: "/adviser-calls/forms/:formId/students/:studentId", component: <AdviserPortalStudentProfile /> },
   { path: "/adviser-calls/logs", component: <AdviserPortalCallLogs /> },
   { path: "/adviser-calls/stats", component: <AdviserPortalStats /> },

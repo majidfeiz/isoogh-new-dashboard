@@ -36,6 +36,12 @@ const normalizeSupportForm = (item = {}) => ({
   createdAt: item?.created_at ?? item?.createdAt ?? null,
 });
 
+const normalizeGrade = (item = {}) => ({
+  id: item?.id ?? null,
+  name: item?.name ?? "",
+  sort: item?.sort ?? 0,
+});
+
 const normalizeStudent = (item = {}) => ({
   id: item?.id ?? null,
   userId: item?.user_id ?? item?.userId ?? null,
@@ -143,6 +149,8 @@ export async function getSuperAdviserSupportForms({
   search = "",
   adviserId = "",
   schoolId = "",
+  gradeId = "",
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.superAdviserPortal.supportForms);
   const res = await apiGet(url, {
@@ -152,12 +160,21 @@ export async function getSuperAdviserSupportForms({
       search: search || undefined,
       adviserId: adviserId || undefined,
       schoolId: schoolId || undefined,
+      gradeId: gradeId || undefined,
     },
+    signal,
   });
   const payload = res?.data;
   const data = payload?.data || {};
   const items = (data.items || data.data || []).map(normalizeSupportForm);
   return { items, pagination: normalizePagination(data.meta, page, limit, items) };
+}
+
+export async function getSuperAdviserSupportFormGrades({ signal } = {}) {
+  const url = getApiUrl(API_ROUTES.superAdviserPortal.supportFormGrades);
+  const res = await apiGet(url, { signal });
+  const payload = res?.data?.data ?? res?.data ?? [];
+  return (Array.isArray(payload) ? payload : payload?.items || []).map(normalizeGrade);
 }
 
 // ─── Students ─────────────────────────────────────────────────────────────────
@@ -181,6 +198,21 @@ export async function getSuperAdviserStudents({
   const data = payload?.data || {};
   const items = (data.items || data.data || []).map(normalizeStudent);
   return { items, pagination: normalizePagination(data.meta, page, limit, items) };
+}
+
+export async function exportSuperAdviserStudents({ search = "", adviserId = "", signal } = {}) {
+  const params = new URLSearchParams();
+  if (search) params.set("search", search);
+  if (adviserId) params.set("adviserId", String(adviserId));
+  const response = await apiGet(getApiUrl(API_ROUTES.superAdviserPortal.studentsExport), {
+    params,
+    responseType: "blob",
+    signal,
+  });
+  return {
+    blob: response.data,
+    contentDisposition: response.headers?.["content-disposition"] || "",
+  };
 }
 
 // ─── Performance Report ───────────────────────────────────────────────────────

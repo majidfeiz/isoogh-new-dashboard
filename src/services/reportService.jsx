@@ -288,6 +288,63 @@ export async function exportSupportFormAnswersReport(params = {}) {
   return res.data
 }
 
+function buildAdviserPerformanceParams(params, includePagination = true) {
+  const query = new URLSearchParams()
+  const keys = ["formId", "schoolId", "studentSearch", "adviserSearch"]
+  if (includePagination) keys.push("page", "limit")
+  keys.forEach((key) => {
+    const value = params?.[key]
+    if (value !== "" && value != null) query.set(key, String(value))
+  })
+  return query
+}
+
+export async function getAdviserPerformanceSchools(signal) {
+  const res = await apiGet(getApiUrl(API_ROUTES.reports.adviserPerformanceSchools), { signal })
+  const data = unwrap(res)
+  return Array.isArray(data) ? data : data?.items || []
+}
+
+export async function getAdviserPerformanceForms(schoolId, signal) {
+  const res = await apiGet(getApiUrl(API_ROUTES.reports.adviserPerformanceForms), {
+    params: new URLSearchParams({ schoolId: String(schoolId) }),
+    signal,
+  })
+  const data = unwrap(res)
+  return Array.isArray(data) ? data : data?.items || []
+}
+
+export async function getAdviserPerformanceReport(params = {}, signal) {
+  const res = await apiGet(getApiUrl(API_ROUTES.reports.adviserPerformance), {
+    params: buildAdviserPerformanceParams(params),
+    signal,
+    timeout: 30000,
+  })
+  const data = unwrap(res)
+  const rows = Array.isArray(data?.rows) ? data.rows : []
+  return {
+    school: data?.school || null,
+    form: data?.form || null,
+    questions: Array.isArray(data?.questions) ? data.questions : [],
+    rows,
+    meta: data?.meta || {
+      page: params.page || 1,
+      limit: params.limit || 15,
+      total: rows.length,
+      lastPage: 1,
+    },
+  }
+}
+
+export async function exportAdviserPerformanceReport(params = {}) {
+  const res = await apiGet(getApiUrl(API_ROUTES.reports.adviserPerformanceExport), {
+    params: buildAdviserPerformanceParams(params, false),
+    responseType: "blob",
+    timeout: 60000,
+  })
+  return res.data
+}
+
 export async function getReportsCallsByHour({ from, to, schoolId } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.callsByHour), {
     params: buildParams({ from, to, schoolId }),

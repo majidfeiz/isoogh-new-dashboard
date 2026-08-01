@@ -3,6 +3,11 @@ export const API_BASE_URL = "http://127.0.0.1:8040"
 export const API_VERSION = { v1: "", v2: "/api/v2" }
 export const getApiUrl = (path) => `${API_BASE_URL}${path}`
 export const API_ROUTES = {
+  voip: {
+    outboundCallHistories: "/voip/outbound-call-histories",
+    outboundCallHistoryTags: "/voip/outbound-call-histories/tags",
+    exportOutboundCallHistories: "/voip/outbound-call-histories/export",
+  },
   students: {
     list: "/students",
     registrationAvailability: "/students/registration-availability",
@@ -32,6 +37,10 @@ export const API_ROUTES = {
       `/reports/student-contact-records/${studentId}/calls/${callId}/answers`,
     inactiveAdvisers: "/reports/inactive-advisers",
     inactiveAdvisersExport: "/reports/inactive-advisers/export",
+    adviserPerformance: "/reports/adviser-performance",
+    adviserPerformanceExport: "/reports/adviser-performance/export",
+    adviserPerformanceSchools: "/reports/adviser-performance/schools",
+    adviserPerformanceForms: "/reports/adviser-performance/forms",
   },
   answerSheets: {
     list: "/answer-sheets",
@@ -44,5 +53,14 @@ export const API_ROUTES = {
     preview: "/dynamic-reports/preview",
     execute: (id) => `/dynamic-reports/${id}/execute`,
     widgetData: (id, widgetId) => `/dynamic-reports/${id}/widgets/${widgetId}/data`,
+  },
+  adviserPortal: {
+    supportFormStudents: (formId) => `/adviser-portal/support-forms/${formId}/students`,
+  },
+  superAdviserPortal: {
+    supportForms: "/super-adviser-portal/support-forms",
+    supportFormGrades: "/super-adviser-portal/support-forms/grades",
+    students: "/super-adviser-portal/students",
+    studentsExport: "/super-adviser-portal/students/export",
   },
 }

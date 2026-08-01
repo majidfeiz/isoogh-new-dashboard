@@ -62,6 +62,12 @@ export async function getOutboundCallHistories({
   sortOrder = "",
   start_date = "",
   end_date = "",
+  ssn = "",
+  tagId = "",
+  support_form_id = "",
+  adviser_id = "",
+  super_adviser_id = "",
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.voip.outboundCallHistories);
 
@@ -77,7 +83,13 @@ export async function getOutboundCallHistories({
       sort_order: sortOrder || undefined,
       start_date: start_date || undefined,
       end_date: end_date || undefined,
+      ssn: ssn?.trim?.() || undefined,
+      tagId: tagId || undefined,
+      support_form_id: support_form_id || undefined,
+      adviser_id: adviser_id || undefined,
+      super_adviser_id: super_adviser_id || undefined,
     },
+    signal,
   });
 
   // ✅ Nest response:
@@ -101,15 +113,40 @@ export async function getOutboundCallHistories({
   };
 }
 
+export async function getOutboundCallHistoryTags({ search = "", page = 1, limit = 20, signal } = {}) {
+  const response = await apiGet(getApiUrl(API_ROUTES.voip.outboundCallHistoryTags), {
+    params: { search: search?.trim?.() || undefined, page, limit },
+    signal,
+  });
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const meta = data?.meta || {};
+  return {
+    items: items.map((item) => ({
+      id: item?.id ?? null,
+      name: item?.name ?? "",
+      schoolId: item?.schoolId ?? item?.school_id ?? null,
+      parentId: item?.parentId ?? item?.parent_id ?? null,
+    })),
+    meta: {
+      page: meta.page ?? page,
+      limit: meta.limit ?? limit,
+      total: meta.total ?? items.length,
+      lastPage: meta.lastPage ?? 1,
+    },
+  };
+}
+
 // خروجی CSV برای تماس‌های خروجی
 export async function exportOutboundCallHistories({
-  page = 1,
-  per_page = 15,
   type = "",
   q = "",
   disposition = "ALL",
   start_date = "",
   end_date = "",
+  ssn = "",
+  tagId = "",
   onDownloadProgress,
 } = {}) {
   const url = getApiUrl(API_ROUTES.voip.exportOutboundCallHistories);
@@ -118,13 +155,13 @@ export async function exportOutboundCallHistories({
     responseType: "blob",
     onDownloadProgress,
     params: {
-      page,
-      per_page,
       type: type || undefined,
       q: q || undefined,
       disposition: disposition && disposition !== "ALL" ? disposition : undefined,
       start_date: start_date || undefined,
       end_date: end_date || undefined,
+      ssn: ssn?.trim?.() || undefined,
+      tagId: tagId || undefined,
     },
   });
 

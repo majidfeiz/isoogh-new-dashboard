@@ -32,6 +32,10 @@ import {
   submitAnswers,
   updateAdviserStudentWorkShift,
 } from "../../services/adviserPortalService.jsx";
+import {
+  nextAdviserStudentSort,
+  readAdviserStudentSort,
+} from "./formDetailSortUtils.js";
 
 const formatJalali = (value, withTime = false) => {
   if (!value) return "—";
@@ -389,10 +393,7 @@ const FormDetail = () => {
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [callStatus, setCallStatus] = useState(searchParams.get("status") ?? "");
-  const [sort, setSort] = useState({
-    by: searchParams.get("sortBy") || "id",
-    order: searchParams.get("sortOrder") === "DESC" ? "DESC" : "ASC",
-  });
+  const [sort, setSort] = useState(() => readAdviserStudentSort(searchParams));
   const [loading, setLoading] = useState(false);
   const [workShifts, setWorkShifts] = useState([]);
   const [workShiftsLoading, setWorkShiftsLoading] = useState(true);
@@ -406,6 +407,7 @@ const FormDetail = () => {
 
   const callCooldown = useRef({});
   const shiftRequestVersions = useRef({});
+  const studentsRequest = useRef(null);
   const [callingIds, setCallingIds] = useState({});
 
   document.title = `فرم تماس | داشبورد آیسوق`;
@@ -433,9 +435,22 @@ const FormDetail = () => {
 
   const fetchStudents = useCallback(
     async (page = 1, q = "", status = "", currentSort = { by: "id", order: "ASC" }) => {
+      studentsRequest.current?.abort();
+      const controller = new AbortController();
+      studentsRequest.current = controller;
       setLoading(true);
       try {
-        const res = await getAdviserFormStudents({ formId, page, limit: 15, search: q, status, sortBy: currentSort.by, sortOrder: currentSort.order });
+        const res = await getAdviserFormStudents({
+          formId,
+          page,
+          limit: 15,
+          search: q,
+          status,
+          sortBy: currentSort.by,
+          sortOrder: currentSort.order,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         setData(res.items || []);
         setMeta(res.pagination || { page, limit: 15, total: 0, lastPage: 1 });
         const next = {};
@@ -445,14 +460,17 @@ const FormDetail = () => {
         if (currentSort.by !== "id" || currentSort.order !== "ASC") next.sortOrder = currentSort.order;
         if (page > 1) next.page = String(page);
         setSearchParams(next, { replace: true });
-      } catch {
+      } catch (error) {
+        if (error?.code === "ERR_CANCELED" || controller.signal.aborted) return;
         setData([]);
       } finally {
-        setLoading(false);
+        if (studentsRequest.current === controller && !controller.signal.aborted) setLoading(false);
       }
     },
     [formId, setSearchParams]
   );
+
+  useEffect(() => () => studentsRequest.current?.abort(), []);
 
   const fetchWorkShifts = useCallback(async (force = false) => {
     setWorkShiftsLoading(true);
@@ -524,7 +542,13 @@ const FormDetail = () => {
   };
 
   const handleStatusSort = () => {
-    const nextSort = { by: "status", order: sort.by === "status" && sort.order === "ASC" ? "DESC" : "ASC" };
+    const nextSort = nextAdviserStudentSort(sort, "status");
+    setSort(nextSort);
+    fetchStudents(1, search, callStatus, nextSort);
+  };
+
+  const handleWorkShiftSort = () => {
+    const nextSort = nextAdviserStudentSort(sort, "workShiftId");
     setSort(nextSort);
     fetchStudents(1, search, callStatus, nextSort);
   };
@@ -689,15 +713,19 @@ const FormDetail = () => {
                       <th>نام</th>
                       <th>تلفن</th>
                       <th>کد ملی</th>
-                      <th>تلفن VoIP</th>
-                      <th style={{ width: 100 }}>تماس‌ها</th>
+                      <th style={{ width: 100 }}>تماس موفق</th>
+                      <th style={{ width: 100 }}>تماس ناموفق</th>
+                      <th style={{ width: 110 }}>مجموع تماس‌ها</th>
                       <th>آخرین تماس</th>
                       <th style={{ width: 80 }}>پاسخ</th>
                       <th style={{ width: 130 }} role="button" onClick={handleStatusSort}>
                         وضعیت تماس
                         {sort.by === "status" && <i className={`bx bx-sort-${sort.order === "ASC" ? "up" : "down"} ms-1`} />}
                       </th>
-                      <th style={{ minWidth: 170 }}>شیفت دانش‌آموز</th>
+                      <th style={{ minWidth: 170 }} role="button" onClick={handleWorkShiftSort}>
+                        شیفت دانش‌آموز
+                        {sort.by === "workShiftId" && <i className={`bx bx-sort-${sort.order === "ASC" ? "up" : "down"} ms-1`} />}
+                      </th>
                       <th style={{ width: 120 }}>عملیات</th>
                     </tr>
                   </thead>
@@ -715,15 +743,13 @@ const FormDetail = () => {
                           <span className="text-muted small">{student.ssn || "—"}</span>
                         </td>
                         <td>
-                          <span className="text-muted small">{student.voipPhone || "—"}</span>
+                          <Badge color="success" pill>{student.successfulCallCount}</Badge>
                         </td>
                         <td>
-                          <Badge
-                            color={student.callCount > 0 ? "success" : "secondary"}
-                            pill
-                          >
-                            {student.callCount}
-                          </Badge>
+                          <Badge color="danger" pill>{student.failedCallCount}</Badge>
+                        </td>
+                        <td>
+                          <Badge color="primary" pill>{student.totalCallCount}</Badge>
                         </td>
                         <td className="text-muted small">
                           {formatJalali(student.lastCallAt, true)}

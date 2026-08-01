@@ -13,16 +13,22 @@ import {
   Row,
   Spinner,
 } from "reactstrap";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import {
   getSuperAdviserSupportForms,
+  getSuperAdviserSupportFormGrades,
   getSuperAdviserAdvisers,
   getSuperAdviserSchools,
 } from "../../services/superAdviserPortalService.jsx";
+import {
+  isValidSuperAdviserGradeId,
+  parseSuperAdviserSupportFormsQuery,
+  serializeSuperAdviserSupportFormsQuery,
+} from "./supportFormsUtils.js";
 
 const formatUnixDate = (unix) => {
   if (!unix) return "-";
@@ -40,13 +46,35 @@ const SupportForms = () => {
   document.title = "فرم‌های تماس | سر مشاور | داشبورد آیسوق";
 
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryString = searchParams.toString();
+  const query = useMemo(
+    () => parseSuperAdviserSupportFormsQuery(new URLSearchParams(queryString)),
+    [queryString]
+  );
 
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
-  const [filters, setFilters] = useState({ search: "", adviserId: "", schoolId: "" });
+  const [filters, setFilters] = useState(() => ({
+    search: query.search,
+    adviserId: query.adviserId,
+    schoolId: query.schoolId,
+    gradeId: query.gradeId,
+  }));
   const [advisers, setAdvisers] = useState([]);
   const [schools, setSchools] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [gradesLoading, setGradesLoading] = useState(true);
+  const [gradesResolved, setGradesResolved] = useState(false);
+  const [gradesError, setGradesError] = useState("");
+  const [gradesRetry, setGradesRetry] = useState(0);
   const [loading, setLoading] = useState(false);
+  const gradeNameById = useMemo(
+    () => new Map(grades.map((grade) => [grade.id, grade.name])),
+    [grades]
+  );
+  const gradeFilterIsValid = isValidSuperAdviserGradeId(query.gradeId, grades);
+  const canLoadForms = !query.gradeId || (gradesResolved && gradeFilterIsValid);
 
   useEffect(() => {
     getSuperAdviserAdvisers({ page: 1, limit: 100 })
@@ -57,33 +85,71 @@ const SupportForms = () => {
       .catch(() => {});
   }, []);
 
-  const fetchData = useCallback(
-    async (page = 1, currentFilters = filters) => {
-      setLoading(true);
-      try {
-        const res = await getSuperAdviserSupportForms({
-          page,
-          limit: meta.limit,
-          search: currentFilters.search,
-          adviserId: currentFilters.adviserId,
-          schoolId: currentFilters.schoolId,
-        });
-        setData(res.items || []);
-        setMeta(res.pagination || { page, limit: meta.limit, total: 0, lastPage: 1 });
-      } catch (e) {
-        if (e?.response?.status === 403) navigate("/pages-404");
-        setData([]);
-        setMeta((prev) => ({ ...prev, total: 0, lastPage: 1 }));
-      } finally {
-        setLoading(false);
-      }
-    },
-    [meta.limit, navigate]
-  );
+  useEffect(() => {
+    const controller = new AbortController();
+    setGradesLoading(true);
+    setGradesResolved(false);
+    setGradesError("");
+    getSuperAdviserSupportFormGrades({ signal: controller.signal })
+      .then((items) => {
+        setGrades(items);
+        setGradesResolved(true);
+        if (!isValidSuperAdviserGradeId(query.gradeId, items)) {
+          setFilters((current) => ({ ...current, gradeId: "" }));
+          setSearchParams(serializeSuperAdviserSupportFormsQuery({ ...query, gradeId: "", page: 1 }), { replace: true });
+        }
+      })
+      .catch((error) => {
+        if (error?.code === "ERR_CANCELED") return;
+        setGrades([]);
+        setGradesResolved(true);
+        setGradesError("دریافت پایه‌ها با خطا مواجه شد.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setGradesLoading(false);
+      });
+    return () => controller.abort();
+    // Grade options only need to reload for an explicit retry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gradesRetry]);
 
   useEffect(() => {
-    fetchData(1, filters);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    setFilters({
+      search: query.search,
+      adviserId: query.adviserId,
+      schoolId: query.schoolId,
+      gradeId: query.gradeId,
+    });
+  }, [query.adviserId, query.gradeId, query.schoolId, query.search]);
+
+  useEffect(() => {
+    if (!canLoadForms) return undefined;
+    const controller = new AbortController();
+    setLoading(true);
+    getSuperAdviserSupportForms({
+      page: query.page,
+      limit: 15,
+      search: query.search,
+      adviserId: query.adviserId,
+      schoolId: query.schoolId,
+      gradeId: query.gradeId,
+      signal: controller.signal,
+    })
+      .then((res) => {
+        setData(res.items || []);
+        setMeta(res.pagination || { page: query.page, limit: 15, total: 0, lastPage: 1 });
+      })
+      .catch((error) => {
+        if (error?.code === "ERR_CANCELED") return;
+        if (error?.response?.status === 403) navigate("/pages-404");
+        setData([]);
+        setMeta((prev) => ({ ...prev, page: query.page, total: 0, lastPage: 1 }));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [canLoadForms, navigate, query]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -92,16 +158,18 @@ const SupportForms = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchData(1, filters);
+    setSearchParams(serializeSuperAdviserSupportFormsQuery({ ...filters, page: 1 }));
   };
 
   const handleResetFilters = () => {
-    const reset = { search: "", adviserId: "", schoolId: "" };
+    const reset = { search: "", adviserId: "", schoolId: "", gradeId: "" };
     setFilters(reset);
-    fetchData(1, reset);
+    setSearchParams(serializeSuperAdviserSupportFormsQuery({ ...reset, page: 1 }));
   };
 
-  const handlePageChange = (page) => fetchData(page, filters);
+  const handlePageChange = (page) => {
+    setSearchParams(serializeSuperAdviserSupportFormsQuery({ ...query, page }));
+  };
 
   const handleRowClick = (row) => {
     navigate(`/super-adviser-portal/performance-report?supportFormId=${row.original.id}`);
@@ -116,6 +184,14 @@ const SupportForms = () => {
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => info.getValue() || "-",
+      },
+      {
+        id: "gradeId",
+        header: "پایه",
+        accessorKey: "gradeId",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => gradeNameById.get(Number(info.getValue())) ?? "—",
       },
       {
         id: "callDuration",
@@ -176,7 +252,7 @@ const SupportForms = () => {
         ),
       },
     ],
-    [] // eslint-disable-line react-hooks/exhaustive-deps
+    [gradeNameById] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   return (
@@ -225,6 +301,39 @@ const SupportForms = () => {
                           <option key={a.id} value={a.id}>{a.name}</option>
                         ))}
                       </Input>
+                    </Col>
+                    <Col xl="2" lg="3" md="4">
+                      <Label className="form-label">پایه</Label>
+                      <Input
+                        type="select"
+                        name="gradeId"
+                        value={filters.gradeId}
+                        disabled={gradesLoading || Boolean(gradesError) || grades.length === 0}
+                        onChange={(event) => {
+                          handleFilterChange(event);
+                          setSearchParams(serializeSuperAdviserSupportFormsQuery({
+                            ...filters,
+                            gradeId: event.target.value,
+                            page: 1,
+                          }));
+                        }}
+                      >
+                        <option value="">
+                          {gradesLoading
+                            ? "در حال دریافت پایه‌ها..."
+                            : grades.length === 0
+                              ? "پایه‌ای برای فرم‌های قابل نمایش وجود ندارد"
+                              : "همه پایه‌ها"}
+                        </option>
+                        {grades.map((grade) => (
+                          <option key={grade.id} value={grade.id}>{grade.name}</option>
+                        ))}
+                      </Input>
+                      {gradesError && <div className="text-danger small mt-1">
+                        {gradesError}{" "}
+                        <button type="button" className="btn btn-link btn-sm p-0"
+                          onClick={() => setGradesRetry((value) => value + 1)}>تلاش مجدد</button>
+                      </div>}
                     </Col>
                     <Col xl="2" lg="3" md="4">
                       <Label className="form-label">مجموعه</Label>
