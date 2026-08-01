@@ -13,6 +13,9 @@ import {
   Spinner,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
+import DatePicker from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persianFa from "react-date-object/locales/persian_fa";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
@@ -21,6 +24,11 @@ import {
   getSuperAdviserSchools,
   getSuperAdviserSupportForms,
 } from "../../services/superAdviserPortalService.jsx";
+import {
+  formatMonitoringDate,
+  monitoringApiDate,
+  monitoringDateObject,
+} from "./monitoringDateUtils.js";
 
 const formatDuration = (seconds) => {
   if (!seconds && seconds !== 0) return "-";
@@ -268,7 +276,7 @@ const Monitoring = () => {
                   <h4 className="card-title mb-1">وضعیت مشاوران</h4>
                   {monitoringData.date && (
                     <p className="text-muted mb-0">
-                      تاریخ: <strong>{monitoringData.date}</strong>
+                      تاریخ: <strong>{formatMonitoringDate(monitoringData.date)}</strong>
                     </p>
                   )}
                 </div>
@@ -280,11 +288,18 @@ const Monitoring = () => {
                   <Row className="g-3 align-items-end">
                     <Col xl="2" lg="3" md="4">
                       <Label className="form-label">تاریخ</Label>
-                      <Input
-                        type="date"
-                        name="date"
-                        value={filters.date}
-                        onChange={handleFilterChange}
+                      <DatePicker
+                        calendar={persian}
+                        locale={persianFa}
+                        value={monitoringDateObject(filters.date)}
+                        onChange={(value) => setFilters((current) => ({
+                          ...current,
+                          date: monitoringApiDate(value),
+                        }))}
+                        format="YYYY/MM/DD"
+                        inputClass="form-control"
+                        calendarPosition="bottom-right"
+                        placeholder="انتخاب تاریخ"
                       />
                     </Col>
                     <Col xl="3" lg="4" md="5">

@@ -18,21 +18,26 @@ import { useNavigate } from "react-router-dom";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
+  exportSuperAdviserStudents,
   getSuperAdviserStudents,
   getSuperAdviserAdvisers,
 } from "../../services/superAdviserPortalService.jsx";
+import { saveSuperAdviserStudentsBlob } from "./superAdviserStudentsExportUtils.js";
 
 const Students = () => {
   document.title = "دانش‌آموزان | سر مشاور | داشبورد آیسوق";
 
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
 
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
   const [filters, setFilters] = useState({ search: "", adviserId: "" });
   const [advisers, setAdvisers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     getSuperAdviserAdvisers({ page: 1, limit: 100 })
@@ -84,6 +89,23 @@ const Students = () => {
   };
 
   const handlePageChange = (page) => fetchData(page, filters);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const result = await exportSuperAdviserStudents({
+        search: filters.search,
+        adviserId: filters.adviserId,
+      });
+      saveSuperAdviserStudentsBlob(result.blob, result.contentDisposition);
+    } catch (error) {
+      if (error?.code === "ERR_CANCELED") return;
+      // httpClient displays localized Blob, authorization and network errors.
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const columns = useMemo(
     () => [
@@ -185,6 +207,12 @@ const Students = () => {
                       <Button color="light" type="button" onClick={handleResetFilters} disabled={loading}>
                         ریست
                       </Button>
+                      {hasPermission("super-adviser-portal.students.export") && (
+                        <Button color="success" type="button" onClick={handleExport} disabled={exporting}>
+                          {exporting ? <Spinner size="sm" className="me-1" /> : <i className="mdi mdi-file-excel-outline me-1" />}
+                          {exporting ? "در حال دانلود..." : "خروجی Excel"}
+                        </Button>
+                      )}
                     </Col>
                   </Row>
                 </Form>
