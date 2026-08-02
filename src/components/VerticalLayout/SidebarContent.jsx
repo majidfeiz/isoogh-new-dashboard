@@ -465,6 +465,13 @@ const SidebarContent = (props) => {
       },
       {
         type: "item",
+        label: "لاگ فعالیت‌ها",
+        icon: "bx bx-history",
+        to: "/audit-logs",
+        permission: "audit-logs.index",
+      },
+      {
+        type: "item",
         label: "پاسخ‌نامه‌ها",
         icon: "bx bx-task",
         to: "/answer-sheets",
