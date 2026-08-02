@@ -16,8 +16,6 @@ import {
   Table,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
-
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { getVoipWebhookLogs, getVoipWebhooks } from "../../services/voipWebhookService.jsx";
@@ -45,6 +43,7 @@ const VoipWebhookLogs = () => {
   const [meta, setMeta] = useState({ page: 1, per_page: 30, total: 0, lastPage: 1 });
   const [loading, setLoading] = useState(false);
   const [payloadModal, setPayloadModal] = useState(null);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     getVoipWebhooks()
@@ -55,6 +54,7 @@ const VoipWebhookLogs = () => {
   const fetchLogs = useCallback(
     async (page = 1) => {
       setLoading(true);
+      setLoadError("");
       try {
         const res = await getVoipWebhookLogs({
           page,
@@ -64,7 +64,8 @@ const VoipWebhookLogs = () => {
         setLogs(res.items);
         setMeta(res.pagination);
       } catch {
-        toast.error("خطا در دریافت لاگ‌ها");
+        setLogs([]);
+        setLoadError("دریافت لاگ ارسال‌ها انجام نشد.");
       } finally {
         setLoading(false);
       }
@@ -120,6 +121,7 @@ const VoipWebhookLogs = () => {
                   </Col>
                 </Row>
 
+                {loadError && <div className="alert alert-danger">{loadError}<Button size="sm" outline color="danger" className="ms-2" onClick={() => fetchLogs(meta.page)}>تلاش مجدد</Button></div>}
                 {loading ? (
                   <div className="text-center py-5">
                     <Spinner color="primary" />
@@ -132,7 +134,7 @@ const VoipWebhookLogs = () => {
                           <tr>
                             <th>زمان ارسال</th>
                             <th>وب‌هوک</th>
-                            <th>شناسه تماس</th>
+                            <th>نوع / شناسه رویداد</th>
                             <th>شماره تلاش</th>
                             <th>تلاش بعدی</th>
                             <th>Payload</th>
@@ -146,13 +148,14 @@ const VoipWebhookLogs = () => {
                         <tbody>
                           {logs.map((log) => {
                             const webhookName = webhooks.find((w) => w.id === log.webhook_id)?.name;
+                            const webhook = webhooks.find((w) => w.id === log.webhook_id);
                             const status = getLogStatus(log);
                             return (
                               <tr key={log.id}>
                                 <td className="text-nowrap">{formatDateTime(log.sent_at)}</td>
                                 <td>{webhookName || `#${log.webhook_id}`}</td>
                                 <td>
-                                  {log.voip_call_history_id ? `#${log.voip_call_history_id}` : "-"}
+                                  {log.audit_log_id ? <><Badge color="primary" className="me-1">تغییرات</Badge>#{log.audit_log_id}</> : log.voip_call_history_id ? <><Badge color="info" className="me-1">تماس</Badge>#{log.voip_call_history_id}</> : <><Badge color={webhook?.event_type === "audit_log" ? "primary" : "secondary"}>{webhook?.event_type === "audit_log" ? "تغییرات" : "نامشخص"}</Badge> —</>}
                                 </td>
                                 <td>{log.attempt_number ?? "-"}</td>
                                 <td className="text-nowrap">{formatDateTime(log.next_attempt_at)}</td>
