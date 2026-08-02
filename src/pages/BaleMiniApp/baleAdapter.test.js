@@ -1,4 +1,4 @@
-import { applyBaleTheme, baleQueryKey, createBaleAdapter, createIdempotencyKey, normalizeBootstrap } from "./baleAdapter.js";
+import { applyBaleTheme, baleQueryKey, createBaleAdapter, createIdempotencyKey, normalizeBootstrap, sanitizeBaleTelemetry, visibleBaleNavigation } from "./baleAdapter.js";
 
 describe("Bale WebApp adapter", () => {
   it("uses raw initData and never initDataUnsafe", () => {
@@ -26,5 +26,23 @@ describe("Bale WebApp adapter", () => {
       activeSchoolId: 12,
       schools: [{ id: 12, name: "سرآمد", schoolId: 12, schoolName: "سرآمد" }],
     });
+  });
+
+  it("preserves capability objects and keeps hidden routes addressable", () => {
+    const result = normalizeBootstrap({
+      capabilities: { canCall: true, canSubmitAnswers: false },
+      navigation: [
+        { key: "forms", path: "/forms", visible: true },
+        { key: "students", path: "/students", visible: false },
+        { key: "broken", label: "بدون مسیر" },
+      ],
+    });
+    expect(result.capabilities).toEqual({ canCall: true, canSubmitAnswers: false });
+    expect(result.navigation.map((item) => item.path)).toEqual(["/forms", "/students"]);
+    expect(visibleBaleNavigation(result.navigation).map((item) => item.path)).toEqual(["/forms"]);
+  });
+
+  it("removes sensitive and complex values from telemetry", () => {
+    expect(sanitizeBaleTelemetry({ stage: "bootstrap", route: "/", token: "secret", initData: "raw", phone: "0912", response: { data: true }, status: 500 })).toEqual({ stage: "bootstrap", route: "/", status: 500 });
   });
 });
