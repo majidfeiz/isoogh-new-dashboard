@@ -240,6 +240,7 @@ import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.j
 import CallTraces from "../pages/Voip/CallTraces/CallTraces.jsx";
 import AnswerSheetList from "../pages/AnswerSheets/AnswerSheetList.jsx";
 import VoipAnalytics from "../pages/Voip/Analytics/VoipAnalytics.jsx";
+import AuditLogs from "../pages/AuditLogs/AuditLogs.jsx";
 
 // external api clients
 import ExternalApiClientList from "../pages/ExternalApi/ExternalApiClientList.jsx";
@@ -416,6 +417,7 @@ const authProtectedRoutes = [
   },
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
+  { path: "/audit-logs", component: <ProtectedRoute permission="audit-logs.index"><AuditLogs /></ProtectedRoute> },
 
   // external api clients
   { path: "/external-api-clients", component: <ExternalApiClientList /> },

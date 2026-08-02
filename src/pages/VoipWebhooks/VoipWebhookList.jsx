@@ -41,14 +41,17 @@ const VoipWebhookList = () => {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [testingId, setTestingId] = useState(null);
+  const [loadError, setLoadError] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const items = await getVoipWebhooks();
       setData(items);
     } catch {
-      toast.error("خطا در دریافت لیست وب‌هوک‌ها");
+      setData([]);
+      setLoadError("دریافت لیست وب‌هوک‌ها انجام نشد.");
     } finally {
       setLoading(false);
     }
@@ -61,10 +64,13 @@ const VoipWebhookList = () => {
   const handleTest = useCallback(async (id) => {
     setTestingId(id);
     try {
-      await testVoipWebhook(id);
-      toast.success("درخواست تست در صف ثبت شد");
-    } catch {
-      toast.error("خطا در ثبت تست وب‌هوک در صف");
+      const result = await testVoipWebhook(id);
+      const data = result?.data ?? result;
+      if (data?.enqueued) toast.success("آخرین رویداد منطبق در صف تست ثبت شد");
+      else toast.warning(data?.message || "رویداد منطبقی برای تست یافت نشد");
+    } catch (error) {
+      const status = error?.response?.status;
+      toast.error(status === 403 ? "اجازه تست این وب‌هوک را ندارید" : status === 429 ? "تعداد درخواست‌ها بیش از حد مجاز است" : "خطا در ثبت تست وب‌هوک در صف");
     } finally {
       setTestingId(null);
     }
@@ -104,6 +110,22 @@ const VoipWebhookList = () => {
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => info.getValue() || "-",
+      },
+      {
+        id: "event_type",
+        header: "نوع رویداد",
+        accessorKey: "event_type",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => info.getValue() === "audit_log" ? <Badge color="primary">تغییرات</Badge> : <Badge color="info">تماس</Badge>,
+      },
+      {
+        id: "school_id",
+        header: "مجموعه",
+        accessorKey: "school_id",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: (info) => info.getValue() ? `#${info.getValue()}` : "—",
       },
       {
         id: "src",
@@ -254,14 +276,15 @@ const VoipWebhookList = () => {
               </CardHeader>
 
               <CardBody>
-                <TableContainer
+                {loadError && <div className="alert alert-danger">{loadError}<Button size="sm" outline color="danger" className="ms-2" onClick={fetchData}>تلاش مجدد</Button></div>}
+                {!loading && !loadError && data.length === 0 ? <div className="text-center text-muted py-5">هیچ وب‌هوکی ثبت نشده است.</div> : <TableContainer
                   columns={columns}
                   data={data}
                   isGlobalFilter={false}
                   isPagination={false}
                   isLoading={loading}
                   tableClass="table-bordered table-nowrap dt-responsive nowrap w-100 dataTable no-footer dtr-inline"
-                />
+                />}
               </CardBody>
             </Card>
           </Col>

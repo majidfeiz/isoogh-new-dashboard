@@ -37,6 +37,17 @@ const CodeBlock = ({ children }) => (
   </pre>
 );
 
+const JsonTree = ({ value, name = "root" }) => {
+  if (value === null || typeof value !== "object") return <div className="ms-3"><strong>{name}:</strong> <code>{String(value)}</code></div>;
+  return <details open className="ms-3"><summary><strong>{name}</strong></summary>{Object.entries(value).map(([key, child]) => <JsonTree key={key} name={key} value={child} />)}</details>;
+};
+
+export const todayExclusiveRange = (now = new Date()) => {
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return { from: from.toISOString(), to: to.toISOString() };
+};
+
 const Section = ({ title, children }) => (
   <div className="mb-5">
     <h5 className="border-bottom pb-2 mb-3 text-primary">{title}</h5>
@@ -56,6 +67,11 @@ const EndpointRow = ({ method, path, permission, description }) => (
 const ExternalApiDocs = () => {
   document.title = "مستندات API خارجی | داشبورد آیسوق";
   const [activeTab, setActiveTab] = useState("management");
+  const auditToday = todayExclusiveRange();
+  const auditExample = {
+    changes: { before: { status: "pending" }, after: { status: "active" } },
+    metadata: { source: "admin-dashboard", affected_count: 1 },
+  };
 
   return (
     <div className="page-content">
@@ -250,11 +266,11 @@ const ExternalApiDocs = () => {
               <TabPane tabId="webhooks">
                 <Section title="توضیح کلی">
                   <p>
-                    ادمین می‌تواند تنظیم کند که هر بار تماسی با <code>src</code> مشخص در <code>voip_call_histories</code> ثبت شود،
-                    اطلاعات آن تماس به یک URL ارسال شود.
+                    ادمین می‌تواند رویداد تماس یا تغییرات Audit یک مجموعه را به URL مقصد ارسال کند.
                   </p>
                   <ul>
                     <li><code>src</code> همان شماره خطی است که در جدول تماس‌ها ذخیره می‌شود</li>
+                    <li>برای <code>event_type=audit_log</code> انتخاب <code>school_id</code> الزامی و فیلترهای ماژول و نوع عملیات اختیاری است</li>
                     <li><code>secret</code> اختیاری است — اگر تنظیم شود، هدر <code>X-Webhook-Signature: sha256={"<hash>"}</code> به درخواست اضافه می‌شود</li>
                   </ul>
                 </Section>
@@ -276,7 +292,7 @@ const ExternalApiDocs = () => {
                         <EndpointRow method="GET"    path="/voip-webhooks/:id"                  permission="voip-webhooks.show"   description="نمایش وب‌هوک" />
                         <EndpointRow method="PATCH"  path="/voip-webhooks/:id"                  permission="voip-webhooks.update" description="ویرایش وب‌هوک" />
                         <EndpointRow method="DELETE" path="/voip-webhooks/:id"                  permission="voip-webhooks.delete" description="حذف وب‌هوک" />
-                        <EndpointRow method="POST"   path="/voip-webhooks/:id/test"             permission="voip-webhooks.update" description="تست با آخرین تماس مرتبط" />
+                        <EndpointRow method="POST"   path="/voip-webhooks/:id/test"             permission="voip-webhooks.update" description="صف‌کردن آخرین event منطبق برای هر دو نوع تماس و Audit" />
                         <EndpointRow method="POST"   path="/voip-webhooks/dispatch/:callId"     permission="voip-webhooks.update" description="ارسال دستی برای یک تماس" />
                         <EndpointRow method="GET"    path="/voip-webhooks/logs"                 permission="voip-webhooks.logs"   description="لاگ ارسال‌ها" />
                       </tbody>
@@ -284,18 +300,24 @@ const ExternalApiDocs = () => {
                   </div>
                 </Section>
 
-                <Section title="Body ایجاد وب‌هوک (POST)">
+                <Section title="Body ایجاد وب‌هوک Audit (POST)">
                   <CodeBlock>{`{
-  "name": "وب‌هوک سازمان مرکزی",
-  "src": "09121234567",
-  "webhook_url": "https://org.example.com/webhook/calls",
+  "name": "وب‌هوک تغییرات مجموعه",
+  "event_type": "audit_log",
+  "school_id": 3,
+  "audit_modules": ["students", "users"],
+  "audit_action_types": ["create", "update", "delete"],
+  "webhook_url": "https://org.example.com/webhook/audit",
   "secret": "my-hmac-secret",
-  "is_active": true
+  "is_active": true,
+  "replay_from": "${auditToday.from}",
+  "max_attempts": 3,
+  "retry_interval_minutes": 10
 }`}</CodeBlock>
                 </Section>
 
                 <Section title="پاسخ تست وب‌هوک (POST /voip-webhooks/:id/test)">
-                  <CodeBlock>{`{ "message": "Dispatch triggered", "call_history_id": 42 }`}</CodeBlock>
+                  <CodeBlock>{`{ "message": "Dispatch queued", "enqueued": 1 }`}</CodeBlock>
                 </Section>
 
                 <Section title="پاسخ لاگ ارسال‌ها (GET /voip-webhooks/logs)">
@@ -344,6 +366,40 @@ const ExternalApiDocs = () => {
                   <p className="text-muted small mt-2">
                     امضای HMAC: اگر <code>secret</code> تنظیم شده باشد، هدر <code>X-Webhook-Signature: sha256={"<hash>"}</code> ارسال می‌شود.
                   </p>
+                </Section>
+
+                <Section title="ساختار Payload وب‌هوک Audit">
+                  <CodeBlock>{`{
+  "event": "audit_log.created",
+  "event_id": "audit:1042:school:3",
+  "occurred_at": "2026-08-02T10:30:00.000Z",
+  "school_id": 3,
+  "audit_log": {
+    "id": 1042,
+    "actor_user_id": 20,
+    "module": "students",
+    "action_type": "update",
+    "status": "success",
+    "changes": { "status": { "from": "pending", "to": "active" } },
+    "metadata": { "affected_count": 1 }
+  }
+}`}</CodeBlock>
+                  <div className="alert alert-info">
+                    مقصد باید <code>event_id</code> را برای idempotency ذخیره و پاسخ 2xx برگرداند. هر پاسخ غیر 2xx باعث retry طبق تنظیمات وب‌هوک می‌شود.
+                  </div>
+                </Section>
+
+                <Section title="اعتبارسنجی امن امضای HMAC">
+                  <p>امضا را روی بایت‌های دقیق <strong>raw body</strong> با secret محاسبه کنید و مقدار هدر <code>X-Webhook-Signature</code> را با مقایسه constant-time بررسی کنید؛ JSON را پیش از محاسبه دوباره stringify نکنید.</p>
+                  <CodeBlock>{`const expected = "sha256=" + crypto
+  .createHmac("sha256", process.env.WEBHOOK_SECRET)
+  .update(rawBody)
+  .digest("hex");
+
+const received = req.get("X-Webhook-Signature") || "";
+const valid = received.length === expected.length &&
+  crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));`}</CodeBlock>
+                  <p className="text-muted small">Secret فقط هنگام ایجاد/تغییر ارسال می‌شود و پس از ثبت نباید نمایش یا log شود.</p>
                 </Section>
               </TabPane>
 
@@ -420,12 +476,50 @@ const ExternalApiDocs = () => {
                           <td><code>from, to, page, per_page, school_id*</code></td>
                           <td>تماس‌های بنیاد در بازه تاریخ</td>
                         </tr>
+                        <tr>
+                          <td><MethodBadge method="GET" /></td>
+                          <td><code>/external-api/v1/audit-logs</code></td>
+                          <td><code>actor_user_id, module, action_type, status, from, to, search, page, per_page, school_id*</code></td>
+                          <td>لاگ فعالیت‌های پاک‌سازی‌شده مجموعه</td>
+                        </tr>
                       </tbody>
                     </Table>
                   </div>
                   <p className="text-muted small">
                     * <code>school_id</code> فقط برای کلاینتی که چند مدرسه مجاز دارد الزامی است.
                   </p>
+                </Section>
+
+                <Section title="GET /external-api/v1/audit-logs">
+                  <p>بازه زمانی به‌صورت <code>[from,to)</code> است: ابتدای بازه محاسبه می‌شود و انتهای آن محاسبه نمی‌شود. هر دو مقدار باید ISO 8601 باشند؛ نمونه زیر امروز را از ابتدای امروز تا ابتدای فردا در timezone کاربر می‌فرستد.</p>
+                  <CodeBlock>{`curl --get "${API_BASE_URL}/external-api/v1/audit-logs" \\
+  -H "X-API-Key: <API_KEY>" \\
+  --data-urlencode "school_id=3" \\
+  --data-urlencode "from=${auditToday.from}" \\
+  --data-urlencode "to=${auditToday.to}" \\
+  --data-urlencode "page=1" \\
+  --data-urlencode "per_page=30"`}</CodeBlock>
+                  <div className="alert alert-info">برای کلاینت چندمدرسه‌ای، <code>school_id</code> اجباری است؛ برای کلاینت تک‌مدرسه‌ای می‌توان آن را حذف کرد.</div>
+                  <CodeBlock>{`{
+  "data": [{
+    "id": 1042,
+    "actor_user_id": 20,
+    "actor_name": "علی محمدی",
+    "module": "students",
+    "action_type": "update",
+    "action": "students.update",
+    "subject_type": "student",
+    "subject_id": "52",
+    "status": "success",
+    "changes": { "before": { "status": "pending" }, "after": { "status": "active" } },
+    "metadata": { "source": "admin-dashboard", "affected_count": 1 },
+    "request_id": "5fc0d03c-46e8-4d9e-b2f5-889489a8e236",
+    "created_at": "2026-08-02T10:30:00.000Z"
+  }],
+  "meta": { "page": 1, "per_page": 30, "total": 1, "last_page": 1 }
+}`}</CodeBlock>
+                  <div className="border rounded p-3 mb-3"><h6>نمایش JSON Tree</h6><JsonTree name="changes" value={auditExample.changes} /><JsonTree name="metadata" value={auditExample.metadata} /></div>
+                  <div className="alert alert-warning">برای کاهش افشای اطلاعات، raw request، IP و User-Agent عمداً در External API ارائه نمی‌شوند.</div>
                 </Section>
 
                 <Section title="GET /external-api/v1/students — پاسخ">

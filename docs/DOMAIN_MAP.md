@@ -19,6 +19,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Files | `pages/Files` | `fileService` | `files` | `/files*` |
 | School chat | `pages/Chat` | `chatService` | `chat` | `/chat` |
 | Notifications | `pages/Notifications` | `notificationService` | `notifications` | `/notifications*` |
+| Audit logs | `pages/AuditLogs` | `auditLogService` | `auditLogs` | `/audit-logs` |
 | VoIP history/live/traces | `pages/Voip` | `voipService` | `voip` | `/voip/outbound-call-histories*`, `/voip/call-traces` |
 | VoIP analytics | `pages/Voip/Analytics` | `voipAnalyticsService` | `voipAnalytics` | `/voip/analytics` |
 | VoIP webhooks | `pages/VoipWebhooks` | `voipWebhookService` | `voipWebhooks` | `/voip-webhooks*` |

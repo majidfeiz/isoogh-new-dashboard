@@ -126,6 +126,11 @@ export const API_ROUTES = {
     update: (id) => `/schools/${id}`,
     delete: (id) => `/schools/${id}`,
   },
+  auditLogs: {
+    list: "/audit-logs",
+    actors: "/audit-logs/actors",
+    stats: "/audit-logs/stats",
+  },
   grades: {
     list: "/grades",
     create: "/grades",
