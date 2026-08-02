@@ -80,6 +80,7 @@ Use `apiPatch` for partial updates and `getApiUrl(API_ROUTES...)` for every endp
 - Bale routes, deployment notes, public configuration, and security boundaries are documented in `docs/BALE_FRONTEND.md`.
 - Bale call-room initialization uses the scoped single-request `/bale/mini-app/adviser/support-forms/:formId/students/:studentId/call-room` contract. Admin Bale management also includes bulk school settings (maximum 500 IDs), server-configured webhook registration/removal, and the permission-gated outbox route.
 - Bale global configuration is database-backed through `/bale/admin/settings`; secret inputs are write-only and deliberately normalized to empty client state. Per-school settings also support raw `HH:mm` quiet hours plus an IANA timezone.
+- Nginx keeps `X-Frame-Options: SAMEORIGIN` for the dashboard, but `/bale-mini-app` deliberately omits it and uses `Content-Security-Policy: frame-ancestors 'self' https://bale.ai https://*.bale.ai` so Bale Web can embed only the separately authenticated Mini App route.
 
 ## Known baseline and risks
 
