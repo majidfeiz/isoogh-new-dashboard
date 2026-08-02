@@ -6,7 +6,7 @@ import {
   getBaleCallRoom, getBalePreferences, setBaleMiniToken, updateBalePreferences,
 } from "../../services/baleService.jsx";
 import { API_ROUTES } from "../../helpers/apiRoutes.jsx";
-import { applyBaleTheme, createBaleAdapter } from "./baleAdapter.js";
+import { applyBaleTheme, createBaleAdapter, normalizeBootstrap } from "./baleAdapter.js";
 import CallRoom from "./CallRoom.jsx";
 import "./bale-mini-app.scss";
 
@@ -28,7 +28,7 @@ function DynamicPage({ bootstrap }) {
   const [state, setState] = useState({ loading: true, data: null, error: "" });
   const [page, setPage] = useState(1);
   const entry = bootstrap.navigation?.find((item) => (item.path || item.route) === location.pathname) || {};
-  const resource = entry.key || entry.resource || "";
+  const resource = entry.key || entry.resource || location.pathname.split("/").filter(Boolean).pop() || "home";
   const endpoint = useMemo(() => {
     if (entry.endpoint) return entry.endpoint;
     if (bootstrap.activeRole === "adviser") {
@@ -42,11 +42,20 @@ function DynamicPage({ bootstrap }) {
       const routes = { schools: API_ROUTES.superAdviserPortal.schools, advisers: API_ROUTES.superAdviserPortal.advisers, forms: API_ROUTES.superAdviserPortal.supportForms, "support-forms": API_ROUTES.superAdviserPortal.supportForms, students: API_ROUTES.superAdviserPortal.students, monitoring: API_ROUTES.superAdviserPortal.monitoring, performance: API_ROUTES.superAdviserPortal.performanceReport, salary: API_ROUTES.superAdviserPortal.salary };
       return routes[resource];
     }
+    if (bootstrap.activeRole === "manager" && ["home", "dashboard"].includes(resource)) return API_ROUTES.dashboard.stats;
     return undefined;
   }, [entry.endpoint, resource, bootstrap.activeRole, bootstrap.activeSchoolId, context.schoolId, context.formId]);
   const load = useCallback(async () => {
-    if (!endpoint) { setState({ loading: false, data: entry?.data ?? null, error: "" }); return; }
-    if (!/^\/(adviser-portal|super-adviser-portal|bale\/mini-app)\//.test(endpoint)) { setState({ loading: false, data: null, error: "مسیر این بخش معتبر نیست." }); return; }
+    if (!endpoint) {
+      const managerData = bootstrap.activeRole === "manager" && resource === "reports"
+        ? { items: [
+          { id: "reports", title: "مرکز گزارش‌ها", description: "مشاهده گزارش‌های مدیریتی", fullPanelPath: "/reports" },
+          { id: "adviser-performance", title: "عملکرد مشاوران", description: "گزارش عملکرد مشاوران مجموعه", fullPanelPath: "/reports/adviser-performance" },
+        ] }
+        : bootstrap.activeRole === "manager" && resource === "schools" ? { items: bootstrap.schools } : null;
+      setState({ loading: false, data: entry?.data ?? managerData, error: "" }); return;
+    }
+    if (!/^\/(dashboard|adviser-portal|super-adviser-portal|bale\/mini-app)\//.test(endpoint)) { setState({ loading: false, data: null, error: "مسیر این بخش معتبر نیست." }); return; }
     setState((old) => ({ ...old, loading: true, error: "" }));
     try { const response = await baleMiniHttp.get(endpoint, { params: { schoolId: context.schoolId || bootstrap.activeSchoolId, adviserId: context.adviserId || undefined, supportFormId: context.formId || undefined, page, limit: 20 } }); setState({ loading: false, data: response?.data?.data ?? response?.data, error: "" }); }
     catch (error) { setState({ loading: false, data: null, error: errorText(error) }); }
@@ -56,6 +65,7 @@ function DynamicPage({ bootstrap }) {
   const meta = state.data?.meta ?? state.data?.pagination ?? {};
   const openItem = async (item) => {
     const nav = bootstrap.navigation || [];
+    if (item.fullPanelPath) { window.open(item.fullPanelPath, "_blank", "noopener,noreferrer"); return; }
     if (resource === "schools") { const target = nav.find((x) => ["forms", "support-forms"].includes(x.key || x.resource)); if (target) navigate(target.path || target.route, { state: { schoolId: item.id, school: item } }); }
     else if (["forms", "support-forms"].includes(resource)) { const target = nav.find((x) => ["students", "form-students"].includes(x.key || x.resource)); if (target) { let form = item; if (bootstrap.activeRole === "adviser") { try { const response = await baleMiniHttp.get(API_ROUTES.adviserPortal.supportFormDetail(item.id)); form = response?.data?.data ?? response?.data ?? item; } catch {} } navigate(target.path || target.route, { state: { ...context, formId: item.id, form } }); } }
     else if (["students", "form-students"].includes(resource) && bootstrap.activeRole === "adviser") { const studentId = item.studentId || item.id; setState((current) => ({ ...current, loading: true, error: "" })); try { const room = await getBaleCallRoom({ formId: context.formId, studentId, schoolId: context.schoolId || bootstrap.activeSchoolId }); navigate("/call-room", { state: { ...room, formId: room.form?.id || context.formId, studentId: room.student?.id || studentId, school: context.school, questions: room.form?.questions || [], readiness: room.readiness, voipLineId: room.voipLineId } }); } catch (caught) { setState((current) => ({ ...current, loading: false, error: errorText(caught) })); } }
@@ -86,7 +96,7 @@ function MiniAppController() {
   const boot = useCallback(async () => {
     if (!adapter.isSupported || !adapter.initData) { setStatus("unsupported"); return; }
     if (exchangeAttempted.current) return; exchangeAttempted.current = true; setStatus("exchanging"); setError("");
-    try { const exchange = await exchangeBaleSession(adapter.initData); if (!exchange.linked) { setStatus("unlinked"); return; } setBaleMiniToken(exchange.accessToken); const next = await getBaleBootstrap({ activeRole: role || undefined, schoolId: schoolId || undefined }); setBootstrap(next); setRole(next.activeRole || ""); setSchoolId(next.activeSchoolId || ""); if ((next.roles || []).length > 1 && !role) setStatus("role-selection"); else if ((next.schools || []).length > 1 && !schoolId) setStatus("school-selection"); else setStatus("ready"); }
+    try { const exchange = await exchangeBaleSession(adapter.initData); if (!exchange.linked) { setStatus("unlinked"); return; } setBaleMiniToken(exchange.accessToken); const next = normalizeBootstrap(await getBaleBootstrap({ activeRole: role || undefined, schoolId: schoolId || undefined })); setBootstrap(next); setRole(next.activeRole || ""); setSchoolId(next.activeSchoolId || ""); if ((next.roles || []).length > 1 && !role) setStatus("role-selection"); else if ((next.schools || []).length > 1 && !schoolId) setStatus("school-selection"); else setStatus("ready"); }
     catch (caught) { clearBaleMiniSession(); setError(errorText(caught)); setStatus(caught?.response?.status === 403 ? "forbidden" : "recoverable-error"); }
   }, [role, schoolId]);
   useEffect(() => { applyBaleTheme(adapter.themeParams); boot(); }, [boot]);
@@ -104,7 +114,7 @@ function MiniAppController() {
     return () => window.removeEventListener("isoogh:bale-mini-unauthorized", reauthenticate);
   }, [boot]);
   useEffect(() => { if (status === "ready") { adapter.ready(); adapter.expand(); } }, [status]);
-  const refreshContext = async (nextRole, nextSchool) => { setStatus("exchanging"); try { const next = await getBaleBootstrap({ activeRole: nextRole, schoolId: nextSchool }); setBootstrap(next); setRole(next.activeRole); setSchoolId(next.activeSchoolId); setStatus("ready"); } catch (caught) { setError(errorText(caught)); setStatus("recoverable-error"); } };
+  const refreshContext = async (nextRole, nextSchool) => { setStatus("exchanging"); try { const next = normalizeBootstrap(await getBaleBootstrap({ activeRole: nextRole, schoolId: nextSchool })); setBootstrap(next); setRole(next.activeRole); setSchoolId(next.activeSchoolId); setStatus("ready"); } catch (caught) { setError(errorText(caught)); setStatus("recoverable-error"); } };
   if (["booting", "exchanging"].includes(status)) return <div className="bale-center"><Spinner /><p>در حال آماده‌سازی…</p></div>;
   if (status === "unsupported") return <div className="bale-center"><h1>نسخه بله پشتیبانی نمی‌شود</h1><p>این صفحه را داخل آخرین نسخه بله باز کنید.</p><a className="btn btn-primary" href="https://bale.ai/">دریافت نسخه جدید</a></div>;
   if (status === "unlinked") return <div className="bale-center"><h1>اتصال حساب لازم است</h1><p>ابتدا حساب سرآمد را از پنل یا بازوی بله متصل کنید و دوباره برگردید.</p></div>;

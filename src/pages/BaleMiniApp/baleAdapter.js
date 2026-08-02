@@ -55,3 +55,19 @@ export const baleQueryKey = ({ role = "", schoolId = "", resource = "", params =
   String(resource),
   JSON.stringify(Object.fromEntries(Object.entries(params).sort(([a], [b]) => a.localeCompare(b)))),
 ];
+
+export const normalizeBootstrap = (value = {}) => {
+  const schoolsSource = value.schools?.items ?? value.schools?.data ?? value.schools ?? [];
+  const schools = (Array.isArray(schoolsSource) ? schoolsSource : []).map((school) => ({
+    ...school,
+    id: school.id ?? school.schoolId,
+    name: school.name ?? school.schoolName ?? school.title ?? `مجموعه ${school.id ?? school.schoolId}`,
+  }));
+  return {
+    ...value,
+    schools,
+    activeSchoolId: value.activeSchoolId ?? value.schoolId ?? (schools.length === 1 ? schools[0].id : null),
+    navigation: Array.isArray(value.navigation) ? value.navigation : [],
+    capabilities: Array.isArray(value.capabilities) ? value.capabilities : [],
+  };
+};

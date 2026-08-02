@@ -1,4 +1,4 @@
-import { applyBaleTheme, baleQueryKey, createBaleAdapter, createIdempotencyKey } from "./baleAdapter.js";
+import { applyBaleTheme, baleQueryKey, createBaleAdapter, createIdempotencyKey, normalizeBootstrap } from "./baleAdapter.js";
 
 describe("Bale WebApp adapter", () => {
   it("uses raw initData and never initDataUnsafe", () => {
@@ -18,5 +18,13 @@ describe("Bale WebApp adapter", () => {
   it("creates stable-shaped unique keys", () => {
     expect(createIdempotencyKey()).toEqual(expect.any(String));
     expect(baleQueryKey({ role: "adviser", schoolId: 12, resource: "forms", params: { page: 1 } })).toEqual(["bale-mini", "adviser", "12", "forms", "{\"page\":1}"]);
+  });
+
+  it("normalizes a manager school and selects the only school", () => {
+    expect(normalizeBootstrap({ activeRole: "manager", schools: [{ schoolId: 12, schoolName: "سرآمد" }] })).toMatchObject({
+      activeRole: "manager",
+      activeSchoolId: 12,
+      schools: [{ id: 12, name: "سرآمد", schoolId: 12, schoolName: "سرآمد" }],
+    });
   });
 });
