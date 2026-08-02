@@ -418,6 +418,7 @@ export const API_ROUTES = {
   bale: {
     exchange: "/bale/auth/exchange",
     bootstrap: "/bale/mini-app/bootstrap",
+    clientLogs: "/bale/mini-app/client-logs",
     linkChallenges: "/bale/link-challenges",
     myConnection: "/bale/connections/me",
     preferences: "/bale/mini-app/notifications/preferences",

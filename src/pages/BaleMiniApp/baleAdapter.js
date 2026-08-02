@@ -10,6 +10,7 @@ export function createBaleAdapter(globalObject = typeof window !== "undefined" ?
     version: Number(webApp?.version || 0),
     ready: () => webApp?.ready?.(),
     expand: () => webApp?.expand?.(),
+    close: () => webApp?.close?.(),
     enableClosingConfirmation: () => webApp?.enableClosingConfirmation?.(),
     disableClosingConfirmation: () => webApp?.disableClosingConfirmation?.(),
     onBack(handler) {
@@ -67,7 +68,16 @@ export const normalizeBootstrap = (value = {}) => {
     ...value,
     schools,
     activeSchoolId: value.activeSchoolId ?? value.schoolId ?? (schools.length === 1 ? schools[0].id : null),
-    navigation: Array.isArray(value.navigation) ? value.navigation : [],
-    capabilities: Array.isArray(value.capabilities) ? value.capabilities : [],
+    navigation: Array.isArray(value.navigation) ? value.navigation.filter((item) => item?.path && item.enabled !== false) : [],
+    capabilities: value.capabilities && typeof value.capabilities === "object" && !Array.isArray(value.capabilities) ? value.capabilities : {},
   };
 };
+
+const SENSITIVE_TELEMETRY_KEYS = /initData|token|authorization|cookie|phone|response|body|stack|secret|answer/i;
+export const sanitizeBaleTelemetry = (context = {}) => Object.fromEntries(
+  Object.entries(context)
+    .filter(([key, value]) => !SENSITIVE_TELEMETRY_KEYS.test(key) && ["string", "number", "boolean"].includes(typeof value))
+    .slice(0, 12)
+);
+
+export const visibleBaleNavigation = (navigation = []) => navigation.filter((item) => item.visible !== false);
