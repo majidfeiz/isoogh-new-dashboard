@@ -17,6 +17,8 @@
 
 اسکریپت رسمی `https://tapi.bale.ai/miniapp.js?3` پیش از entry برنامه بارگذاری می‌شود. Mini App در `main.jsx` خارج از `BrowserRouter` و session پنل mount می‌شود و router حافظه‌ای و token موقت مستقل دارد.
 
+در nginx فقط مسیر `/bale-mini-app` اجازه embed شدن از `https://bale.ai` و زیردامنه‌های HTTPS بله را دارد. سایر مسیرهای پنل همچنان با `X-Frame-Options: SAMEORIGIN` در برابر iframe محافظت می‌شوند. بعد از تغییر این policy باید image فرانت دوباره build و deploy شود؛ تغییر React به‌تنهایی header نسخه production را عوض نمی‌کند.
+
 ## قرارداد امنیتی
 
 - فقط `window.Bale.WebApp.initData` خام برای exchange ارسال می‌شود.
