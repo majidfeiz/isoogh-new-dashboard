@@ -9,6 +9,7 @@ const compact = (value = {}) => Object.fromEntries(
   Object.entries(value).filter(([, item]) => item !== "" && item != null)
 );
 const unwrap = (response) => response?.data?.data ?? response?.data ?? {};
+const unwrapMini = (response) => response?.data?.data;
 const listResult = (response, fallback = {}) => {
   const body = unwrap(response);
   const items = body.items ?? body.data ?? (Array.isArray(body) ? body : []);
@@ -72,8 +73,9 @@ baleMiniHttp.interceptors.response.use((response) => response, (error) => {
   return Promise.reject(error);
 });
 
-export const exchangeBaleSession = async (initData) => unwrap(await baleMiniHttp.post(API_ROUTES.bale.exchange, { initData }));
-export const getBaleBootstrap = async (params) => unwrap(await baleMiniHttp.get(API_ROUTES.bale.bootstrap, { params: compact(params) }));
+export const exchangeBaleSession = async (initData, signal) => unwrapMini(await baleMiniHttp.post(API_ROUTES.bale.exchange, { initData }, { signal }));
+export const getBaleBootstrap = async (params, signal) => unwrapMini(await baleMiniHttp.get(API_ROUTES.bale.bootstrap, { params: compact(params), signal }));
+export const sendBaleClientLog = (payload) => baleMiniHttp.post(API_ROUTES.bale.clientLogs, payload, { silent: true }).catch(() => {});
 export const startBaleCall = async (data, key) => unwrap(await baleMiniHttp.post(API_ROUTES.bale.adviserCalls, data, { headers: { "Idempotency-Key": key } }));
 export const getBaleCallStatus = async (id, signal) => unwrap(await baleMiniHttp.get(API_ROUTES.bale.adviserCallStatus(id), { signal }));
 export const getBaleCallDraft = async (id) => unwrap(await baleMiniHttp.get(API_ROUTES.bale.adviserCallDraft(id)));

@@ -27,6 +27,9 @@
 - `Bale User ID` در UI و query به‌صورت string باقی می‌ماند.
 - عملیات تماس و submit کلید idempotency مستقل دارند.
 - خطای 401 فقط session بله را پاک می‌کند و حداکثر یک exchange کنترل‌شده آغاز می‌کند.
+- bootstrap فقط wrapper قطعی `response.data.data` را مصرف می‌کند؛ `capabilities` یک object است و routeهای `visible=false` ثبت می‌شوند ولی در navigation دیده نمی‌شوند.
+- چرخه SDK تا bootstrap watchdog دوازده‌ثانیه‌ای، AbortController و Error Boundary دارد؛ همه حالت‌های شکست باید متن فارسی، retry و شناسه پیگیری نمایش دهند.
+- تله‌متری امن به `/bale/mini-app/client-logs` فرستاده می‌شود، در هر session deduplicate و به ۳۰ رخداد در دقیقه محدود است و نباید initData، JWT، شماره، response خام یا secret داشته باشد.
 
 ## تنظیمات سرور
 
