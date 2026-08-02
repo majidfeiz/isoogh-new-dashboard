@@ -1,6 +1,6 @@
 # Project Memory
 
-Last verified against the repository: 2026-07-11 (app version `1.5.1`).
+Last verified against the repository: 2026-08-03 (app version `1.13.0`).
 
 This is the short, code-derived context to read before changing the project. `AGENTS.md` remains the detailed conventions guide; `docs/DOMAIN_MAP.md` is the feature locator.
 
@@ -76,6 +76,10 @@ Use `apiPatch` for partial updates and `getApiUrl(API_ROUTES...)` for every endp
 - Back-navigation list restoration: `src/hooks/useListState.js`, which persists under `sessionStorage` keys prefixed with `list:` and restores only on POP navigation.
 - User impersonation: `userSwitchService.jsx` plus `ImpersonationBanner`/`SwitchUserButton`; treat token switching as auth-sensitive work.
 - Realtime VoIP view uses socket.io; inspect `OutboundCallHistoriesLive.jsx` and socket docs service before changing event handling.
+- Bale Mini App is mounted directly from `main.jsx` for `/bale-mini-app`, outside the dashboard `BrowserRouter` and auth providers. It owns a `MemoryRouter`, a session-only Bale token, a dedicated axios client, and a single testable SDK adapter; dashboard Bale administration continues to use the standard authenticated HTTP client.
+- Bale routes, deployment notes, public configuration, and security boundaries are documented in `docs/BALE_FRONTEND.md`.
+- Bale call-room initialization uses the scoped single-request `/bale/mini-app/adviser/support-forms/:formId/students/:studentId/call-room` contract. Admin Bale management also includes bulk school settings (maximum 500 IDs), server-configured webhook registration/removal, and the permission-gated outbox route.
+- Bale global configuration is database-backed through `/bale/admin/settings`; secret inputs are write-only and deliberately normalized to empty client state. Per-school settings also support raw `HH:mm` quiet hours plus an IANA timezone.
 
 ## Known baseline and risks
 

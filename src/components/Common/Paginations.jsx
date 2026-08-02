@@ -8,8 +8,8 @@ const Paginations = ({
   currentPage,
   setCurrentPage,
   isShowingPageLength,
-  paginationDiv,
-  paginationClass,
+  paginationDiv = "col-sm-auto",
+  paginationClass = "pagination pagination-sm mb-0",
   totalRecords,
 }) => {
   const total =
