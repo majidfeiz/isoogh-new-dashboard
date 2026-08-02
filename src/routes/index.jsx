@@ -272,6 +272,13 @@ import ProtectedRoute from "../components/Access/ProtectedRoute.jsx";
 
 // admin - dashboard widgets
 import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
+import { BaleConnections } from "../pages/BaleAdmin/BaleAdminPages.jsx";
+import BaleAccount from "../pages/BaleAdmin/BaleAccount.jsx";
+import BaleSchoolsPage from "../pages/BaleAdmin/BaleSchoolsPage.jsx";
+import BaleLogsPage from "../pages/BaleAdmin/BaleLogsPage.jsx";
+import BaleHealthPage from "../pages/BaleAdmin/BaleHealthPage.jsx";
+import BaleOutboxPage from "../pages/BaleAdmin/BaleOutboxPage.jsx";
+import BaleConfigurationPage from "../pages/BaleAdmin/BaleConfigurationPage.jsx";
 
 // admin - sessions
 import AdminUserSessions from "../pages/Sessions/AdminUserSessions.jsx";
@@ -449,6 +456,15 @@ const authProtectedRoutes = [
 
   // admin - dashboard widgets
   { path: "/admin/dashboard-widgets", component: <DashboardWidgetsAdmin /> },
+
+  // Bale integration
+  { path: "/settings/integrations/bale/schools", component: <ProtectedRoute permission="bale.admin.settings.show"><BaleSchoolsPage /></ProtectedRoute> },
+  { path: "/settings/integrations/bale/connections", component: <ProtectedRoute permission="bale.admin.connections.index"><BaleConnections /></ProtectedRoute> },
+  { path: "/settings/integrations/bale/health", component: <ProtectedRoute permission="bale.admin.health.show"><BaleHealthPage /></ProtectedRoute> },
+  { path: "/settings/integrations/bale/outbox", component: <ProtectedRoute permission="bale.admin.messages.index"><BaleOutboxPage /></ProtectedRoute> },
+  { path: "/settings/integrations/bale/configuration", component: <ProtectedRoute permission="bale.admin.global-settings.show"><BaleConfigurationPage /></ProtectedRoute> },
+  { path: "/logs/bale", component: <ProtectedRoute permission="bale.logs.index"><BaleLogsPage /></ProtectedRoute> },
+  { path: "/profile/bale", component: <BaleAccount /> },
 
   // admin - user sessions
   { path: "/admin/users/:userId/sessions", component: <AdminUserSessions /> },
