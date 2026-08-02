@@ -46,6 +46,10 @@ const ProfileMenu = (props) => {
             <i className="bx bx-user font-size-16 align-middle me-1" />
             {props.t("پروفایل")}
           </DropdownItem>
+          <DropdownItem tag={Link} to="/profile/bale">
+            <i className="bx bx-link-alt font-size-16 align-middle me-1" />
+            {props.t("اتصال حساب بله")}
+          </DropdownItem>
           <div className="dropdown-divider" />
           <Link to="/logout" className="dropdown-item">
             <i className="bx bx-power-off font-size-16 align-middle me-1 text-danger" />
