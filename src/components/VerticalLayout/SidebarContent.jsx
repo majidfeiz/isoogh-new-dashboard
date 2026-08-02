@@ -200,6 +200,20 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "یکپارچه‌سازی بله",
+        icon: "bx bx-message-rounded-dots",
+        permissionAny: ["bale.admin.settings.show", "bale.admin.global-settings.show", "bale.admin.connections.index", "bale.admin.health.show", "bale.admin.messages.index", "bale.logs.index"],
+        children: [
+          { label: "مدیریت مجموعه‌ها", to: "/settings/integrations/bale/schools", permission: "bale.admin.settings.show" },
+          { label: "تنظیمات سراسری", to: "/settings/integrations/bale/configuration", permission: "bale.admin.global-settings.show" },
+          { label: "اتصال کاربران", to: "/settings/integrations/bale/connections", permission: "bale.admin.connections.index" },
+          { label: "سلامت سرویس", to: "/settings/integrations/bale/health", permission: "bale.admin.health.show" },
+          { label: "صف پیام‌ها", to: "/settings/integrations/bale/outbox", permission: "bale.admin.messages.index" },
+          { label: "لاگ تخصصی بله", to: "/logs/bale", permission: "bale.logs.index" },
+        ],
+      },
+      {
+        type: "group",
         label: "دسترسی",
         icon: "bx bx-lock-alt",
         permissionAny: ["permissions.index", "roles.index"],

@@ -28,6 +28,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Dynamic reports | `pages/DynamicReports` | `dynamicReportService` | `dynamicReports` | `/dynamic-reports*` |
 | Adviser portal | `pages/AdviserPortal` | `adviserPortalService` | `adviserPortal` | `/adviser-calls*` |
 | Super-adviser portal | `pages/SuperAdviserPortal` | `superAdviserPortalService` | `superAdviserPortal` | `/super-adviser-portal*` |
+| Bale integration | `pages/BaleMiniApp`, `pages/BaleAdmin` | `baleService` | `bale` | `/bale-mini-app`, `/settings/integrations/bale/*` (schools, connections, health, outbox), `/logs/bale`, `/profile/bale` |
 
 ## Cross-cutting ownership
 
