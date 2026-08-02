@@ -313,6 +313,7 @@ export const API_ROUTES = {
   },
   dashboard: {
     default: "/dashboard/default",
+    stats: "/dashboard/stats",
     widgets: "/dashboard/widgets",
     my: "/dashboard/my",
     myWidgets: "/dashboard/my/widgets",
