@@ -31,6 +31,7 @@
 - چرخه SDK تا bootstrap watchdog دوازده‌ثانیه‌ای، AbortController و Error Boundary دارد؛ همه حالت‌های شکست باید متن فارسی، retry و شناسه پیگیری نمایش دهند.
 - تله‌متری امن به `/bale/mini-app/client-logs` فرستاده می‌شود، در هر session deduplicate و به ۳۰ رخداد در دقیقه محدود است و نباید initData، JWT، شماره، response خام یا secret داشته باشد.
 - query صفحات Mini App با `buildBaleResourceParams` و allowlist DTO همان resource ساخته می‌شود؛ شناسه‌های موجود در path دوباره به query افزوده نمی‌شوند. داشبورد مدیر نیز فقط endpoint ارائه‌شده در bootstrap (معمولاً `/bale/mini-app/manager/dashboard`) را مصرف می‌کند و به داشبورد عمومی fallback ندارد.
+- شروع تماس در Mini App با Modal داخلی React تأیید می‌شود و فقط readiness صریح `ready=true` اجازه ارسال می‌دهد. خطای قطعی 502 یا پاسخ فاقد `callGroupId` کلید idempotency را برای تلاش بعدی عوض می‌کند؛ timeout و وضعیت نامشخص همان کلید را حفظ می‌کنند.
 
 ## تنظیمات سرور
 
