@@ -1,4 +1,4 @@
-import { applyBaleTheme, baleQueryKey, createBaleAdapter, createIdempotencyKey, normalizeBootstrap, sanitizeBaleTelemetry, visibleBaleNavigation } from "./baleAdapter.js";
+import { applyBaleTheme, baleQueryKey, buildBaleResourceParams, createBaleAdapter, createIdempotencyKey, normalizeBootstrap, sanitizeBaleTelemetry, visibleBaleNavigation } from "./baleAdapter.js";
 
 describe("Bale WebApp adapter", () => {
   it("uses raw initData and never initDataUnsafe", () => {
@@ -44,5 +44,23 @@ describe("Bale WebApp adapter", () => {
 
   it("removes sensitive and complex values from telemetry", () => {
     expect(sanitizeBaleTelemetry({ stage: "bootstrap", route: "/", token: "secret", initData: "raw", phone: "0912", response: { data: true }, status: 500 })).toEqual({ stage: "bootstrap", route: "/", status: 500 });
+  });
+
+  it("does not send path-scoped schoolId to adviser forms", () => {
+    expect(buildBaleResourceParams({ activeRole: "adviser", resource: "forms", activeSchoolId: 94, page: 1 })).toEqual({ page: 1, limit: 20 });
+  });
+
+  it("keeps supported filters for adviser call logs", () => {
+    expect(buildBaleResourceParams({ activeRole: "adviser", resource: "calls", activeSchoolId: 94, context: { formId: 12 }, page: 2 })).toEqual({ page: 2, limit: 20, schoolId: 94, supportFormId: 12 });
+  });
+
+  it("does not leak form identifiers into adviser students query", () => {
+    expect(buildBaleResourceParams({ activeRole: "adviser", resource: "students", activeSchoolId: 94, context: { schoolId: 94, formId: 12 }, page: 1 })).toEqual({ page: 1, limit: 20 });
+  });
+
+  it("uses the manager dashboard contract and endpoint-specific super adviser filters", () => {
+    expect(buildBaleResourceParams({ activeRole: "manager", resource: "dashboard", activeSchoolId: 94 })).toEqual({ page: 1, limit: 20, schoolId: 94 });
+    expect(buildBaleResourceParams({ activeRole: "super-adviser", resource: "monitoring", activeSchoolId: 94, context: { formId: 12 } })).toEqual({ schoolId: 94, supportFormId: 12 });
+    expect(buildBaleResourceParams({ activeRole: "super-adviser", resource: "salary", activeSchoolId: 94, context: { year: 1405, month: 5, adviserId: 7 } })).toEqual({ year: 1405, month: 5, adviserId: 7 });
   });
 });

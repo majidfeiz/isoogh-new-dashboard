@@ -6,7 +6,7 @@ import {
   getBaleCallRoom, getBalePreferences, setBaleMiniToken, updateBalePreferences,
 } from "../../services/baleService.jsx";
 import { API_ROUTES } from "../../helpers/apiRoutes.jsx";
-import { applyBaleTheme, createBaleAdapter, normalizeBootstrap, visibleBaleNavigation } from "./baleAdapter.js";
+import { applyBaleTheme, buildBaleResourceParams, createBaleAdapter, normalizeBootstrap, visibleBaleNavigation } from "./baleAdapter.js";
 import { logBaleClientEvent } from "./baleTelemetry.js";
 import CallRoom from "./CallRoom.jsx";
 import "./bale-mini-app.scss";
@@ -52,7 +52,6 @@ function DynamicPage({ bootstrap }) {
       const routes = { schools: API_ROUTES.superAdviserPortal.schools, advisers: API_ROUTES.superAdviserPortal.advisers, forms: API_ROUTES.superAdviserPortal.supportForms, "support-forms": API_ROUTES.superAdviserPortal.supportForms, students: API_ROUTES.superAdviserPortal.students, monitoring: API_ROUTES.superAdviserPortal.monitoring, performance: API_ROUTES.superAdviserPortal.performanceReport, salary: API_ROUTES.superAdviserPortal.salary };
       return routes[resource];
     }
-    if (bootstrap.activeRole === "manager" && ["home", "dashboard"].includes(resource)) return API_ROUTES.dashboard.stats;
     return undefined;
   }, [entry.endpoint, resource, bootstrap.activeRole, bootstrap.activeSchoolId, context.schoolId, context.formId]);
   const load = useCallback(async () => {
@@ -63,13 +62,19 @@ function DynamicPage({ bootstrap }) {
           { id: "adviser-performance", title: "عملکرد مشاوران", description: "گزارش عملکرد مشاوران مجموعه", fullPanelPath: "/reports/adviser-performance" },
         ] }
         : bootstrap.activeRole === "manager" && resource === "schools" ? { items: bootstrap.schools } : null;
-      setState({ loading: false, data: entry?.data ?? managerData, error: "" }); return;
+      const missingManagerDashboard = bootstrap.activeRole === "manager" && ["home", "dashboard"].includes(resource);
+      setState({ loading: false, data: entry?.data ?? managerData, error: missingManagerDashboard ? "مسیر داشبورد مدیر در اطلاعات ورود تعریف نشده است." : "" }); return;
     }
-    if (!/^\/(dashboard|adviser-portal|super-adviser-portal|bale\/mini-app)\//.test(endpoint)) { setState({ loading: false, data: null, error: "مسیر این بخش معتبر نیست." }); return; }
+    if (!/^\/(adviser-portal|super-adviser-portal|bale\/mini-app)\//.test(endpoint)) { setState({ loading: false, data: null, error: "مسیر این بخش معتبر نیست." }); return; }
     setState((old) => ({ ...old, loading: true, error: "" }));
-    try { const response = await baleMiniHttp.get(endpoint, { params: { schoolId: context.schoolId || bootstrap.activeSchoolId, adviserId: context.adviserId || undefined, supportFormId: context.formId || undefined, page, limit: 20 } }); setState({ loading: false, data: response?.data?.data, error: "" }); logBaleClientEvent("route_rendered", { context: { stage: "render", route: location.pathname } }); }
+    try {
+      const params = buildBaleResourceParams({ activeRole: bootstrap.activeRole, resource, activeSchoolId: bootstrap.activeSchoolId, context, page });
+      const response = await baleMiniHttp.get(endpoint, { params });
+      setState({ loading: false, data: response?.data?.data, error: "" });
+      logBaleClientEvent("route_rendered", { context: { stage: "render", route: location.pathname } });
+    }
     catch (error) { setState({ loading: false, data: null, error: errorText(error) }); logBaleClientEvent("api_failed", { level: "error", message: errorText(error), context: { stage: "render", route: location.pathname, status: error?.response?.status || 0 } }); }
-  }, [endpoint, bootstrap.activeSchoolId, context.schoolId, context.adviserId, context.formId, page]);
+  }, [endpoint, bootstrap.activeRole, bootstrap.activeSchoolId, resource, context.schoolId, context.adviserId, context.formId, context.search, context.sortBy, context.sortOrder, context.gradeId, context.date, context.year, context.month, page, location.pathname]);
   useEffect(() => { load(); }, [load]);
   const items = state.data?.items ?? state.data?.data ?? (Array.isArray(state.data) ? state.data : []);
   const meta = state.data?.meta ?? state.data?.pagination ?? {};
