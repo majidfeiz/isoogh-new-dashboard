@@ -38,6 +38,7 @@ export const getBaleLogs = async (params = {}, signal) => listResult(await apiGe
 export const getBaleLogStats = async (params = {}, signal) => unwrap(await apiGet(getApiUrl(API_ROUTES.bale.adminLogStats), { params: compact(params), signal }));
 export const getBaleLogUsers = async (params = {}, signal) => unwrap(await apiGet(getApiUrl(API_ROUTES.bale.adminLogUsers), { params: compact(params), signal, silent: true }));
 export const getBaleConnections = async (params = {}) => listResult(await apiGet(getApiUrl(API_ROUTES.bale.adminConnections), { params: compact(params) }), params);
+export const createManualBaleConnection = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.bale.adminManualConnection), payload));
 export const revokeBaleConnection = async (id) => unwrap(await apiDelete(getApiUrl(API_ROUTES.bale.adminConnection(id))));
 export const getBaleHealth = async () => unwrap(await apiGet(getApiUrl(API_ROUTES.bale.adminHealth)));
 export const getBaleGlobalSettings = async () => unwrap(await apiGet(getApiUrl(API_ROUTES.bale.adminSettings)));

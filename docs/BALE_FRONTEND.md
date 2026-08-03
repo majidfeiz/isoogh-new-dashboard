@@ -37,4 +37,6 @@
 
 تنظیم گروهی مجموعه‌ها حداکثر ۵۰۰ شناسه را به `/bale/admin/schools/settings/bulk` می‌فرستد. مدیریت Webhook از صفحه سلامت انجام می‌شود و عملیات ثبت آن body خالی دارد؛ URL امن از تنظیم backend خوانده می‌شود. اتاق تماس مشاور نیز تمام داده اولیه را با یک درخواست `call-room` دریافت می‌کند.
 
+ادمین دارای `bale.admin.connections.create` می‌تواند در صفحه اتصال کاربران، یک کاربر داخلی را از API کاربران انتخاب و Bale ID تأییدشده را به‌صورت دستی با `/bale/admin/connections/manual` متصل کند. Bale ID همیشه string عددی ۱ تا ۳۲ رقم باقی می‌ماند؛ ارقام فارسی پیش از نمایش و submit به ASCII تبدیل می‌شوند و هیچ اتصال optimistic یا force/override وجود ندارد.
+
 تنظیمات سراسری از `/bale/admin/settings` خوانده می‌شود. پاسخ امن GET فقط وضعیت configured را دارد؛ ورودی‌های `botToken`، `webhookSecret` و `safirApiAccessKey` همیشه خالی hydrate می‌شوند و فقط هنگام واردکردن مقدار جدید در PATCH حضور دارند. ساعت سکوت مجموعه‌ها با `HH:mm` و timezone از نوع IANA، بدون تبدیل زمانی مرورگر ارسال می‌شوند.
