@@ -3,6 +3,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
 import { API_BASE_URL, API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 import { mapBaleSchoolSettingsPayload } from "./baleSettingsMapper.js";
 import { mapBaleGlobalSettingsPayload } from "./baleGlobalSettingsMapper.js";
+import { normalizeBaleCallRoom } from "./baleCallMapper.js";
 export { mapBaleSchoolSettingsPayload } from "./baleSettingsMapper.js";
 
 const compact = (value = {}) => Object.fromEntries(
@@ -80,7 +81,7 @@ export const sendBaleClientLog = (payload) => baleMiniHttp.post(API_ROUTES.bale.
 export const startBaleCall = async (data, key) => unwrap(await baleMiniHttp.post(API_ROUTES.bale.adviserCalls, data, { headers: { "Idempotency-Key": key } }));
 export const getBaleCallStatus = async (id, signal) => unwrap(await baleMiniHttp.get(API_ROUTES.bale.adviserCallStatus(id), { signal }));
 export const getBaleCallDraft = async (id) => unwrap(await baleMiniHttp.get(API_ROUTES.bale.adviserCallDraft(id)));
-export const getBaleCallRoom = async ({ formId, studentId, schoolId }, signal) => unwrap(await baleMiniHttp.get(API_ROUTES.bale.adviserCallRoom(formId, studentId), { params: { schoolId }, signal }));
+export const getBaleCallRoom = async ({ formId, studentId, schoolId }, signal) => normalizeBaleCallRoom(unwrap(await baleMiniHttp.get(API_ROUTES.bale.adviserCallRoom(formId, studentId), { params: { schoolId }, signal })));
 export const saveBaleCallDraft = async (id, data) => unwrap(await baleMiniHttp.patch(API_ROUTES.bale.adviserCallDraft(id), data));
 export const submitBaleCall = async (id, data, key) => unwrap(await baleMiniHttp.post(API_ROUTES.bale.adviserCallSubmit(id), data, { headers: { "Idempotency-Key": key } }));
 export const getBalePreferences = async (schoolId) => unwrap(await baleMiniHttp.get(API_ROUTES.bale.preferences, { params: { schoolId } }));
