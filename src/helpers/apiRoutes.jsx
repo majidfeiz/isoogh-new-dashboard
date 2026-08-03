@@ -434,6 +434,7 @@ export const API_ROUTES = {
     adminLogStats: "/bale/admin/logs/stats",
     adminLogUsers: "/bale/admin/logs/users",
     adminConnections: "/bale/admin/connections",
+    adminManualConnection: "/bale/admin/connections/manual",
     adminConnection: (id) => `/bale/admin/connections/${id}`,
     adminHealth: "/bale/admin/health",
     adminSettings: "/bale/admin/settings",
