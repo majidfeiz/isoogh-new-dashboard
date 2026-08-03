@@ -30,6 +30,7 @@
 - bootstrap فقط wrapper قطعی `response.data.data` را مصرف می‌کند؛ `capabilities` یک object است و routeهای `visible=false` ثبت می‌شوند ولی در navigation دیده نمی‌شوند.
 - چرخه SDK تا bootstrap watchdog دوازده‌ثانیه‌ای، AbortController و Error Boundary دارد؛ همه حالت‌های شکست باید متن فارسی، retry و شناسه پیگیری نمایش دهند.
 - تله‌متری امن به `/bale/mini-app/client-logs` فرستاده می‌شود، در هر session deduplicate و به ۳۰ رخداد در دقیقه محدود است و نباید initData، JWT، شماره، response خام یا secret داشته باشد.
+- query صفحات Mini App با `buildBaleResourceParams` و allowlist DTO همان resource ساخته می‌شود؛ شناسه‌های موجود در path دوباره به query افزوده نمی‌شوند. داشبورد مدیر نیز فقط endpoint ارائه‌شده در bootstrap (معمولاً `/bale/mini-app/manager/dashboard`) را مصرف می‌کند و به داشبورد عمومی fallback ندارد.
 
 ## تنظیمات سرور
 
