@@ -8,3 +8,7 @@
 .bale-list { display:grid; gap:12px; } .bale-list .card,.bale-app .card { background:var(--bale-surface); color:var(--bale-text); border:0; border-radius:16px; } .bale-list .badge { float:left; } .bale-empty { text-align:center; color:var(--bale-hint); padding:48px 12px; }
 .bale-center-inline { display:flex; align-items:center; justify-content:center; gap:10px; padding:48px 12px; } .bale-pager { display:flex; align-items:center; justify-content:space-between; margin-top:16px; } .bale-kpis { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; } .bale-kpis strong,.bale-kpis small { display:block; overflow-wrap:anywhere; }
 .bale-questions { display:grid; gap:20px; margin-top:18px; } .bale-questions fieldset { border:0; padding:0; } .bale-questions legend { font-size:1rem; font-weight:600; } .bale-success { color:#22a06b; font-size:5rem; } .bale-breadcrumb { color:var(--bale-hint); margin-bottom:12px; }
+.bale-question-option { display:flex; align-items:center; gap:10px; margin:8px 0 0; padding:10px 12px; border:1px solid var(--bale-hint); border-radius:12px; color:var(--bale-text); cursor:pointer; line-height:1.6; }
+.bale-question-option span { flex:1; }
+.bale-question-option input { flex:0 0 auto; margin:0; }
+.bale-question-option:focus-within { outline:2px solid var(--bale-link); outline-offset:2px; }
