@@ -81,3 +81,17 @@ export const sanitizeBaleTelemetry = (context = {}) => Object.fromEntries(
 );
 
 export const visibleBaleNavigation = (navigation = []) => navigation.filter((item) => item.visible !== false);
+
+export const buildBaleResourceParams = ({ activeRole, resource, activeSchoolId, context = {}, page = 1 }) => {
+  const params = { page, limit: 20 };
+  if (activeRole === "manager") params.schoolId = context.schoolId || activeSchoolId;
+  if (activeRole === "adviser" && ["call-history", "calls"].includes(resource)) {
+    params.schoolId = context.schoolId || activeSchoolId;
+    if (context.formId) params.supportFormId = context.formId;
+  }
+  if (["super-adviser", "super_adviser"].includes(activeRole)) {
+    if (["advisers", "forms", "support-forms", "monitoring", "performance", "salary"].includes(resource)) params.schoolId = context.schoolId || activeSchoolId;
+    if (["forms", "support-forms", "students", "monitoring", "performance", "salary"].includes(resource) && context.adviserId) params.adviserId = context.adviserId;
+  }
+  return Object.fromEntries(Object.entries(params).filter(([, value]) => value != null && value !== ""));
+};

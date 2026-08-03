@@ -6,7 +6,7 @@ import {
   getBaleCallRoom, getBalePreferences, setBaleMiniToken, updateBalePreferences,
 } from "../../services/baleService.jsx";
 import { API_ROUTES } from "../../helpers/apiRoutes.jsx";
-import { applyBaleTheme, createBaleAdapter, normalizeBootstrap, visibleBaleNavigation } from "./baleAdapter.js";
+import { applyBaleTheme, buildBaleResourceParams, createBaleAdapter, normalizeBootstrap, visibleBaleNavigation } from "./baleAdapter.js";
 import { logBaleClientEvent } from "./baleTelemetry.js";
 import CallRoom from "./CallRoom.jsx";
 import "./bale-mini-app.scss";
@@ -67,7 +67,12 @@ function DynamicPage({ bootstrap }) {
     }
     if (!/^\/(dashboard|adviser-portal|super-adviser-portal|bale\/mini-app)\//.test(endpoint)) { setState({ loading: false, data: null, error: "مسیر این بخش معتبر نیست." }); return; }
     setState((old) => ({ ...old, loading: true, error: "" }));
-    try { const response = await baleMiniHttp.get(endpoint, { params: { schoolId: context.schoolId || bootstrap.activeSchoolId, adviserId: context.adviserId || undefined, supportFormId: context.formId || undefined, page, limit: 20 } }); setState({ loading: false, data: response?.data?.data, error: "" }); logBaleClientEvent("route_rendered", { context: { stage: "render", route: location.pathname } }); }
+    try {
+      const params = buildBaleResourceParams({ activeRole: bootstrap.activeRole, resource, activeSchoolId: bootstrap.activeSchoolId, context, page });
+      const response = await baleMiniHttp.get(endpoint, { params });
+      setState({ loading: false, data: response?.data?.data, error: "" });
+      logBaleClientEvent("route_rendered", { context: { stage: "render", route: location.pathname } });
+    }
     catch (error) { setState({ loading: false, data: null, error: errorText(error) }); logBaleClientEvent("api_failed", { level: "error", message: errorText(error), context: { stage: "render", route: location.pathname, status: error?.response?.status || 0 } }); }
   }, [endpoint, bootstrap.activeSchoolId, context.schoolId, context.adviserId, context.formId, page]);
   useEffect(() => { load(); }, [load]);
