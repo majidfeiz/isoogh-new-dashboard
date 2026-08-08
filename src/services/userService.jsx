@@ -128,7 +128,7 @@ export async function importUserRoles({ file, roleId, onUploadProgress } = {}) {
   formData.append("roleId", String(roleId));
 
   const url = getApiUrl(API_ROUTES.users.importRoles);
-  const res = await apiPost(url, formData, { onUploadProgress });
+  const res = await apiPost(url, formData, { onUploadProgress, silent: true });
   return res?.data?.data || res?.data;
 }
 
@@ -136,6 +136,7 @@ export async function downloadUserRoleImportTemplate() {
   const url = getApiUrl(API_ROUTES.users.importRolesTemplate);
   const res = await apiGet(url, {
     responseType: "blob",
+    silent: true,
     headers: {
       Accept:
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
