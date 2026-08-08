@@ -22,11 +22,7 @@ import {
   createUser,
   updateUser,
 } from "../../services/userService.jsx";
-
-const normalizeStatus = (val) => {
-  if (val === "inactive" || val === 0 || val === false || val === "0") return "inactive"
-  return "active"
-}
+import { buildUserPayload } from "./userFormUtils.js";
 
 const UserForm = () => {
   const { id } = useParams();
@@ -43,7 +39,6 @@ const UserForm = () => {
     phone: "",
     password: "",
     confirmPassword: "",
-    status: "active",
   });
   const [errors, setErrors] = useState({});
   const [alert, setAlert] = useState(null);
@@ -64,7 +59,6 @@ const UserForm = () => {
           username: user.username || "",
           ssn: user.ssn || "",
           phone: user.phone || user.mobile || "",
-          status: normalizeStatus(user.status),
           password: "",
           confirmPassword: "",
         }));
@@ -97,19 +91,14 @@ const UserForm = () => {
 
     try {
       if (isEdit) {
-        const payload = { ...form };
-        delete payload.confirmPassword;
-        if (!payload.password) delete payload.password;
-        delete payload.mobile;
+        const payload = buildUserPayload(form);
         await updateUser(id, payload);
         setAlert({
           type: "success",
           message: "کاربر با موفقیت ویرایش شد.",
         });
       } else {
-        const payload = { ...form };
-        delete payload.confirmPassword;
-        delete payload.mobile;
+        const payload = buildUserPayload(form);
         await createUser(payload);
         setAlert({
           type: "success",
@@ -237,24 +226,6 @@ const UserForm = () => {
                           placeholder="example@mail.com"
                         />
                         {renderError("email")}
-                      </FormGroup>
-                    </Col>
-
-                    <Col md="6">
-                      <FormGroup>
-                        <Label for="status">وضعیت</Label>
-                        <select
-                          id="status"
-                          name="status"
-                          className="form-select"
-                          style={{ width: "130px" }}
-                          value={form.status}
-                          onChange={handleChange}
-                        >
-                          <option value="active">فعال</option>
-                          <option value="inactive">غیرفعال</option>
-                        </select>
-                        {renderError("status")}
                       </FormGroup>
                     </Col>
 

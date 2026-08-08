@@ -35,7 +35,7 @@ test("sends file and numeric role id as multipart FormData", async () => {
   expect(formData).toBeInstanceOf(FormData);
   expect(formData.get("file")).toBe(file);
   expect(formData.get("roleId")).toBe("7");
-  expect(config).toEqual({ onUploadProgress });
+  expect(config).toEqual({ onUploadProgress, silent: true });
   expect(config.headers).toBeUndefined();
 });
 

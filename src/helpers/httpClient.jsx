@@ -20,9 +20,6 @@ const PERSIAN_STATUS = {
 
 const http = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
 });
 
 http.interceptors.request.use(
