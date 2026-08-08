@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Badge,
   Button,
   Card,
@@ -20,13 +21,15 @@ import {
   TabPane,
   Table,
 } from "reactstrap";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import moment from "moment-jalaali";
 import { getVoipCallDateDisplay } from "../../helpers/voipTime.js";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
 import CallTrackingWarningModal from "./CallTrackingWarningModal.jsx";
+import { getCallTrace } from "../../services/voipService.jsx";
+import { isQueuedCallResponse, normalizeQueuedCall, pollQueuedCallTrace } from "./queuedCallUtils.js";
 import {
   getStudentProfile,
   getStudentCallLogs,
@@ -763,6 +766,8 @@ const StudentProfile = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [lastVoipCallId, setLastVoipCallId] = useState(null);
   const [callTrackingWarningOpen, setCallTrackingWarningOpen] = useState(false);
+  const [queuedCall, setQueuedCall] = useState(null);
+  const queuedTraceRequest = useRef(null);
   const [calling, setCalling] = useState(false);
   const cooldown = useRef(false);
 
@@ -782,6 +787,8 @@ const StudentProfile = () => {
     getContactSubjects().then((d) => setSubjects(Array.isArray(d) ? d : [])).catch(() => {});
   }, [formId, studentId, fetchProfile]);
 
+  useEffect(() => () => queuedTraceRequest.current?.abort(), []);
+
   const handleCall = async () => {
     if (cooldown.current || calling) return;
     cooldown.current = true;
@@ -789,6 +796,19 @@ const StudentProfile = () => {
     setTimeout(() => { cooldown.current = false; }, 5000);
     try {
       const result = await makeCall({ supportFormId: Number(formId), studentId: Number(studentId) });
+      if (isQueuedCallResponse(result)) {
+        const queued = normalizeQueuedCall(result);
+        setQueuedCall(queued);
+        setLastVoipCallId(queued.voipCallId);
+        toast.success("درخواست تماس در صف قرار گرفت");
+        queuedTraceRequest.current?.abort();
+        const controller = new AbortController();
+        queuedTraceRequest.current = controller;
+        pollQueuedCallTrace({ traceId: queued.traceId, getTrace: getCallTrace, signal: controller.signal })
+          .then(() => { if (!controller.signal.aborted) { fetchProfile(); setRefreshKey((key) => key + 1); } })
+          .catch(() => {});
+        return;
+      }
       if (!hasValidCallGroupId(result?.callGroupId)) {
         setCallTrackingWarningOpen(true);
         return;
@@ -964,6 +984,8 @@ const StudentProfile = () => {
           </CardBody>
         </Card>
       </div>
+
+      {queuedCall ? <Alert color="info" className="mt-3">درخواست تماس در صف قرار دارد (شناسه صف: {queuedCall.queueJobId ?? "—"}، پیشرفت: {queuedCall.progress.toLocaleString("fa-IR")}٪). {queuedCall.traceId ? <Link to={`/voip/call-traces?traceId=${queuedCall.traceId}`}>مشاهده رهگیری</Link> : null}</Alert> : null}
 
       <AnswerDrawer
         open={drawerOpen}

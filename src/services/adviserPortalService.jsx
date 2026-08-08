@@ -328,9 +328,17 @@ export async function updateAdviserStudentWorkShift({ formId, studentId, workShi
 
 // ─── Call ─────────────────────────────────────────────────────────────────────
 
-export async function makeCall({ supportFormId, studentId }) {
+export async function makeCall({ supportFormId, studentId, priority }) {
   const url = getApiUrl(API_ROUTES.adviserPortal.call);
-  const res = await apiPost(url, { supportFormId, studentId });
+  const normalizedPriority = priority === "" || priority == null ? null : Number(priority);
+  if (normalizedPriority != null && (!Number.isInteger(normalizedPriority) || normalizedPriority < -100 || normalizedPriority > 100)) {
+    throw new Error("priority must be an integer between -100 and 100");
+  }
+  const res = await apiPost(url, {
+    supportFormId,
+    studentId,
+    ...(normalizedPriority != null ? { priority: normalizedPriority } : {}),
+  });
   return res?.data?.data || res?.data || {};
 }
 
