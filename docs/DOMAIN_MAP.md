@@ -20,7 +20,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | School chat | `pages/Chat` | `chatService` | `chat` | `/chat` |
 | Notifications | `pages/Notifications` | `notificationService` | `notifications` | `/notifications*` |
 | Audit logs | `pages/AuditLogs` | `auditLogService` | `auditLogs` | `/audit-logs` |
-| VoIP history/live/traces | `pages/Voip` | `voipService` | `voip` | `/voip/outbound-call-histories*`, `/voip/call-traces` |
+| VoIP history/live/traces/call queue | `pages/Voip` | `voipService`, `callQueueService` | `voip` | `/voip/outbound-call-histories*`, `/voip/call-traces`, `/voip/call-queue` |
 | VoIP analytics | `pages/Voip/Analytics` | `voipAnalyticsService` | `voipAnalytics` | `/voip/analytics` |
 | VoIP webhooks | `pages/VoipWebhooks` | `voipWebhookService` | `voipWebhooks` | `/voip-webhooks*` |
 | External API clients | `pages/ExternalApi` | `externalApiService` | `externalApiClients` | `/external-api-clients*` |
