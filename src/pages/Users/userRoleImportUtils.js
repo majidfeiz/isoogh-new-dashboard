@@ -32,12 +32,41 @@ export function escapeCsvCell(value) {
   return `"${text.replace(/"/g, '""')}"`;
 }
 
+export const USER_ROLE_ISSUE_LABELS = {
+  EMPTY_IDENTIFIER: "شناسه خالی",
+  DUPLICATE_IDENTIFIER: "شناسه تکراری",
+  DUPLICATE_USER_REFERENCE: "ارجاع تکراری به کاربر",
+  AMBIGUOUS_IDENTIFIER: "شناسه مبهم",
+  USER_NOT_FOUND: "کاربر یافت نشد",
+};
+
+export const USER_ROLE_ISSUE_HELP = {
+  AMBIGUOUS_IDENTIFIER:
+    "این شناسه به بیش از یک کاربر تطبیق داده شده است؛ مقدار را اصلاح کنید.",
+  DUPLICATE_USER_REFERENCE:
+    "همین کاربر با شناسه دیگری قبلاً در فایل آمده است.",
+};
+
+export function getUserRoleIssueIdentifier(issue = {}) {
+  return issue.identifier ?? issue.username ?? "";
+}
+
+export function getUserRoleImportErrorMessage(error) {
+  const value = error?.response?.data?.message;
+  if (Array.isArray(value)) return value.filter(Boolean).join("، ");
+  if (typeof value === "string" && value.trim()) return value;
+  const nested = error?.response?.data?.error;
+  if (typeof nested === "string" && nested.trim()) return nested;
+  return "اطلاعات فایل یا نقش انتخاب‌شده معتبر نیست.";
+}
+
 export function buildUserRoleIssuesCsv(issues = []) {
   const rows = [
-    ["شماره سطر", "نام کاربری", "پیام"],
+    ["شماره سطر", "نام کاربری/موبایل", "کد خطا", "پیام"],
     ...issues.map((issue) => [
       issue?.rowNumber ?? "",
-      issue?.username ?? "",
+      getUserRoleIssueIdentifier(issue),
+      issue?.code ?? "",
       issue?.message ?? "",
     ]),
   ];

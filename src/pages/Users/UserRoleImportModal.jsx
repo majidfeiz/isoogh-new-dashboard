@@ -24,7 +24,11 @@ import {
 import {
   buildUserRoleIssuesCsv,
   formatFileSize,
+  getUserRoleImportErrorMessage,
+  getUserRoleIssueIdentifier,
   USER_ROLE_IMPORT_ACCEPT,
+  USER_ROLE_ISSUE_HELP,
+  USER_ROLE_ISSUE_LABELS,
   validateUserRoleImportFile,
 } from "./userRoleImportUtils.js";
 
@@ -101,9 +105,9 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
     const term = issueSearch.trim().toLowerCase();
     if (!term) return issues;
     return issues.filter((issue) =>
-      `${issue?.rowNumber || ""} ${issue?.username || ""} ${
-        issue?.message || ""
-      }`
+      `${issue?.rowNumber || ""} ${getUserRoleIssueIdentifier(issue)} ${
+        issue?.code || ""
+      } ${issue?.message || ""}`
         .toLowerCase()
         .includes(term)
     );
@@ -197,11 +201,11 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
         toast.success(
           `نقش برای ${response.assignedUsers} کاربر با موفقیت اضافه شد.`
         );
-        await onImported?.();
-        await loadRoles();
       } else {
         toast.warning("درخواست انجام شد، اما نقش جدیدی به کاربران اضافه نشد.");
       }
+      await onImported?.();
+      await loadRoles();
     } catch (error) {
       const status = error?.response?.status;
       if (status === 403) {
@@ -209,6 +213,8 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
         setFormError("شما مجوز تخصیص گروهی نقش کاربران را ندارید.");
       } else if (status === 413) {
         setFormError("حجم فایل از محدودیت ۵ مگابایت بیشتر است.");
+      } else if (status === 400) {
+        setFormError(getUserRoleImportErrorMessage(error));
       } else if (!error?.response) {
         setFormError(
           "ارتباط با سرور برقرار نشد. فایل و نقش حفظ شده‌اند؛ دوباره تلاش کنید."
@@ -256,9 +262,9 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
       <form onSubmit={handleSubmit}>
         <ModalBody>
           <Alert color="info">
-            فایل نمونه را دانلود کنید، نام‌های کاربری را در ستون{" "}
-            <code>username</code> از سطر دوم قرار دهید و سپس نقش مورد نظر را
-            انتخاب کنید.
+            فایل نمونه را دانلود کنید و نام کاربری یا شماره موبایل را از سطر
+            دوم در ستون <code>identifier</code> وارد کنید. فایل‌های قدیمی با
+            ستون‌های <code>username</code> یا <code>phone</code> نیز معتبرند.
           </Alert>
           <Alert color="warning" className="d-flex align-items-center gap-2">
             <i className="bx bx-info-circle fs-4" />
@@ -382,7 +388,7 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
                   onChange={handleFileChange}
                   className="visually-hidden"
                   disabled={submitting}
-                  aria-label="فایل اکسل نام‌های کاربری"
+                  aria-label="فایل اکسل نام کاربری یا شماره موبایل"
                 />
 
                 {file ? (
@@ -468,7 +474,11 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
               <Row className="g-2 mb-3">
                 {[
                   ["کل سطرها", result.totalRows, "primary"],
-                  ["نام کاربری یکتا", result.uniqueUsernames, "info"],
+                  [
+                    "شناسه‌های یکتا",
+                    result.uniqueIdentifiers ?? result.uniqueUsernames,
+                    "info",
+                  ],
                   ["نقش اضافه‌شده", result.assignedUsers, "success"],
                   ["از قبل دارای نقش", result.alreadyAssignedUsers, "warning"],
                   ["خطاها", result.issues?.length || 0, "danger"],
@@ -490,7 +500,7 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
                       setIssueSearch(event.target.value);
                       setIssuePage(1);
                     }}
-                    placeholder="جستجو در شماره سطر، نام کاربری یا پیام"
+                    placeholder="جستجو در شماره سطر، نام کاربری، موبایل، کد یا پیام"
                     aria-label="جستجو در خطاهای import"
                     className="mb-2"
                   />
@@ -499,23 +509,36 @@ const UserRoleImportModal = ({ isOpen, toggle, onImported }) => {
                       <thead className="table-light">
                         <tr>
                           <th>شماره سطر</th>
-                          <th>نام کاربری</th>
+                          <th>نام کاربری/موبایل</th>
+                          <th>کد خطا</th>
                           <th>پیام</th>
                         </tr>
                       </thead>
                       <tbody>
                         {visibleIssues.map((issue, index) => (
-                          <tr key={`${issue.rowNumber}-${issue.username}-${index}`}>
+                          <tr key={`${issue.rowNumber}-${getUserRoleIssueIdentifier(issue)}-${index}`}>
                             <td>{issue.rowNumber}</td>
                             <td dir="ltr" className="text-end">
-                              {issue.username || "-"}
+                              {getUserRoleIssueIdentifier(issue) || "-"}
                             </td>
-                            <td>{issue.message}</td>
+                            <td>
+                              <Badge color="light" className="text-dark">
+                                {USER_ROLE_ISSUE_LABELS[issue.code] || issue.code || "-"}
+                              </Badge>
+                            </td>
+                            <td>
+                              <div>{issue.message}</div>
+                              {USER_ROLE_ISSUE_HELP[issue.code] ? (
+                                <small className="text-muted">
+                                  {USER_ROLE_ISSUE_HELP[issue.code]}
+                                </small>
+                              ) : null}
+                            </td>
                           </tr>
                         ))}
                         {!visibleIssues.length ? (
                           <tr>
-                            <td colSpan="3" className="text-center text-muted">
+                            <td colSpan="4" className="text-center text-muted">
                               موردی یافت نشد.
                             </td>
                           </tr>

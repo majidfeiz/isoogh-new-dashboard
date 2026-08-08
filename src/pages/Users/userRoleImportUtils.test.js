@@ -1,6 +1,7 @@
 import {
   buildUserRoleIssuesCsv,
   escapeCsvCell,
+  getUserRoleIssueIdentifier,
   USER_ROLE_IMPORT_MAX_SIZE,
   validateUserRoleImportFile,
 } from "./userRoleImportUtils.js";
@@ -30,9 +31,15 @@ test("escapes CSV formulas, quotes and Persian issue rows", () => {
   expect(escapeCsvCell("@cmd")).toBe("\"'@cmd\"");
 
   const csv = buildUserRoleIssuesCsv([
-    { rowNumber: 4, username: "=danger", message: "کاربر یافت نشد" },
+    { rowNumber: 4, username: "legacy", identifier: "=danger", code: "USER_NOT_FOUND", message: "کاربر یافت نشد" },
   ]);
-  expect(csv).toContain('"شماره سطر","نام کاربری","پیام"');
+  expect(csv).toContain('"شماره سطر","نام کاربری/موبایل","کد خطا","پیام"');
   expect(csv).toContain('"\'=danger"');
+  expect(csv).toContain('"USER_NOT_FOUND"');
   expect(csv).toContain('"کاربر یافت نشد"');
+});
+
+test("prefers identifier while preserving the legacy username fallback", () => {
+  expect(getUserRoleIssueIdentifier({ identifier: "0912", username: "old" })).toBe("0912");
+  expect(getUserRoleIssueIdentifier({ username: "legacy.user" })).toBe("legacy.user");
 });
