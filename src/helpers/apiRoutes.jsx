@@ -159,6 +159,10 @@ export const API_ROUTES = {
     outboundCallHistoriesSocketDocs: "/voip/outbound-call-histories/socket-docs",
     callTraces: "/voip/call-traces",
     callTrace: (id) => `/voip/call-traces/${id}`,
+    callQueue: "/voip/call-queue",
+    callQueueStats: "/voip/call-queue/stats",
+    retryCallQueueJob: (id) => `/voip/call-queue/${id}/retry`,
+    cancelCallQueueJob: (id) => `/voip/call-queue/${id}/cancel`,
   },
   voipAnalytics: {
     summary: "/voip/analytics/summary",

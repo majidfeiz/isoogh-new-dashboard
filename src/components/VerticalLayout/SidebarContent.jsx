@@ -349,7 +349,7 @@ const SidebarContent = (props) => {
         type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
-        permissionAny: ["voip.outbound.index", "voip.analytics.index", "voip.call-traces.index"],
+        permissionAny: ["voip.outbound.index", "voip.analytics.index", "voip.call-traces.index", "voip.call-queue.index"],
         children: [
           {
             label: "تماس خروجی",
@@ -365,6 +365,11 @@ const SidebarContent = (props) => {
             label: "رهگیری تماس‌ها",
             to: "/voip/call-traces",
             permission: "voip.call-traces.index",
+          },
+          {
+            label: "صف تماس سیموتل",
+            to: "/voip/call-queue",
+            permission: "voip.call-queue.index",
           },
           {
             label: "آنالیز وویپ",

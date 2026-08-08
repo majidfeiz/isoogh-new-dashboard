@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Badge,
   Button,
   Card,
@@ -17,12 +18,14 @@ import {
   Spinner,
   Table,
 } from "reactstrap";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import moment from "moment-jalaali";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
 import CallTrackingWarningModal from "./CallTrackingWarningModal.jsx";
+import { getCallTrace } from "../../services/voipService.jsx";
+import { isQueuedCallResponse, normalizeQueuedCall, pollQueuedCallTrace } from "./queuedCallUtils.js";
 import {
   getAdviserSupportFormDetail,
   getAdviserSupportFormStats,
@@ -404,6 +407,8 @@ const FormDetail = () => {
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [lastVoipCallId, setLastVoipCallId] = useState(null);
   const [callTrackingWarningOpen, setCallTrackingWarningOpen] = useState(false);
+  const [queuedCall, setQueuedCall] = useState(null);
+  const queuedTraceRequest = useRef(null);
 
   const callCooldown = useRef({});
   const shiftRequestVersions = useRef({});
@@ -471,6 +476,7 @@ const FormDetail = () => {
   );
 
   useEffect(() => () => studentsRequest.current?.abort(), []);
+  useEffect(() => () => queuedTraceRequest.current?.abort(), []);
 
   const fetchWorkShifts = useCallback(async (force = false) => {
     setWorkShiftsLoading(true);
@@ -508,6 +514,20 @@ const FormDetail = () => {
 
     try {
       const result = await makeCall({ supportFormId: Number(formId), studentId: id });
+      if (isQueuedCallResponse(result)) {
+        const queued = normalizeQueuedCall(result);
+        setQueuedCall(queued);
+        setLastVoipCallId(queued.voipCallId);
+        setSelectedStudent(student);
+        toast.success("درخواست تماس در صف قرار گرفت");
+        queuedTraceRequest.current?.abort();
+        const controller = new AbortController();
+        queuedTraceRequest.current = controller;
+        pollQueuedCallTrace({ traceId: queued.traceId, getTrace: getCallTrace, signal: controller.signal })
+          .then(() => { if (!controller.signal.aborted) { fetchStudents(meta.page, search, callStatus, sort); fetchStats(); } })
+          .catch(() => {});
+        return;
+      }
       if (!hasValidCallGroupId(result?.callGroupId)) {
         setCallTrackingWarningOpen(true);
         return;
@@ -848,6 +868,8 @@ const FormDetail = () => {
           </div>
         )}
       </div>
+
+      {queuedCall ? <Alert color="info" className="mt-3">درخواست تماس در صف قرار دارد (شناسه صف: {queuedCall.queueJobId ?? "—"}، پیشرفت: {queuedCall.progress.toLocaleString("fa-IR")}٪). {queuedCall.traceId ? <Link to={`/voip/call-traces?traceId=${queuedCall.traceId}`}>مشاهده رهگیری</Link> : null}</Alert> : null}
 
       <AnswerDrawer
         open={drawerOpen}

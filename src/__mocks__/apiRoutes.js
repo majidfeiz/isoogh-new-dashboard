@@ -7,6 +7,11 @@ export const API_ROUTES = {
     outboundCallHistories: "/voip/outbound-call-histories",
     outboundCallHistoryTags: "/voip/outbound-call-histories/tags",
     exportOutboundCallHistories: "/voip/outbound-call-histories/export",
+    callQueue: "/voip/call-queue",
+    callQueueStats: "/voip/call-queue/stats",
+    retryCallQueueJob: (id) => `/voip/call-queue/${id}/retry`,
+    cancelCallQueueJob: (id) => `/voip/call-queue/${id}/cancel`,
+    callTrace: (id) => `/voip/call-traces/${id}`,
   },
   students: {
     list: "/students",

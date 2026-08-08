@@ -238,6 +238,7 @@ import FileForm from "../pages/Files/FileForm.jsx";
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
 import CallTraces from "../pages/Voip/CallTraces/CallTraces.jsx";
+import CallQueue from "../pages/Voip/CallQueue/CallQueue.jsx";
 import AnswerSheetList from "../pages/AnswerSheets/AnswerSheetList.jsx";
 import VoipAnalytics from "../pages/Voip/Analytics/VoipAnalytics.jsx";
 import AuditLogs from "../pages/AuditLogs/AuditLogs.jsx";
@@ -421,6 +422,10 @@ const authProtectedRoutes = [
   {
     path: "/voip/call-traces",
     component: <ProtectedRoute permission="voip.call-traces.index"><CallTraces /></ProtectedRoute>,
+  },
+  {
+    path: "/voip/call-queue",
+    component: <ProtectedRoute permission="voip.call-queue.index"><CallQueue /></ProtectedRoute>,
   },
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
