@@ -37,6 +37,11 @@ import {
 } from "../../services/dashboardService.jsx";
 
 import { useAuth } from "../../context/AuthContext.jsx";
+import {
+  getDateRangeKey,
+  getWidgetDateRange,
+  getWidgetRequestKey,
+} from "./dashboardDateRange.js";
 
 // ─────────────────────────────────────────────
 // Custom width hook: measures actual offsetWidth
@@ -108,6 +113,7 @@ const RECENT_KEY_TO_TYPE = {
 
 const CHART_KEYS = new Set([...Object.keys(CHART_KEY_TO_TYPE), "support_forms_by_status"]);
 const TABLE_KEYS = new Set(Object.keys(RECENT_KEY_TO_TYPE));
+const STATS_ENDPOINT_KEYS = new Set([...STATS_KEYS, "support_forms_by_status"]);
 
 // ─────────────────────────────────────────────
 // Smart initial placement
@@ -137,10 +143,13 @@ const WidgetRenderer = ({
 }) => {
   const { widget, userConfig, isVisible, id } = userWidget;
   const key = widget?.key;
+  const statsRequestKey = getWidgetRequestKey("stats", "", userConfig);
+  const chartRequestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], userConfig);
+  const recentRequestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], userConfig);
 
   const renderContent = () => {
     if (STATS_KEYS.has(key))
-      return <StatsWidget widgetKey={key} widgetName={widget?.name} stats={statsData} />;
+      return <StatsWidget widgetKey={key} widgetName={widget?.name} stats={statsData[statsRequestKey]} />;
 
     if (TABLE_KEYS.has(key))
       return (
@@ -148,7 +157,7 @@ const WidgetRenderer = ({
           widgetKey={key}
           widgetName={widget?.name}
           userConfig={userConfig}
-          data={recentDataMap[key]}
+          data={recentDataMap[recentRequestKey]}
         />
       );
 
@@ -157,8 +166,8 @@ const WidgetRenderer = ({
         <ChartWidget
           widgetKey={key}
           widgetName={widget?.name}
-          chartData={chartDataMap[key]}
-          stats={statsData}
+          chartData={chartDataMap[chartRequestKey]}
+          stats={statsData[statsRequestKey]}
         />
       );
 
@@ -287,7 +296,7 @@ const DashboardPage = () => {
   const myWidgetsRef = useRef([]);
 
   const [myWidgets, setMyWidgets] = useState([]);
-  const [statsData, setStatsData] = useState(undefined);
+  const [statsData, setStatsData] = useState({});
   const [chartDataMap, setChartDataMap] = useState({});
   const [recentDataMap, setRecentDataMap] = useState({});
   const [isDefaultView, setIsDefaultView] = useState(false);
@@ -336,27 +345,36 @@ const DashboardPage = () => {
       // Only fetch data for visible widgets
       const visibleOnly = (w) => w.isVisible !== false;
 
-      const hasStats = widgets.some((w) => STATS_KEYS.has(w.widget?.key) && visibleOnly(w));
-      let newStats = null;
-      if (hasStats) {
-        try { newStats = await getDashboardStats(); } catch { newStats = null; }
-      }
-
+      const statsWidgets = widgets.filter((w) => STATS_ENDPOINT_KEYS.has(w.widget?.key) && visibleOnly(w));
       const chartWidgets = widgets.filter((w) => CHART_KEY_TO_TYPE[w.widget?.key] && visibleOnly(w));
       const tableWidgets = widgets.filter((w) => RECENT_KEY_TO_TYPE[w.widget?.key] && visibleOnly(w));
 
-      const [chartResults, recentResults] = await Promise.all([
-        Promise.all(chartWidgets.map((w) => getDashboardChart(CHART_KEY_TO_TYPE[w.widget.key]).catch(() => null))),
+      const statsRangeGroups = [...new Map(statsWidgets.map((w) => [
+        getDateRangeKey(w.userConfig),
+        getWidgetDateRange(w.userConfig),
+      ])).values()];
+
+      const [statsResults, chartResults, recentResults] = await Promise.all([
+        Promise.all(statsRangeGroups.map((range) => getDashboardStats(range).catch(() => null))),
+        Promise.all(chartWidgets.map((w) => getDashboardChart(CHART_KEY_TO_TYPE[w.widget.key], getWidgetDateRange(w.userConfig)).catch(() => null))),
         Promise.all(tableWidgets.map((w) => {
           const limit = w.userConfig?.limit ?? w.widget?.configSchema?.find((f) => f.key === "limit")?.default ?? 5;
-          return getDashboardRecent(RECENT_KEY_TO_TYPE[w.widget.key], limit).catch(() => null);
+          return getDashboardRecent(RECENT_KEY_TO_TYPE[w.widget.key], limit, getWidgetDateRange(w.userConfig)).catch(() => null);
         })),
       ]);
 
+      const newStats = {};
+      statsRangeGroups.forEach((range, i) => {
+        newStats[getWidgetRequestKey("stats", "", { dateRangeFrom: range.from, dateRangeTo: range.to })] = statsResults[i];
+      });
       const newChartMap = {};
-      chartWidgets.forEach((w, i) => { newChartMap[w.widget.key] = chartResults[i]; });
+      chartWidgets.forEach((w, i) => {
+        newChartMap[getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[w.widget.key], w.userConfig)] = chartResults[i];
+      });
       const newRecentMap = {};
-      tableWidgets.forEach((w, i) => { newRecentMap[w.widget.key] = recentResults[i]; });
+      tableWidgets.forEach((w, i) => {
+        newRecentMap[getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[w.widget.key], w.userConfig)] = recentResults[i];
+      });
 
       setMyWidgets(widgets);
       setIsDefaultView(defaultView);
@@ -379,9 +397,14 @@ const DashboardPage = () => {
     if (loading) return;
     const id = setInterval(() => {
       const widgets = myWidgetsRef.current;
-      const hasStats = widgets.some((w) => w.isVisible !== false && STATS_KEYS.has(w.widget?.key));
-      if (!hasStats) return;
-      getDashboardStats().then(setStatsData).catch(() => {});
+      const statsWidgets = widgets.filter((w) => w.isVisible !== false && STATS_ENDPOINT_KEYS.has(w.widget?.key));
+      const rangeGroups = [...new Map(statsWidgets.map((w) => [getDateRangeKey(w.userConfig), getWidgetDateRange(w.userConfig)])).values()];
+      rangeGroups.forEach((range) => {
+        getDashboardStats(range).then((data) => {
+          const requestKey = getWidgetRequestKey("stats", "", { dateRangeFrom: range.from, dateRangeTo: range.to });
+          setStatsData((prev) => ({ ...prev, [requestKey]: data }));
+        }).catch(() => {});
+      });
     }, 2 * 60 * 1000);
     return () => clearInterval(id);
   }, [loading]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -396,11 +419,13 @@ const DashboardPage = () => {
       );
       if (chartWidgets.length === 0) return;
       Promise.all(
-        chartWidgets.map((w) => getDashboardChart(CHART_KEY_TO_TYPE[w.widget.key]).catch(() => null))
+        chartWidgets.map((w) => getDashboardChart(CHART_KEY_TO_TYPE[w.widget.key], getWidgetDateRange(w.userConfig)).catch(() => null))
       ).then((results) => {
         const updates = {};
         chartWidgets.forEach((w, i) => {
-          if (results[i] !== null) updates[w.widget.key] = results[i];
+          if (results[i] !== null) {
+            updates[getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[w.widget.key], w.userConfig)] = results[i];
+          }
         });
         if (Object.keys(updates).length > 0) {
           setChartDataMap((prev) => ({ ...prev, ...updates }));
@@ -513,15 +538,23 @@ const DashboardPage = () => {
       if (newVal) {
         const target = myWidgets.find((w) => w.id === id);
         const key = target?.widget?.key;
-        if (key && CHART_KEY_TO_TYPE[key] && !(key in chartDataMap)) {
-          getDashboardChart(CHART_KEY_TO_TYPE[key])
-            .then((d) => setChartDataMap((prev) => ({ ...prev, [key]: d })))
+        const range = getWidgetDateRange(target?.userConfig);
+        const chartRequestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], target?.userConfig);
+        const recentRequestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], target?.userConfig);
+        if (key && CHART_KEY_TO_TYPE[key] && !(chartRequestKey in chartDataMap)) {
+          getDashboardChart(CHART_KEY_TO_TYPE[key], range)
+            .then((d) => setChartDataMap((prev) => ({ ...prev, [chartRequestKey]: d })))
             .catch(() => {});
-        } else if (key && RECENT_KEY_TO_TYPE[key] && !(key in recentDataMap)) {
+        } else if (key && RECENT_KEY_TO_TYPE[key] && !(recentRequestKey in recentDataMap)) {
           const limit = target?.userConfig?.limit ?? target?.widget?.configSchema?.find((f) => f.key === "limit")?.default ?? 5;
-          getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit)
-            .then((d) => setRecentDataMap((prev) => ({ ...prev, [key]: d })))
+          getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit, range)
+            .then((d) => setRecentDataMap((prev) => ({ ...prev, [recentRequestKey]: d })))
             .catch(() => {});
+        } else if (key && STATS_ENDPOINT_KEYS.has(key)) {
+          const statsRequestKey = getWidgetRequestKey("stats", "", target?.userConfig);
+          if (!(statsRequestKey in statsData)) {
+            getDashboardStats(range).then((d) => setStatsData((prev) => ({ ...prev, [statsRequestKey]: d }))).catch(() => {});
+          }
         }
       }
 
@@ -544,10 +577,22 @@ const DashboardPage = () => {
       setMyWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, userConfig: newConfig } : w)));
       toast.success("تنظیمات ذخیره شد");
       const key = widget?.widget?.key;
+      const range = getWidgetDateRange(newConfig);
       if (key && RECENT_KEY_TO_TYPE[key]) {
         const limit = newConfig?.limit ?? 5;
-        getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit)
-          .then((data) => setRecentDataMap((prev) => ({ ...prev, [key]: data })))
+        const requestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], newConfig);
+        getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit, range)
+          .then((data) => setRecentDataMap((prev) => ({ ...prev, [requestKey]: data })))
+          .catch(() => {});
+      } else if (key && CHART_KEY_TO_TYPE[key]) {
+        const requestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], newConfig);
+        getDashboardChart(CHART_KEY_TO_TYPE[key], range)
+          .then((data) => setChartDataMap((prev) => ({ ...prev, [requestKey]: data })))
+          .catch(() => {});
+      } else if (key && STATS_ENDPOINT_KEYS.has(key)) {
+        const requestKey = getWidgetRequestKey("stats", "", newConfig);
+        getDashboardStats(range)
+          .then((data) => setStatsData((prev) => ({ ...prev, [requestKey]: data })))
           .catch(() => {});
       }
     },
@@ -573,20 +618,28 @@ const DashboardPage = () => {
         setIsDefaultView(false);
         toast.success(`ویجت "${widget.name}" به داشبورد اضافه شد`);
         setPickerOpen(false);
+        if (widget.configSchema?.some((field) => field.key === "dateRangeFrom") && widget.configSchema?.some((field) => field.key === "dateRangeTo")) {
+          setConfigWidget(newWidget?.widget ? newWidget : { ...newWidget, widget });
+        }
 
         // Fetch data for new widget
         const key = widget.key;
         if (CHART_KEY_TO_TYPE[key]) {
+          const requestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key]);
           getDashboardChart(CHART_KEY_TO_TYPE[key])
-            .then((d) => setChartDataMap((prev) => ({ ...prev, [key]: d })))
+            .then((d) => setChartDataMap((prev) => ({ ...prev, [requestKey]: d })))
             .catch(() => {});
         } else if (RECENT_KEY_TO_TYPE[key]) {
           const limit = widget.configSchema?.find((f) => f.key === "limit")?.default ?? 5;
+          const requestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key]);
           getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit)
-            .then((d) => setRecentDataMap((prev) => ({ ...prev, [key]: d })))
+            .then((d) => setRecentDataMap((prev) => ({ ...prev, [requestKey]: d })))
             .catch(() => {});
-        } else if (STATS_KEYS.has(key) && statsData === null) {
-          getDashboardStats().then(setStatsData).catch(() => {});
+        } else if (STATS_ENDPOINT_KEYS.has(key)) {
+          const requestKey = getWidgetRequestKey("stats", "");
+          if (!(requestKey in statsData)) {
+            getDashboardStats().then((d) => setStatsData((prev) => ({ ...prev, [requestKey]: d }))).catch(() => {});
+          }
         }
       } catch (e) {
         const status = e?.response?.status;
