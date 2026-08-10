@@ -107,9 +107,10 @@ test("maps online report hierarchy, dynamic questions and grouped pagination", a
   }
   apiGet.mockResolvedValue({ data: { data } })
   const controller = new AbortController()
-  await expect(getContactFormsOnlineReport({ formId: 10, page: 2 }, controller.signal)).resolves.toEqual(data)
+  await expect(getContactFormsOnlineReport({ formId: 10, schoolId: 4, page: 2 }, controller.signal)).resolves.toEqual(data)
   expect(apiGet.mock.calls[0][1].signal).toBe(controller.signal)
   expect(apiGet.mock.calls[0][1].params.get("formId")).toBe("10")
+  expect(apiGet.mock.calls[0][1].params.get("schoolId")).toBe("4")
 })
 
 test("downloads online Excel with active filters and without pagination", async () => {
