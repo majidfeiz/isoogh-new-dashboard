@@ -97,6 +97,7 @@ const OutboundCallHistories = () => {
   const [tagsError, setTagsError] = useState("");
   const callsAbortRef = useRef(null);
   const tagsAbortRef = useRef(null);
+  const pageLimitRef = useRef(15);
 
   const [exportState, setExportState] = useState(INITIAL_EXPORT_STATE);
   const exportAbortRef = useRef(null);
@@ -136,7 +137,7 @@ const OutboundCallHistories = () => {
         const cleanedQ = currentQ?.trim?.() || "";
         const res = await getOutboundCallHistories({
           page,
-          per_page: meta.limit,
+          per_page: pageLimitRef.current,
           type: currentType,
           q: cleanedQ,
           disposition: currentDisposition,
@@ -150,12 +151,20 @@ const OutboundCallHistories = () => {
         });
         if (controller.signal.aborted) return;
         setData(res.items || []);
-        setMeta((prev) => ({
-          page: res.pagination?.page ?? page,
-          limit: res.pagination?.limit ?? prev.limit,
-          total: res.pagination?.total ?? 0,
-          lastPage: res.pagination?.lastPage ?? 1,
-        }));
+        setMeta((prev) => {
+          const responsePage = Number(res.pagination?.page);
+          const responseLimit = Number(res.pagination?.limit);
+          const responseTotal = Number(res.pagination?.total);
+          const responseLastPage = Number(res.pagination?.lastPage);
+          const nextLimit = Number.isFinite(responseLimit) && responseLimit > 0 ? responseLimit : prev.limit;
+          pageLimitRef.current = nextLimit;
+          return {
+            page: Number.isFinite(responsePage) && responsePage > 0 ? responsePage : page,
+            limit: nextLimit,
+            total: Number.isFinite(responseTotal) && responseTotal >= 0 ? responseTotal : 0,
+            lastPage: Number.isFinite(responseLastPage) && responseLastPage > 0 ? responseLastPage : 1,
+          };
+        });
         setSearchParams(serializeOutboundCallQuery({
           page,
           type: currentType,
@@ -177,7 +186,7 @@ const OutboundCallHistories = () => {
         if (callsAbortRef.current === controller && !controller.signal.aborted) setLoading(false);
       }
     },
-    [meta.limit, setSearchParams]
+    [setSearchParams]
   );
 
   useEffect(() => {

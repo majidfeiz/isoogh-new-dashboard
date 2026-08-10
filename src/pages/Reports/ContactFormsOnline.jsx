@@ -88,13 +88,23 @@ const ContactFormsOnline = () => {
   }, [loadReport])
 
   useEffect(() => {
-    getSupportForms({ page: 1, limit: 100 })
-      .then((result) => setForms(result.items || []))
-      .catch(() => setForms([]))
     if (showSchoolFilter) {
       getSchools({ page: 1, limit: 100 }).then((result) => setSchools(result.items || [])).catch(() => setSchools([]))
     }
   }, [showSchoolFilter])
+
+  useEffect(() => {
+    let ignore = false
+    setForms([])
+    getSupportForms({
+      page: 1,
+      limit: 100,
+      schoolId: showSchoolFilter ? query.schoolId || undefined : undefined,
+    })
+      .then((result) => { if (!ignore) setForms(result.items || []) })
+      .catch(() => { if (!ignore) setForms([]) })
+    return () => { ignore = true }
+  }, [query.schoolId, showSchoolFilter])
 
   useEffect(() => { setSearch(query.search) }, [query.search])
   useEffect(() => {
@@ -143,7 +153,7 @@ const ContactFormsOnline = () => {
             {forms.map((form) => <option key={form.id} value={form.id}>{form.title || form.name || `فرم ${form.id}`}</option>)}
           </Input></Col>
         {showSchoolFilter && <Col xl="3" md="6"><Label>مدرسه</Label><Input type="select" value={query.schoolId}
-          onChange={(event) => updateQuery({ schoolId: event.target.value, page: 1 })}><option value="">همه مدارس</option>
+          onChange={(event) => updateQuery({ schoolId: event.target.value, formId: "", page: 1 })}><option value="">همه مدارس</option>
           {schools.map((school) => <option key={school.id} value={school.id}>{school.name || school.title}</option>)}</Input></Col>}
         <Col xl="3" md="6"><Label>جستجو</Label><Input value={search} onChange={(event) => setSearch(event.target.value)}
           placeholder="نام، شماره یا مقدار آماری" /></Col>
