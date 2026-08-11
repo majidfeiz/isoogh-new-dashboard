@@ -33,19 +33,24 @@ const firstDefined = (...values: any[]) => values.find((value) => value !== unde
 
 export function normalizeBackupProgress(value: any): BackupProgress {
   const raw = value?.job ?? value?.backup ?? value?.resource ?? value ?? {};
-  const totalFiles = Number(firstDefined(raw.totalFiles, raw.total_files, 0));
-  const processedFiles = Number(firstDefined(raw.processedFiles, raw.processed_files, 0));
-  const backendPercent = firstDefined(raw.percent, raw.progress_percent);
-  const currentFile = firstDefined(raw.currentFile, raw.current_file, null);
+  const nested = [raw, raw.progress, raw.snapshot, raw.stats, raw.counters]
+    .filter((item) => item && typeof item === "object");
+  const pick = (...keys: string[]) => firstDefined(
+    ...nested.flatMap((source) => keys.map((key) => source[key])),
+  );
+  const totalFiles = Number(firstDefined(pick("totalFiles", "total_files", "filesTotal", "files_total", "total"), 0));
+  const processedFiles = Number(firstDefined(pick("processedFiles", "processed_files", "filesProcessed", "files_processed", "processed"), 0));
+  const backendPercent = pick("percent", "progressPercent", "progress_percent");
+  const currentFile = firstDefined(pick("currentFile", "current_file"), null);
   return {
     ...raw,
-    id: firstDefined(raw.id, raw.jobId, raw.job_id),
-    status: firstDefined(raw.status, raw.state),
+    id: pick("id", "jobId", "job_id"),
+    status: pick("status", "state"),
     totalFiles,
     processedFiles,
-    downloadedFiles: Number(firstDefined(raw.downloadedFiles, raw.downloaded_files, 0)),
-    failedFiles: Number(firstDefined(raw.failedFiles, raw.failed_files, 0)),
-    downloadedBytes: Number(firstDefined(raw.downloadedBytes, raw.downloaded_bytes, 0)),
+    downloadedFiles: Number(firstDefined(pick("downloadedFiles", "downloaded_files", "filesDownloaded", "files_downloaded"), 0)),
+    failedFiles: Number(firstDefined(pick("failedFiles", "failed_files", "filesFailed", "files_failed"), 0)),
+    downloadedBytes: Number(firstDefined(pick("downloadedBytes", "downloaded_bytes", "bytesDownloaded", "bytes_downloaded"), 0)),
     currentFile: currentFile && typeof currentFile === "object"
       ? String(firstDefined(currentFile.name, currentFile.fileName, currentFile.file_name, currentFile.id, "—"))
       : currentFile,
@@ -53,6 +58,25 @@ export function normalizeBackupProgress(value: any): BackupProgress {
       backendPercent,
       totalFiles > 0 ? Math.min(100, (processedFiles / totalFiles) * 100) : 0,
     )),
+  };
+}
+
+export function mergeBackupProgress(previous: BackupProgress, incoming: BackupProgress): BackupProgress {
+  const totalFiles = Math.max(Number(previous.totalFiles || 0), Number(incoming.totalFiles || 0));
+  const processedFiles = Math.max(Number(previous.processedFiles || 0), Number(incoming.processedFiles || 0));
+  const calculatedPercent = totalFiles > 0 ? (processedFiles / totalFiles) * 100 : 0;
+  return {
+    ...previous,
+    ...incoming,
+    id: incoming.id ?? previous.id,
+    status: incoming.status ?? previous.status,
+    totalFiles,
+    processedFiles,
+    downloadedFiles: Math.max(Number(previous.downloadedFiles || 0), Number(incoming.downloadedFiles || 0)),
+    failedFiles: Math.max(Number(previous.failedFiles || 0), Number(incoming.failedFiles || 0)),
+    downloadedBytes: Math.max(Number(previous.downloadedBytes || 0), Number(incoming.downloadedBytes || 0)),
+    currentFile: incoming.currentFile ?? previous.currentFile ?? null,
+    percent: Math.max(Number(previous.percent || 0), Number(incoming.percent || 0), calculatedPercent),
   };
 }
 
