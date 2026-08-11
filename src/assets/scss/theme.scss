@@ -923,3 +923,6 @@ aside.EmojiPickerReact.epr-main {
 [data-bs-theme=dark] .btn-close-white {
   filter: invert(1) grayscale(100%) brightness(0);
 }
+.backup-date-picker-popup {
+  z-index: 11000 !important;
+}
