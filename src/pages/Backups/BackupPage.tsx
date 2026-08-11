@@ -11,6 +11,7 @@ import {
   executeBackup,
   getBackup,
   isTemporaryBackupError,
+  mergeBackupProgress,
   normalizeBackupProgress,
   TEMPORARY_BACKUP_ERROR_MESSAGE,
   type BackupProgress,
@@ -78,7 +79,7 @@ export default function BackupPage() {
       .then((result) => setSchools(result.items || []))
       .catch(() => setSchools([]));
     const unsubscribe = backupController.subscribe((nextJob, nextMetrics) => {
-      setJob(nextJob);
+      setJob((current) => current?.id === nextJob.id ? mergeBackupProgress(current, nextJob) : nextJob);
       setMetrics(nextMetrics);
     });
     return () => {
@@ -88,12 +89,18 @@ export default function BackupPage() {
   }, []);
 
   useEffect(() => {
-    if (!job?.id || runningRef.current) return;
+    if (!job?.id || (running && Number(job.totalFiles || 0) > 0)) return;
+    const refresh = () => {
+      getBackup(job.id).then((nextJob) => {
+        setJob((current) => current?.id === nextJob.id ? mergeBackupProgress(current, nextJob) : nextJob);
+      }).catch(() => undefined);
+    };
+    refresh();
     const poll = window.setInterval(() => {
-      getBackup(job.id).then(setJob).catch(() => undefined);
+      refresh();
     }, 4000);
     return () => window.clearInterval(poll);
-  }, [job?.id]);
+  }, [job?.id, job?.totalFiles, running]);
 
   useEffect(() => {
     if (!job?.id) return;

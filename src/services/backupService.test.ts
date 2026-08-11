@@ -3,7 +3,7 @@ jest.mock("../helpers/httpClient.jsx", () => ({
 }));
 
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
-import { ackBackupFile, executeBackup, getNextBackupFile, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE } from "./backupService";
+import { ackBackupFile, executeBackup, getNextBackupFile, mergeBackupProgress, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE } from "./backupService";
 
 const mockedGet = apiGet as jest.Mock;
 const mockedPatch = apiPatch as jest.Mock;
@@ -60,6 +60,21 @@ describe("backup queue API", () => {
       failedFiles: 1,
       downloadedBytes: 523845,
       currentFile: "call.mp3",
+      percent: 25,
+    }));
+  });
+
+  it("reads counters nested under progress and preserves monotonic values across sparse ACKs", () => {
+    const initial = normalizeBackupProgress({ id: 12, progress: {
+      total_files: 100,
+      processed_files: 25,
+      downloaded_bytes: 523845,
+    } });
+    const sparseAck = normalizeBackupProgress({ id: 12, status: "running" });
+    expect(mergeBackupProgress(initial, sparseAck)).toEqual(expect.objectContaining({
+      totalFiles: 100,
+      processedFiles: 25,
+      downloadedBytes: 523845,
       percent: 25,
     }));
   });

@@ -3,16 +3,19 @@ jest.mock("./backupService", () => ({
   backupAction: jest.fn(),
   fetchProtectedStream: jest.fn(),
   fetchStorageStream: jest.fn(),
+  getBackup: jest.fn(),
   getNextBackupFile: jest.fn(),
+  mergeBackupProgress: (previous: any, incoming: any) => ({ ...previous, ...incoming, totalFiles: Math.max(previous.totalFiles || 0, incoming.totalFiles || 0) }),
   retryAfterMilliseconds: jest.fn(() => 0),
 }));
 
 import { BackupController } from "./backupController";
-import { ackBackupFile, backupAction, fetchStorageStream, getNextBackupFile } from "./backupService";
+import { ackBackupFile, backupAction, fetchStorageStream, getBackup, getNextBackupFile } from "./backupService";
 
 const mockedAck = ackBackupFile as jest.MockedFunction<typeof ackBackupFile>;
 const mockedAction = backupAction as jest.MockedFunction<typeof backupAction>;
 const mockedFetch = fetchStorageStream as jest.MockedFunction<typeof fetchStorageStream>;
+const mockedGetBackup = getBackup as jest.MockedFunction<typeof getBackup>;
 const mockedNext = getNextBackupFile as jest.MockedFunction<typeof getNextBackupFile>;
 
 function streamResponse() {
@@ -59,6 +62,7 @@ describe("backup controller queue workflow", () => {
     mockedAck.mockResolvedValue({ id: 12, processedFiles: 1, totalFiles: 1, downloadedBytes: 3 });
     mockedAction.mockResolvedValue({ id: 12, status: "completed" });
     mockedFetch.mockResolvedValue(streamResponse());
+    mockedGetBackup.mockImplementation(async (id) => ({ id, totalFiles: 1, processedFiles: 0 }));
   });
 
   it("retries, ACKs only after close, writes a sanitized manifest, and finalizes on 204", async () => {

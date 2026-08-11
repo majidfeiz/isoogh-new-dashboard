@@ -5,7 +5,9 @@ import {
   backupAction,
   fetchProtectedStream,
   fetchStorageStream,
+  getBackup,
   getNextBackupFile,
+  mergeBackupProgress,
   retryAfterMilliseconds,
   type BackupFile,
   type BackupProgress,
@@ -234,8 +236,8 @@ export class BackupController {
 
     if (options.resume) {
       const state = await backupAction(options.job.id, "resume");
-      manifest.progress = state;
-      this.emit(state);
+      manifest.progress = mergeBackupProgress(manifest.progress, state);
+      this.emit(manifest.progress);
     } else {
       if (options.sections.includes("outbound_calls")) await this.writeReport(reports, "calls.xlsx", API_ROUTES.backups.exportCalls(options.job.id), signal);
       if (options.sections.includes("support_form_answers")) await this.writeReport(reports, "answers.xlsx", API_ROUTES.backups.exportAnswers(options.job.id), signal);
@@ -244,6 +246,15 @@ export class BackupController {
 
     if (options.sections.includes("call_recordings")) {
       while (!signal.aborted && !this.pauseRequested) {
+        if (Number(manifest.progress.totalFiles || 0) === 0) {
+          try {
+            const refreshed = await getBackup(options.job.id);
+            manifest.progress = mergeBackupProgress(manifest.progress, refreshed);
+            this.emit(manifest.progress);
+          } catch {
+            // Progress refresh is best-effort; the queue endpoints remain authoritative.
+          }
+        }
         const file = await getNextBackupFile(options.job.id, signal);
         if (!file) break;
         this.emit({ ...manifest.progress, currentFile: file.name });
@@ -252,10 +263,18 @@ export class BackupController {
         try {
           const baseBytes = Number(manifest.progress.downloadedBytes || 0);
           bytes = await this.downloadWithRetry(file, recordings, signal, (currentBytes) => {
+            const totalFiles = Number(manifest.progress.totalFiles || 0);
+            const processedFiles = Number(manifest.progress.processedFiles || 0);
+            const fileFraction = Number(file.size || 0) > 0
+              ? Math.min(1, currentBytes / Number(file.size))
+              : 0;
             this.emit({
               ...manifest.progress,
               currentFile: file.name,
               downloadedBytes: baseBytes + currentBytes,
+              percent: totalFiles > 0
+                ? Math.min(100, ((processedFiles + fileFraction) / totalFiles) * 100)
+                : Number(manifest.progress.percent || 0),
             });
           });
         } catch (error) {
@@ -272,20 +291,20 @@ export class BackupController {
           outcome,
           bytes,
         }, signal);
-        manifest.progress = state;
+        manifest.progress = mergeBackupProgress(manifest.progress, state);
         manifest.lastAcknowledgedFileId = file.id;
         manifest.updatedAt = new Date().toISOString();
         await writeJson(root, manifest);
-        this.emit(state);
+        this.emit(manifest.progress);
       }
     }
 
     if (!signal.aborted && !this.pauseRequested) {
       const state = await backupAction(options.job.id, "finalize");
-      manifest.progress = state;
+      manifest.progress = mergeBackupProgress(manifest.progress, state);
       manifest.updatedAt = new Date().toISOString();
       await writeJson(root, manifest);
-      this.emit(state);
+      this.emit(manifest.progress);
     }
     this.abortController = null;
   }
