@@ -4,8 +4,10 @@ import {
 } from "reactstrap";
 import { toast } from "react-toastify";
 import Breadcrumbs from "../../components/Common/Breadcrumb.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { backupController } from "../../services/backupController";
+import type { BackupReportProgress } from "../../services/backupController";
 import { ensureDirectoryPermission, getBackupDirectory, saveBackupDirectory, supportsDirectoryPicker, verifyWritableDirectory } from "../../services/backupDirectoryStore";
 import {
   executeBackup,
@@ -28,6 +30,19 @@ const sections: Array<{ id: BackupSection; label: string }> = [
   { id: "call_recordings", label: "فایل‌های صوتی تماس" },
   { id: "support_form_answers", label: "گزارش پاسخ فرم‌های پشتیبانی" },
 ];
+
+const initialReports: Record<"outbound_calls" | "support_form_answers", BackupReportProgress> = {
+  outbound_calls: { status: "idle", filename: "reports/outbound-calls.xlsx", bytes: 0 },
+  support_form_answers: { status: "idle", filename: "reports/support-form-answers.xlsx", bytes: 0 },
+};
+
+const reportStatusLabel: Record<BackupReportProgress["status"], string> = {
+  idle: "در انتظار",
+  downloading: "در حال دانلود",
+  writing: "در حال ذخیره روی هارد",
+  completed: "ذخیره شد",
+  failed: "ناموفق",
+};
 
 const formatBytes = (bytes = 0) => {
   if (!bytes) return "۰ بایت";
@@ -59,6 +74,8 @@ const apiErrorMessage = (error: any) => {
 export default function BackupPage() {
   document.title = "بک‌آپ محلی | داشبورد آیسوق";
   const supported = supportsDirectoryPicker();
+  const { hasPermission } = useAuth() as any;
+  const canDownloadReports = hasPermission("backups.download");
   const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
   const saved = useMemo(loadSaved, []);
   const [schools, setSchools] = useState<any[]>([]);
@@ -72,6 +89,7 @@ export default function BackupPage() {
   const [acknowledgeFailures, setAcknowledgeFailures] = useState(true);
   const [metrics, setMetrics] = useState({ bytesPerSecond: 0, etaSeconds: null as number | null });
   const [temporaryFailure, setTemporaryFailure] = useState<null | { phase: "execute" | "job" }>(null);
+  const [reportProgress, setReportProgress] = useState(initialReports);
   const runningRef = useRef(false);
 
   useEffect(() => {
@@ -80,7 +98,8 @@ export default function BackupPage() {
       .catch(() => setSchools([]));
     const unsubscribe = backupController.subscribe((nextJob, nextMetrics) => {
       setJob((current) => current?.id === nextJob.id ? mergeBackupProgress(current, nextJob) : nextJob);
-      setMetrics(nextMetrics);
+      setMetrics({ bytesPerSecond: nextMetrics.bytesPerSecond, etaSeconds: nextMetrics.etaSeconds });
+      setReportProgress(nextMetrics.reports);
     });
     return () => {
       unsubscribe();
@@ -252,9 +271,26 @@ export default function BackupPage() {
     }
   };
 
+  const retryReport = async () => {
+    if (!job || !canDownloadReports) return;
+    setBusy(true);
+    try {
+      const handle = await resolveDirectory(true);
+      if (!handle) {
+        toast.info("همان پوشه مقصد قبلی را دوباره انتخاب کنید");
+        return;
+      }
+      setBusy(false);
+      await runController(job, handle, false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const toggleSection = (id: BackupSection) => setSelectedSections((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
   const percent = Math.max(0, Math.min(100, Number(job?.percent || 0)));
   const terminal = isTerminalStatus(job?.status);
+  const hasSelectedReport = selectedSections.some((section) => section === "outbound_calls" || section === "support_form_answers");
 
   return <div className="page-content"><div className="container-fluid">
     <Breadcrumbs title="مدیریت داده" breadcrumbItem="بک‌آپ روی هارد کاربر" />
@@ -265,6 +301,7 @@ export default function BackupPage() {
       <span>{TEMPORARY_BACKUP_ERROR_MESSAGE}</span>
       <Button color="warning" size="sm" onClick={retryTemporaryFailure} disabled={busy || running}>تلاش مجدد</Button>
     </Alert>}
+    {hasSelectedReport && !canDownloadReports && <Alert color="danger">دسترسی دریافت خروجی‌های بک‌آپ (`backups.download`) برای این حساب فعال نیست.</Alert>}
     <Row className="g-3">
       <Col xl="5"><Card className="h-100"><CardHeader><h5 className="mb-0">تنظیمات بک‌آپ</h5></CardHeader><CardBody>
         <Alert color="info" className="small">مرورگر هیچ هاردی را خودکار شناسایی نمی‌کند. پوشه‌ای روی لپ‌تاپ یا هارد اکسترنال را خودتان انتخاب کنید؛ نام و مسیر پوشه به سرور ارسال نمی‌شود.</Alert>
@@ -274,11 +311,15 @@ export default function BackupPage() {
           </Input>
         </FormGroup>
         <Label>بخش‌ها</Label>
-        {sections.map((section) => <FormGroup check key={section.id} className="mb-2"><Input type="checkbox" id={section.id} checked={selectedSections.includes(section.id)} onChange={() => toggleSection(section.id)} /><Label check htmlFor={section.id}>{section.label}</Label></FormGroup>)}
+        {sections.map((section) => {
+          const isReport = section.id === "outbound_calls" || section.id === "support_form_answers";
+          const selected = selectedSections.includes(section.id);
+          return <FormGroup check key={section.id} className="mb-2"><Input type="checkbox" id={section.id} checked={selected} disabled={running || busy || (isReport && !canDownloadReports && !selected)} onChange={() => toggleSection(section.id)} /><Label check htmlFor={section.id}>{section.label}</Label></FormGroup>;
+        })}
         <FormGroup check className="mt-3"><Input type="checkbox" id="continue-failures" checked={acknowledgeFailures} onChange={(event) => setAcknowledgeFailures(event.target.checked)} /><Label check htmlFor="continue-failures">پس از ۳ تلاش ناموفق، خطا ثبت و صف ادامه داده شود</Label></FormGroup>
         <div className="d-flex flex-wrap gap-2 mt-4">
           <Button color="secondary" outline onClick={chooseDirectory} disabled={!supported || running}>انتخاب پوشه مقصد</Button>
-          <Button color="primary" onClick={start} disabled={!supported || busy || running || !selectedSections.length}>{busy && <Spinner size="sm" className="ms-1" />}شروع بک‌آپ</Button>
+          <Button color="primary" onClick={start} disabled={!supported || busy || running || !selectedSections.length || (hasSelectedReport && !canDownloadReports)}>{busy && <Spinner size="sm" className="ms-1" />}شروع بک‌آپ</Button>
         </div>
         {isMac && <Alert color="light" className="border mt-3 mb-0 small">
           اگر هارد در پنجره انتخاب پوشه دیده نمی‌شود، در همان پنجره کلیدهای <strong>⌘⇧G</strong> را بزنید و <code>/Volumes</code> را وارد کنید. همچنین در تنظیمات macOS، دسترسی Google Chrome به Removable Volumes را فعال و Chrome را کاملاً بسته و دوباره اجرا کنید.
@@ -297,6 +338,26 @@ export default function BackupPage() {
             <Col sm="6"><div className="text-muted small">فایل جاری</div><strong className="text-break">{String(job.currentFile || "—")}</strong></Col>
             <Col sm="6"><div className="text-muted small">خطاها</div><strong className={Number(job.failedFiles || 0) ? "text-danger" : ""}>{Number(job.failedFiles || 0).toLocaleString("fa-IR")}</strong></Col>
           </Row>
+          <div className="mt-4">
+            {([
+              ["outbound_calls", "گزارش تماس‌های خروجی"],
+              ["support_form_answers", "گزارش سوالات و پاسخ‌ها"],
+            ] as const).map(([section, label]) => {
+              const report = reportProgress[section];
+              const selected = selectedSections.includes(section);
+              return <div key={section} className="border rounded p-3 mb-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div>
+                  <strong>{label}</strong>
+                  <div className="small text-muted mt-1">{selected ? reportStatusLabel[report.status] : "انتخاب نشده"}{report.bytes > 0 ? ` — ${formatBytes(report.bytes)}` : ""}</div>
+                  {report.error && <div className="small text-danger mt-1">{report.error}</div>}
+                </div>
+                {selected && <div className="d-flex align-items-center gap-2">
+                  <Badge color={report.status === "completed" ? "success" : report.status === "failed" ? "danger" : report.status === "idle" ? "secondary" : "info"}>{reportStatusLabel[report.status]}</Badge>
+                  {report.status === "failed" && <Button size="sm" color="danger" outline onClick={retryReport} disabled={busy || running || !canDownloadReports}>تلاش مجدد</Button>}
+                </div>}
+              </div>;
+            })}
+          </div>
           <div className="d-flex flex-wrap gap-2 mt-4">
             {running && <Button color="warning" onClick={pause} disabled={busy}>توقف موقت پس از فایل جاری</Button>}
             {!running && !terminal && <Button color="success" onClick={resume} disabled={busy || !supported}>ادامه بک‌آپ</Button>}

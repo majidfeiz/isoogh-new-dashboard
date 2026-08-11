@@ -1,6 +1,6 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
-import { getAccessToken } from "../helpers/authStorage.jsx";
+import { clearAuthData, getAccessToken } from "../helpers/authStorage.jsx";
 
 export type BackupSection = "outbound_calls" | "call_recordings" | "support_form_answers";
 
@@ -25,6 +25,13 @@ export interface BackupFile {
   schoolName: string;
   historyId?: number | string;
   downloadUrl: string;
+}
+
+export type BackupReportSection = "outbound_calls" | "support_form_answers";
+
+export interface BackupReportDownload {
+  bytes: Uint8Array;
+  contentType: string;
 }
 
 const unwrap = <T>(response: any): T => (response?.data?.data ?? response?.data) as T;
@@ -113,6 +120,23 @@ export function retryAfterMilliseconds(error: any) {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+async function parseBinaryEndpointError(response: Response) {
+  let message = `خطا در دریافت خروجی (${response.status})`;
+  try {
+    const text = new TextDecoder().decode(await response.arrayBuffer());
+    const data = JSON.parse(text);
+    const value = data?.message ?? data?.error;
+    if (Array.isArray(value)) message = value.filter(Boolean).join("، ");
+    else if (value) message = String(value);
+  } catch {
+    // Binary or empty error responses use the safe Persian status message.
+  }
+  const error = new Error(message) as Error & { status?: number; headers?: Headers };
+  error.status = response.status;
+  error.headers = response.headers;
+  return error;
+}
+
 export async function executeBackup(payload: { school_ids?: number[]; sections: BackupSection[] }) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -188,6 +212,44 @@ export async function fetchProtectedStream(path: string, signal?: AbortSignal) {
   }
   if (!response.body) throw new Error("پاسخ قابل پخش از سرور دریافت نشد");
   return response;
+}
+
+export async function fetchBackupReport(path: string, signal?: AbortSignal): Promise<BackupReportDownload> {
+  const token = getAccessToken();
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const response = await fetch(getApiUrl(path), {
+        signal,
+        cache: "no-store",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!response.ok) throw await parseBinaryEndpointError(response);
+
+      const contentType = String(response.headers.get("Content-Type") || "").toLowerCase();
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (!contentType.includes("spreadsheetml.sheet")) {
+        throw new Error("پاسخ سرور فایل XLSX معتبر نیست");
+      }
+      if (bytes.byteLength === 0 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+        throw new Error("محتوای خروجی XLSX معتبر نیست");
+      }
+      return { bytes, contentType };
+    } catch (error: any) {
+      lastError = error;
+      if (error?.name === "AbortError") throw error;
+      if (error?.status === 401) {
+        clearAuthData();
+        if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+          window.location.replace("/login");
+        }
+        throw error;
+      }
+      if (error?.status !== 503 || attempt === 2) throw error;
+      await wait(Math.max(500 * 2 ** attempt, retryAfterMilliseconds(error)));
+    }
+  }
+  throw lastError;
 }
 
 export async function fetchStorageStream(url: string, signal?: AbortSignal) {

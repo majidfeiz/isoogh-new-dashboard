@@ -1,6 +1,7 @@
 jest.mock("./backupService", () => ({
   ackBackupFile: jest.fn(),
   backupAction: jest.fn(),
+  fetchBackupReport: jest.fn(),
   fetchProtectedStream: jest.fn(),
   fetchStorageStream: jest.fn(),
   getBackup: jest.fn(),
@@ -10,10 +11,11 @@ jest.mock("./backupService", () => ({
 }));
 
 import { BackupController } from "./backupController";
-import { ackBackupFile, backupAction, fetchStorageStream, getBackup, getNextBackupFile } from "./backupService";
+import { ackBackupFile, backupAction, fetchBackupReport, fetchStorageStream, getBackup, getNextBackupFile } from "./backupService";
 
 const mockedAck = ackBackupFile as jest.MockedFunction<typeof ackBackupFile>;
 const mockedAction = backupAction as jest.MockedFunction<typeof backupAction>;
+const mockedReport = fetchBackupReport as jest.MockedFunction<typeof fetchBackupReport>;
 const mockedFetch = fetchStorageStream as jest.MockedFunction<typeof fetchStorageStream>;
 const mockedGetBackup = getBackup as jest.MockedFunction<typeof getBackup>;
 const mockedNext = getNextBackupFile as jest.MockedFunction<typeof getNextBackupFile>;
@@ -26,7 +28,7 @@ function streamResponse() {
   }) } } as unknown as Response;
 }
 
-function directoryFixture() {
+function directoryFixture(options: { reportCloseFails?: boolean; manifest?: object } = {}) {
   const events: string[] = [];
   const writes: unknown[] = [];
   const writable = () => ({
@@ -35,6 +37,24 @@ function directoryFixture() {
     abort: jest.fn(),
   });
   const fileHandle = { createWritable: jest.fn(async () => writable()), getFile: jest.fn() };
+  const reportWritable = () => ({
+    write: jest.fn(async (value) => { writes.push(value); events.push("report-write"); }),
+    close: jest.fn(async () => {
+      events.push("report-close");
+      if (options.reportCloseFails) throw new Error("disk disconnected");
+    }),
+    abort: jest.fn().mockResolvedValue(undefined),
+  });
+  const reportFileHandle = {
+    createWritable: jest.fn(async () => reportWritable()),
+    getFile: jest.fn(async () => ({ size: 3 })),
+  };
+  const manifestHandle = {
+    createWritable: jest.fn(async () => writable()),
+    getFile: jest.fn(async () => ({
+      text: async () => options.manifest ? JSON.stringify(options.manifest) : "",
+    })),
+  };
   const school = { getFileHandle: jest.fn(async (_name: string, options?: { create?: boolean }) => {
     if (!options?.create) {
       const error = new DOMException("missing", "NotFoundError");
@@ -43,13 +63,13 @@ function directoryFixture() {
     return fileHandle;
   }) };
   const recordings = { getDirectoryHandle: jest.fn(async () => school) };
-  const reports = { getFileHandle: jest.fn(async () => fileHandle) };
+  const reports = { getFileHandle: jest.fn(async () => reportFileHandle) };
   const root = {
     getDirectoryHandle: jest.fn(async (name: string) => name === "reports" ? reports : recordings),
-    getFileHandle: jest.fn(async () => fileHandle),
+    getFileHandle: jest.fn(async () => manifestHandle),
   };
   const directory = { getDirectoryHandle: jest.fn(async () => root) } as unknown as FileSystemDirectoryHandle;
-  return { directory, events, writes, school };
+  return { directory, events, writes, school, reports, reportFileHandle };
 }
 
 describe("backup controller queue workflow", () => {
@@ -62,6 +82,7 @@ describe("backup controller queue workflow", () => {
     mockedAck.mockResolvedValue({ id: 12, processedFiles: 1, totalFiles: 1, downloadedBytes: 3 });
     mockedAction.mockResolvedValue({ id: 12, status: "completed" });
     mockedFetch.mockResolvedValue(streamResponse());
+    mockedReport.mockResolvedValue({ bytes: new Uint8Array([0x50, 0x4b, 1]), contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     mockedGetBackup.mockImplementation(async (id) => ({ id, totalFiles: 1, processedFiles: 0 }));
   });
 
@@ -141,5 +162,42 @@ describe("backup controller queue workflow", () => {
     await expect(controller.cancel(44)).resolves.toMatchObject({ status: "cancelled" });
     await runningExpectation;
     expect(mockedAction).toHaveBeenCalledWith(44, "cancel");
+  });
+
+  it("writes only the selected report with its canonical XLSX filename and then finalizes", async () => {
+    const fixture = directoryFixture();
+    mockedAction.mockImplementation(async (id, action) => {
+      if (action === "finalize") expect(fixture.events).toContain("report-close");
+      return { id, status: "completed" };
+    });
+
+    await new BackupController().run({ job: { id: 31 }, directory: fixture.directory, schoolIds: [], sections: ["outbound_calls"], acknowledgeFailures: true });
+
+    expect(mockedReport).toHaveBeenCalledTimes(1);
+    expect(mockedReport).toHaveBeenCalledWith("/backups/31/export/calls", expect.any(AbortSignal));
+    expect(fixture.reports.getFileHandle).toHaveBeenCalledWith("outbound-calls.xlsx", { create: true });
+    expect(mockedAction).toHaveBeenCalledWith(31, "finalize");
+  });
+
+  it("does not finalize when closing a selected report fails", async () => {
+    const fixture = directoryFixture({ reportCloseFails: true });
+
+    await expect(new BackupController().run({ job: { id: 32 }, directory: fixture.directory, schoolIds: [], sections: ["support_form_answers"], acknowledgeFailures: true })).rejects.toThrow("disk disconnected");
+
+    expect(mockedAction).not.toHaveBeenCalledWith(32, "finalize");
+    expect(fixture.reportFileHandle.createWritable).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips a completed unchanged report on resume without scanning the directory", async () => {
+    const fixture = directoryFixture({ manifest: {
+      reports: { outbound_calls: { status: "completed", filename: "reports/outbound-calls.xlsx", bytes: 3 } },
+    } });
+
+    await new BackupController().run({ job: { id: 33 }, directory: fixture.directory, schoolIds: [], sections: ["outbound_calls"], acknowledgeFailures: true, resume: true });
+
+    expect(mockedReport).not.toHaveBeenCalled();
+    expect(fixture.reports.getFileHandle).toHaveBeenCalledWith("outbound-calls.xlsx");
+    expect((fixture.reports as any).values).toBeUndefined();
+    expect(mockedAction).toHaveBeenCalledWith(33, "finalize");
   });
 });
