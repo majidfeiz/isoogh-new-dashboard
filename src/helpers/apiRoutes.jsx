@@ -131,6 +131,18 @@ export const API_ROUTES = {
     actors: "/audit-logs/actors",
     stats: "/audit-logs/stats",
   },
+  backups: {
+    execute: "/backups/execute",
+    detail: (id) => `/backups/${id}`,
+    exportCalls: (id) => `/backups/${id}/export/calls`,
+    exportAnswers: (id) => `/backups/${id}/export/answers`,
+    nextFile: (id) => `/backups/${id}/files/next`,
+    ackFile: (id) => `/backups/${id}/files/ack`,
+    pause: (id) => `/backups/${id}/pause`,
+    resume: (id) => `/backups/${id}/resume`,
+    cancel: (id) => `/backups/${id}/cancel`,
+    finalize: (id) => `/backups/${id}/finalize`,
+  },
   grades: {
     list: "/grades",
     create: "/grades",

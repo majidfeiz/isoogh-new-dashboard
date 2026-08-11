@@ -59,6 +59,18 @@ export const API_ROUTES = {
     execute: (id) => `/dynamic-reports/${id}/execute`,
     widgetData: (id, widgetId) => `/dynamic-reports/${id}/widgets/${widgetId}/data`,
   },
+  backups: {
+    execute: "/backups/execute",
+    detail: (id) => `/backups/${id}`,
+    exportCalls: (id) => `/backups/${id}/export/calls`,
+    exportAnswers: (id) => `/backups/${id}/export/answers`,
+    nextFile: (id) => `/backups/${id}/files/next`,
+    ackFile: (id) => `/backups/${id}/files/ack`,
+    pause: (id) => `/backups/${id}/pause`,
+    resume: (id) => `/backups/${id}/resume`,
+    cancel: (id) => `/backups/${id}/cancel`,
+    finalize: (id) => `/backups/${id}/finalize`,
+  },
   adviserPortal: {
     supportFormStudents: (formId) => `/adviser-portal/support-forms/${formId}/students`,
   },

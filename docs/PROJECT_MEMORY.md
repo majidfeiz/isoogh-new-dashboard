@@ -1,6 +1,6 @@
 # Project Memory
 
-Last verified against the repository: 2026-08-03 (app version `1.13.0`).
+Last verified against the repository: 2026-08-11 (app version `1.14.1`).
 
 This is the short, code-derived context to read before changing the project. `AGENTS.md` remains the detailed conventions guide; `docs/DOMAIN_MAP.md` is the feature locator.
 
@@ -19,6 +19,7 @@ npm run dev
 - Build: `npm run build` (verified passing on 2026-07-11).
 - Lint baseline: `npm run lint` currently cannot start because `eslint-plugin-react` is referenced in `package.json` but is not installed.
 - Tests use the old `react-scripts test` command; do not assume the test setup is aligned with Vite.
+- TypeScript 4.9 is available for typed feature modules; `tsconfig.json` currently scopes strict checking to the local-backup feature while the legacy application remains JS/JSX.
 
 ## Runtime shape
 
@@ -68,6 +69,7 @@ Use `apiPatch` for partial updates and `getApiUrl(API_ROUTES...)` for every endp
 ## Special workflows
 
 - CSV downloads: native streaming `fetch`, bearer token from `authStorage`, UTF-8 BOM, progress from content-length headers. References: `Users.jsx`, `OutboundCallHistories.jsx`.
+- Local backups stream reports and recordings directly to a user-selected File System Access directory. `backupController.ts` owns the abortable single-file queue, cross-tab lock, ACK ordering/retry (network/503 with `Retry-After`), and manifest; directory handles are persisted in IndexedDB by backup id. Snapshot execution retries 503 at most three times, while execute/export/next database outages preserve the selected directory/job and surface a Persian in-page retry action instead of raw backend text.
 - Excel import: lazy `import("xlsx")`, virtualized preview, multipart upload with `onUploadProgress`. Reference: `StudentList.jsx`.
 - User role Excel import: `UserRoleImportModal.jsx` uses the protected `users.roles.import` action, downloads the backend xlsx template, submits `file` plus numeric `roleId`, and reports partial row issues without replacing existing roles.
 - Dynamic report execution separates raw and display values: tables use `displayRows ?? rows`, KPI values use `displaySummary ?? summary`, and charts continue to consume the backend-normalized raw `visualization.data`. Backend display dates are final Jalali/Tehran strings and must not be converted again.
