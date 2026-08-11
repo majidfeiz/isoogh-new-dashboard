@@ -2,9 +2,8 @@ jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn(),
 }));
 
-import { TextDecoder, TextEncoder } from "util";
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
-import { ackBackupFile, executeBackup, fetchBackupReport, getNextBackupFile, mergeBackupProgress, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE } from "./backupService";
+import { ackBackupFile, executeBackup, fetchBackupReportStream, getNextBackupFile, mergeBackupProgress, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE } from "./backupService";
 
 const mockedGet = apiGet as jest.Mock;
 const mockedPatch = apiPatch as jest.Mock;
@@ -13,28 +12,26 @@ const mockedPost = apiPost as jest.Mock;
 describe("backup queue API", () => {
   const originalFetch = global.fetch;
 
-  beforeAll(() => {
-    Object.assign(global, { TextDecoder, TextEncoder });
-  });
-
   afterEach(() => {
     jest.clearAllMocks();
     global.fetch = originalFetch;
   });
 
-  const binaryResponse = (options: { status?: number; contentType?: string; bytes?: number[]; retryAfter?: string } = {}) => {
+  const streamResponse = (options: { status?: number; contentType?: string; errorText?: string; retryAfter?: string } = {}) => {
     const status = options.status ?? 200;
     const headers = new Headers({
-      "Content-Type": options.contentType || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Type": options.contentType || "text/csv; charset=utf-8",
       ...(options.retryAfter == null ? {} : { "Retry-After": options.retryAfter }),
     });
-    const bytes = new Uint8Array(options.bytes || [0x50, 0x4b, 3, 4]);
     return {
       ok: status >= 200 && status < 300,
       status,
       headers,
-      arrayBuffer: async () => bytes.buffer,
-    } as Response;
+      body: { getReader: jest.fn() },
+      text: jest.fn(async () => options.errorText || ""),
+      blob: jest.fn(() => { throw new Error("blob must not be called"); }),
+      arrayBuffer: jest.fn(() => { throw new Error("arrayBuffer must not be called"); }),
+    } as unknown as Response;
   };
 
   it("maps HTTP 204 to the end of the queue", async () => {
@@ -104,25 +101,25 @@ describe("backup queue API", () => {
     }));
   });
 
-  it("returns the raw XLSX bytes without JSON unwrapping", async () => {
-    global.fetch = jest.fn().mockResolvedValue(binaryResponse()) as jest.Mock;
+  it("returns the raw CSV response body without buffering it", async () => {
+    const response = streamResponse();
+    global.fetch = jest.fn().mockResolvedValue(response) as jest.Mock;
 
-    await expect(fetchBackupReport("/backups/12/export/calls")).resolves.toMatchObject({
-      bytes: new Uint8Array([0x50, 0x4b, 3, 4]),
-    });
+    await expect(fetchBackupReportStream("/backups/12/export/calls")).resolves.toBe(response);
+    expect(response.blob).not.toHaveBeenCalled();
+    expect(response.arrayBuffer).not.toHaveBeenCalled();
   });
 
-  it("extracts a JSON API error instead of treating it as an XLSX file", async () => {
-    const json = Array.from(new TextEncoder().encode(JSON.stringify({ message: "گزارش آماده نیست" })));
-    global.fetch = jest.fn().mockResolvedValue(binaryResponse({ status: 400, contentType: "application/json", bytes: json })) as jest.Mock;
+  it("extracts a JSON API error instead of writing it as CSV", async () => {
+    global.fetch = jest.fn().mockResolvedValue(streamResponse({ status: 400, contentType: "application/json", errorText: JSON.stringify({ message: "گزارش آماده نیست" }) })) as jest.Mock;
 
-    await expect(fetchBackupReport("/backups/12/export/calls")).rejects.toThrow("گزارش آماده نیست");
+    await expect(fetchBackupReportStream("/backups/12/export/calls")).rejects.toThrow("گزارش آماده نیست");
   });
 
-  it("retries a report response with status 503 at most three times", async () => {
-    global.fetch = jest.fn().mockResolvedValue(binaryResponse({ status: 503, contentType: "application/json", bytes: [], retryAfter: "0" })) as jest.Mock;
+  it.each([502, 503])("retries a report response with status %s at most three times", async (status) => {
+    global.fetch = jest.fn().mockResolvedValue(streamResponse({ status, contentType: "application/json", errorText: JSON.stringify({ message: "خطای موقت خروجی" }), retryAfter: "0" })) as jest.Mock;
 
-    await expect(fetchBackupReport("/backups/12/export/calls")).rejects.toMatchObject({ status: 503 });
+    await expect(fetchBackupReportStream("/backups/12/export/calls")).rejects.toMatchObject({ status, message: "خطای موقت خروجی" });
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 });

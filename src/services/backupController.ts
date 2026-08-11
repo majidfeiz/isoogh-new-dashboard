@@ -3,7 +3,7 @@ import { API_ROUTES } from "../helpers/apiRoutes.jsx";
 import {
   ackBackupFile,
   backupAction,
-  fetchBackupReport,
+  fetchBackupReportStream,
   fetchStorageStream,
   getBackup,
   getNextBackupFile,
@@ -36,7 +36,7 @@ export interface BackupManifest {
   updatedAt: string;
 }
 
-export type BackupReportStatus = "idle" | "downloading" | "writing" | "completed" | "failed";
+export type BackupReportStatus = "idle" | "connecting" | "streaming" | "completed" | "failed";
 export interface BackupReportProgress {
   status: BackupReportStatus;
   filename: string;
@@ -52,8 +52,8 @@ type Listener = (state: BackupProgress, metrics: {
 type FileHandleWithMove = FileSystemFileHandle & { move?: (name: string) => Promise<void> };
 
 const REPORTS: Record<BackupReportSection, { filename: string; api: (id: BackupProgress["id"]) => string }> = {
-  outbound_calls: { filename: "outbound-calls.xlsx", api: API_ROUTES.backups.exportCalls },
-  support_form_answers: { filename: "support-form-answers.xlsx", api: API_ROUTES.backups.exportAnswers },
+  outbound_calls: { filename: "outbound-calls.csv", api: API_ROUTES.backups.exportCalls },
+  support_form_answers: { filename: "support-form-answers.csv", api: API_ROUTES.backups.exportAnswers },
 };
 
 const initialReportProgress = (): Record<BackupReportSection, BackupReportProgress> => ({
@@ -129,6 +129,43 @@ async function readManifest(directory: FileSystemDirectoryHandle) {
     return JSON.parse(await file.text()) as Partial<BackupManifest>;
   } catch {
     return null;
+  }
+}
+
+function reportFilename(response: Response, fallback: string) {
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const regular = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+  let candidate = fallback;
+  try { candidate = decodeURIComponent(utf8 || regular || fallback); } catch { candidate = regular || fallback; }
+  const sanitized = safeName(candidate, fallback);
+  return sanitized.toLowerCase().endsWith(".csv") ? sanitized : fallback;
+}
+
+async function streamReportToFile(
+  response: Response,
+  handle: FileSystemFileHandle,
+  signal: AbortSignal,
+  onProgress: (bytes: number) => void,
+) {
+  const reader = response.body!.getReader();
+  const writable = await handle.createWritable();
+  let bytes = 0;
+  try {
+    while (true) {
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      const { done, value } = await reader.read();
+      if (done) break;
+      await writable.write(value);
+      bytes += value.byteLength;
+      onProgress(bytes);
+    }
+    await writable.close();
+    return bytes;
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    await writable.abort().catch(() => undefined);
+    throw error;
   }
 }
 
@@ -290,7 +327,8 @@ export class BackupController {
       if (!options.sections.includes(section)) continue;
       if (this.reportProgress[section].status === "completed") {
         try {
-          const existing = await reports.getFileHandle(REPORTS[section].filename);
+          const storedFilename = this.reportProgress[section].filename.split("/").pop() || REPORTS[section].filename;
+          const existing = await reports.getFileHandle(storedFilename);
           const file = await existing.getFile();
           if (file.size === this.reportProgress[section].bytes && file.size > 0) continue;
         } catch {
@@ -383,20 +421,19 @@ export class BackupController {
       await writeJson(root, manifest);
     };
 
-    await update({ status: "downloading", filename: `reports/${config.filename}`, bytes: 0 });
+    await update({ status: "connecting", filename: `reports/${config.filename}`, bytes: 0 });
     try {
-      const report = await fetchBackupReport(config.api(jobId), signal);
-      await update({ status: "writing", filename: `reports/${config.filename}`, bytes: report.bytes.byteLength });
-      const file = await directory.getFileHandle(config.filename, { create: true });
-      const writable = await file.createWritable();
-      try {
-        await writable.write(report.bytes);
-        await writable.close();
-      } catch (error) {
-        await writable.abort().catch(() => undefined);
-        throw error;
-      }
-      await update({ status: "completed", filename: `reports/${config.filename}`, bytes: report.bytes.byteLength });
+      const response = await fetchBackupReportStream(config.api(jobId), signal);
+      const filename = reportFilename(response, config.filename);
+      await update({ status: "streaming", filename: `reports/${filename}`, bytes: 0 });
+      const file = await directory.getFileHandle(filename, { create: true });
+      const bytes = await streamReportToFile(response, file, signal, (writtenBytes) => {
+        const progress = { status: "streaming" as const, filename: `reports/${filename}`, bytes: writtenBytes };
+        this.reportProgress = { ...this.reportProgress, [section]: progress };
+        manifest.reports = { ...manifest.reports, [section]: progress };
+        this.emit(manifest.progress);
+      });
+      await update({ status: "completed", filename: `reports/${filename}`, bytes });
     } catch (error) {
       if ((error as any)?.name === "AbortError") throw error;
       await update({
@@ -496,4 +533,4 @@ export class BackupController {
 }
 
 export const backupController = new BackupController();
-export { isRetryableAckError, safeName, streamToFile };
+export { isRetryableAckError, reportFilename, safeName, streamReportToFile, streamToFile };
