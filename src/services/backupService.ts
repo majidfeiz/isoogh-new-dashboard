@@ -6,6 +6,8 @@ export type BackupSection = "outbound_calls" | "call_recordings" | "support_form
 
 export interface BackupProgress {
   id: number | string;
+  schoolIds?: number[];
+  allSchools?: boolean;
   status?: string;
   totalFiles?: number;
   processedFiles?: number;
@@ -29,6 +31,12 @@ export interface BackupFile {
 
 export type BackupReportSection = "outbound_calls" | "support_form_answers";
 
+export interface ExecuteBackupPayload {
+  school_ids?: number[];
+  all_schools?: boolean;
+  sections: BackupSection[];
+}
+
 const unwrap = <T>(response: any): T => (response?.data?.data ?? response?.data) as T;
 
 const firstDefined = (...values: any[]) => values.find((value) => value !== undefined && value !== null);
@@ -40,13 +48,17 @@ export function normalizeBackupProgress(value: any): BackupProgress {
   const pick = (...keys: string[]) => firstDefined(
     ...nested.flatMap((source) => keys.map((key) => source[key])),
   );
-  const totalFiles = Number(firstDefined(pick("totalFiles", "total_files", "filesTotal", "files_total", "total"), 0));
+  const progress = raw.progress && typeof raw.progress === "object" ? raw.progress : {};
+  const totalFiles = Number(firstDefined(progress.totalFiles, progress.total_files, progress.filesTotal, progress.files_total, 0));
   const processedFiles = Number(firstDefined(pick("processedFiles", "processed_files", "filesProcessed", "files_processed", "processed"), 0));
   const backendPercent = pick("percent", "progressPercent", "progress_percent");
   const currentFile = firstDefined(pick("currentFile", "current_file"), null);
+  const rawSchoolIds = firstDefined(raw.schoolIds, raw.school_ids, []);
   return {
     ...raw,
     id: pick("id", "jobId", "job_id"),
+    schoolIds: (Array.isArray(rawSchoolIds) ? rawSchoolIds : []).map(Number).filter(Number.isFinite),
+    allSchools: Boolean(firstDefined(raw.allSchools, raw.all_schools, false)),
     status: pick("status", "state"),
     totalFiles,
     processedFiles,
@@ -61,6 +73,37 @@ export function normalizeBackupProgress(value: any): BackupProgress {
       totalFiles > 0 ? Math.min(100, (processedFiles / totalFiles) * 100) : 0,
     )),
   };
+}
+
+export function buildExecuteBackupPayload(options: {
+  schoolIds: Array<number | string>;
+  allSchools: boolean;
+  isAdmin: boolean;
+  sections: BackupSection[];
+}): ExecuteBackupPayload {
+  const schoolIds = [...new Set(options.schoolIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+  if (options.allSchools) {
+    if (!options.isAdmin) throw new Error("گزینه همه مدارس برای مدیر مجاز نیست");
+    return { all_schools: true, sections: options.sections };
+  }
+  if (schoolIds.length) return { school_ids: schoolIds, all_schools: false, sections: options.sections };
+  if (options.isAdmin) throw new Error("حداقل یک مدرسه یا گزینه همه مدارس را انتخاب کنید");
+  return { sections: options.sections };
+}
+
+export function isBackupAdmin(user: any) {
+  return Boolean(user?.roles?.some((role: any) =>
+    ["admin", "super_admin"].includes(String(role?.slug || role?.name || role).toLowerCase())));
+}
+
+export function validateBackupSchoolScope(job: BackupProgress, expectedSchoolIds: number[], allSchools: boolean) {
+  if (allSchools) return;
+  const expected = [...expectedSchoolIds].map(Number).sort((a, b) => a - b);
+  if (!expected.length) return;
+  const actual = [...(job.schoolIds || [])].map(Number).sort((a, b) => a - b);
+  if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+    throw new Error("محدوده مدارس بک‌آپ با انتخاب شما یکسان نیست");
+  }
 }
 
 export function mergeBackupProgress(previous: BackupProgress, incoming: BackupProgress): BackupProgress {
@@ -132,7 +175,7 @@ async function parseStreamingEndpointError(response: Response) {
   return error;
 }
 
-export async function executeBackup(payload: { school_ids?: number[]; sections: BackupSection[] }) {
+export async function executeBackup(payload: ExecuteBackupPayload) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {

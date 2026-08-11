@@ -3,7 +3,7 @@ jest.mock("../helpers/httpClient.jsx", () => ({
 }));
 
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
-import { ackBackupFile, executeBackup, fetchBackupReportStream, getNextBackupFile, mergeBackupProgress, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE } from "./backupService";
+import { ackBackupFile, buildExecuteBackupPayload, executeBackup, fetchBackupReportStream, getNextBackupFile, isBackupAdmin, mergeBackupProgress, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE, validateBackupSchoolScope } from "./backupService";
 
 const mockedGet = apiGet as jest.Mock;
 const mockedPatch = apiPatch as jest.Mock;
@@ -66,17 +66,22 @@ describe("backup queue API", () => {
     expect(mockedPost.mock.calls.every((call) => call[2]?.silent === true)).toBe(true);
   });
 
-  it("normalizes snake_case progress returned by the backend", () => {
+  it("normalizes snake_case progress and reads total only from the new job progress", () => {
     expect(normalizeBackupProgress({ job: {
       id: 12,
-      total_files: 100,
-      processed_files: 25,
-      downloaded_files: 24,
-      failed_files: 1,
-      downloaded_bytes: 523845,
-      current_file: { file_name: "call.mp3" },
+      total_files: 999,
+      school_ids: [12, 19],
+      progress: {
+        total_files: 100,
+        processed_files: 25,
+        downloaded_files: 24,
+        failed_files: 1,
+        downloaded_bytes: 523845,
+        current_file: { file_name: "call.mp3" },
+      },
     } })).toEqual(expect.objectContaining({
       totalFiles: 100,
+      schoolIds: [12, 19],
       processedFiles: 25,
       downloadedFiles: 24,
       failedFiles: 1,
@@ -84,6 +89,37 @@ describe("backup queue API", () => {
       currentFile: "call.mp3",
       percent: 25,
     }));
+  });
+
+  it("builds an exact numeric scope for one or multiple selected schools", () => {
+    expect(buildExecuteBackupPayload({ schoolIds: ["12"], allSchools: false, isAdmin: true, sections: ["call_recordings"] })).toEqual({
+      school_ids: [12], all_schools: false, sections: ["call_recordings"],
+    });
+    expect(buildExecuteBackupPayload({ schoolIds: ["12", 19], allSchools: false, isAdmin: true, sections: ["call_recordings"] })).toEqual({
+      school_ids: [12, 19], all_schools: false, sections: ["call_recordings"],
+    });
+  });
+
+  it("sends all_schools without school_ids only for admins", () => {
+    expect(buildExecuteBackupPayload({ schoolIds: [12], allSchools: true, isAdmin: true, sections: ["call_recordings"] })).toEqual({
+      all_schools: true, sections: ["call_recordings"],
+    });
+    expect(() => buildExecuteBackupPayload({ schoolIds: [], allSchools: true, isAdmin: false, sections: ["call_recordings"] })).toThrow("مدیر");
+  });
+
+  it("prevents an admin from executing without a school scope", () => {
+    expect(() => buildExecuteBackupPayload({ schoolIds: [], allSchools: false, isAdmin: true, sections: ["call_recordings"] })).toThrow("حداقل یک مدرسه");
+  });
+
+  it("does not expose the all-schools capability to managers", () => {
+    expect(isBackupAdmin({ roles: [{ name: "manager" }] })).toBe(false);
+    expect(isBackupAdmin({ roles: [{ slug: "admin" }] })).toBe(true);
+  });
+
+  it("validates returned schoolIds against the requested selection", () => {
+    expect(() => validateBackupSchoolScope({ id: 1, schoolIds: [19, 12] }, [12, 19], false)).not.toThrow();
+    expect(() => validateBackupSchoolScope({ id: 1, schoolIds: [12] }, [12, 19], false)).toThrow("محدوده مدارس");
+    expect(() => validateBackupSchoolScope({ id: 1, schoolIds: [12, 19] }, [], false)).not.toThrow();
   });
 
   it("reads counters nested under progress and preserves monotonic values across sparse ACKs", () => {
