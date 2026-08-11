@@ -1,24 +1,24 @@
 jest.mock("./backupService", () => ({
-  ackBackupFile: jest.fn(),
+  ackBackupFileBatch: jest.fn(),
   backupAction: jest.fn(),
   fetchBackupReportStream: jest.fn(),
   fetchProtectedStream: jest.fn(),
   fetchStorageStream: jest.fn(),
   getBackup: jest.fn(),
-  getNextBackupFile: jest.fn(),
+  getBackupFileBatch: jest.fn(),
   mergeBackupProgress: (previous: any, incoming: any) => ({ ...previous, ...incoming, totalFiles: Math.max(previous.totalFiles || 0, incoming.totalFiles || 0) }),
   retryAfterMilliseconds: jest.fn(() => 0),
 }));
 
 import { BackupController } from "./backupController";
-import { ackBackupFile, backupAction, fetchBackupReportStream, fetchStorageStream, getBackup, getNextBackupFile } from "./backupService";
+import { ackBackupFileBatch, backupAction, fetchBackupReportStream, fetchStorageStream, getBackup, getBackupFileBatch } from "./backupService";
 
-const mockedAck = ackBackupFile as jest.MockedFunction<typeof ackBackupFile>;
+const mockedAck = ackBackupFileBatch as jest.MockedFunction<typeof ackBackupFileBatch>;
 const mockedAction = backupAction as jest.MockedFunction<typeof backupAction>;
 const mockedReport = fetchBackupReportStream as jest.MockedFunction<typeof fetchBackupReportStream>;
 const mockedFetch = fetchStorageStream as jest.MockedFunction<typeof fetchStorageStream>;
 const mockedGetBackup = getBackup as jest.MockedFunction<typeof getBackup>;
-const mockedNext = getNextBackupFile as jest.MockedFunction<typeof getNextBackupFile>;
+const mockedNext = getBackupFileBatch as jest.MockedFunction<typeof getBackupFileBatch>;
 
 function streamResponse(filename = "outbound-calls.csv") {
   let read = false;
@@ -88,7 +88,7 @@ describe("backup controller queue workflow", () => {
 
   it("retries, ACKs only after close, writes a sanitized manifest, and finalizes on 204", async () => {
     const fixture = directoryFixture();
-    mockedNext.mockResolvedValueOnce({ id: 7, name: "call.mp3", size: 3, schoolId: 2, schoolName: "مدرسه", downloadUrl: "https://secret.example/token" }).mockResolvedValueOnce(null);
+    mockedNext.mockResolvedValueOnce([{ id: 7, name: "call.mp3", size: 3, schoolId: 2, schoolName: "مدرسه", downloadUrl: "https://secret.example/token" }]).mockResolvedValueOnce([]);
     mockedFetch.mockRejectedValueOnce(new Error("network")).mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(streamResponse());
     mockedAck.mockImplementation(async () => {
       expect(fixture.events).toContain("close");
@@ -98,7 +98,7 @@ describe("backup controller queue workflow", () => {
     await new BackupController().run({ job: { id: 12 }, directory: fixture.directory, schoolIds: [2], sections: ["call_recordings"], acknowledgeFailures: true });
 
     expect(mockedFetch).toHaveBeenCalledTimes(3);
-    expect(mockedAck).toHaveBeenCalledWith(12, { file_id: 7, outcome: "downloaded", bytes: 3 }, expect.any(AbortSignal));
+    expect(mockedAck).toHaveBeenCalledWith(12, [{ file_id: 7, outcome: "downloaded", bytes: 3 }], expect.any(AbortSignal));
     expect(mockedAction).toHaveBeenLastCalledWith(12, "finalize");
     expect(JSON.stringify(fixture.writes)).not.toContain("secret.example");
   });
@@ -106,7 +106,7 @@ describe("backup controller queue workflow", () => {
   it("allows only one loop per job", async () => {
     const fixture = directoryFixture();
     let release!: () => void;
-    mockedNext.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve(null); }));
+    mockedNext.mockImplementationOnce(() => new Promise((resolve) => { release = () => resolve([]); }));
     const controller = new BackupController();
     const first = controller.run({ job: { id: 99 }, directory: fixture.directory, schoolIds: [], sections: ["call_recordings"], acknowledgeFailures: true });
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -117,7 +117,7 @@ describe("backup controller queue workflow", () => {
 
   it("resume asks the server for next and never scans the directory", async () => {
     const fixture = directoryFixture();
-    mockedNext.mockResolvedValueOnce(null);
+    mockedNext.mockResolvedValueOnce([]);
     await new BackupController().run({ job: { id: 20 }, directory: fixture.directory, schoolIds: [], sections: ["call_recordings"], acknowledgeFailures: true, resume: true });
     expect(mockedAction).toHaveBeenCalledWith(20, "resume");
     expect(mockedNext).toHaveBeenCalledTimes(1);
@@ -127,8 +127,8 @@ describe("backup controller queue workflow", () => {
   it("retries a 503 ACK with the same file_id before requesting next", async () => {
     const fixture = directoryFixture();
     mockedNext
-      .mockResolvedValueOnce({ id: 8, name: "call.mp3", size: 3, schoolId: 2, schoolName: "مدرسه", downloadUrl: "https://storage.example/file" })
-      .mockResolvedValueOnce(null);
+      .mockResolvedValueOnce([{ id: 8, name: "call.mp3", size: 3, schoolId: 2, schoolName: "مدرسه", downloadUrl: "https://storage.example/file" }])
+      .mockResolvedValueOnce([]);
     mockedAck
       .mockRejectedValueOnce({ response: { status: 503, headers: { "retry-after": "0" } } })
       .mockResolvedValueOnce({ id: 12, processedFiles: 1, totalFiles: 1, downloadedBytes: 3 });
@@ -136,8 +136,8 @@ describe("backup controller queue workflow", () => {
     await new BackupController().run({ job: { id: 12 }, directory: fixture.directory, schoolIds: [2], sections: ["call_recordings"], acknowledgeFailures: true });
 
     expect(mockedAck).toHaveBeenCalledTimes(2);
-    expect(mockedAck.mock.calls[0][1].file_id).toBe(8);
-    expect(mockedAck.mock.calls[1][1].file_id).toBe(8);
+    expect(mockedAck.mock.calls[0][1][0].file_id).toBe(8);
+    expect(mockedAck.mock.calls[1][1][0].file_id).toBe(8);
     expect(mockedAck.mock.invocationCallOrder[1]).toBeLessThan(mockedNext.mock.invocationCallOrder[1]);
   });
 
@@ -162,6 +162,30 @@ describe("backup controller queue workflow", () => {
     await expect(controller.cancel(44)).resolves.toMatchObject({ status: "cancelled" });
     await runningExpectation;
     expect(mockedAction).toHaveBeenCalledWith(44, "cancel");
+  });
+
+  it("settles and ACKs the current batch before pausing", async () => {
+    const fixture = directoryFixture();
+    let release!: () => void;
+    let first = true;
+    mockedNext.mockResolvedValueOnce([{ id: 9, name: "call.mp3", size: 3, schoolId: 2, schoolName: "مدرسه", downloadUrl: "https://storage.example/file" }]);
+    mockedFetch.mockResolvedValue({ body: { getReader: () => ({
+      read: () => first ? (first = false, new Promise((resolve) => { release = () => resolve({ done: false, value: new Uint8Array([1, 2, 3]) }); })) : Promise.resolve({ done: true }),
+      cancel: jest.fn().mockResolvedValue(undefined),
+    }) } } as unknown as Response);
+    mockedAction.mockImplementation(async (id, action) => {
+      if (action === "pause") expect(mockedAck).toHaveBeenCalled();
+      return { id, status: action === "pause" ? "paused" : "completed" };
+    });
+    const controller = new BackupController();
+    const running = controller.run({ job: { id: 45, downloadConcurrency: 1 }, directory: fixture.directory, schoolIds: [], sections: ["call_recordings"], acknowledgeFailures: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const pausing = controller.pause(45);
+    release();
+    await running;
+    await pausing;
+    expect(mockedAction).toHaveBeenCalledWith(45, "pause");
+    expect(mockedAction).not.toHaveBeenCalledWith(45, "finalize");
   });
 
   it("writes only the selected report with its Content-Disposition CSV filename and then finalizes", async () => {

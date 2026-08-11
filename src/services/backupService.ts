@@ -3,11 +3,14 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 import { clearAuthData, getAccessToken } from "../helpers/authStorage.jsx";
 
 export type BackupSection = "outbound_calls" | "call_recordings" | "support_form_answers";
+export interface BackupDateRange { from: string; to: string }
 
 export interface BackupProgress {
   id: number | string;
   schoolIds?: number[];
   allSchools?: boolean;
+  dateRanges?: Partial<Record<BackupSection, BackupDateRange>>;
+  downloadConcurrency?: number;
   status?: string;
   totalFiles?: number;
   processedFiles?: number;
@@ -35,7 +38,11 @@ export interface ExecuteBackupPayload {
   school_ids?: number[];
   all_schools?: boolean;
   sections: BackupSection[];
+  date_ranges?: Partial<Record<BackupSection, BackupDateRange>>;
+  download_concurrency: number;
 }
+
+export const clampBackupConcurrency = (value: unknown) => Math.min(10, Math.max(1, Number(value) || 1));
 
 const unwrap = <T>(response: any): T => (response?.data?.data ?? response?.data) as T;
 
@@ -59,6 +66,8 @@ export function normalizeBackupProgress(value: any): BackupProgress {
     id: pick("id", "jobId", "job_id"),
     schoolIds: (Array.isArray(rawSchoolIds) ? rawSchoolIds : []).map(Number).filter(Number.isFinite),
     allSchools: Boolean(firstDefined(raw.allSchools, raw.all_schools, false)),
+    dateRanges: firstDefined(raw.dateRanges, raw.date_ranges, {}),
+    downloadConcurrency: clampBackupConcurrency(firstDefined(raw.downloadConcurrency, raw.download_concurrency, 1)),
     status: pick("status", "state"),
     totalFiles,
     processedFiles,
@@ -80,15 +89,17 @@ export function buildExecuteBackupPayload(options: {
   allSchools: boolean;
   isAdmin: boolean;
   sections: BackupSection[];
+  dateRanges?: Partial<Record<BackupSection, BackupDateRange>>;
+  downloadConcurrency?: number;
 }): ExecuteBackupPayload {
   const schoolIds = [...new Set(options.schoolIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
   if (options.allSchools) {
     if (!options.isAdmin) throw new Error("گزینه همه مدارس برای مدیر مجاز نیست");
-    return { all_schools: true, sections: options.sections };
+    return { all_schools: true, sections: options.sections, date_ranges: options.dateRanges, download_concurrency: clampBackupConcurrency(options.downloadConcurrency) };
   }
-  if (schoolIds.length) return { school_ids: schoolIds, all_schools: false, sections: options.sections };
+  if (schoolIds.length) return { school_ids: schoolIds, all_schools: false, sections: options.sections, date_ranges: options.dateRanges, download_concurrency: clampBackupConcurrency(options.downloadConcurrency) };
   if (options.isAdmin) throw new Error("حداقل یک مدرسه یا گزینه همه مدارس را انتخاب کنید");
-  return { sections: options.sections };
+  return { sections: options.sections, date_ranges: options.dateRanges, download_concurrency: clampBackupConcurrency(options.downloadConcurrency) };
 }
 
 export function isBackupAdmin(user: any) {
@@ -224,6 +235,23 @@ export async function ackBackupFile(id: BackupProgress["id"], payload: {
   return normalizeBackupProgress(unwrap<any>(await apiPatch(
     getApiUrl(API_ROUTES.backups.ackFile(id)),
     { ...payload, file_id: fileId },
+    { signal, silent: true },
+  )));
+}
+
+export async function getBackupFileBatch(id: BackupProgress["id"], signal?: AbortSignal) {
+  const response = await apiGet(getApiUrl(API_ROUTES.backups.fileBatch(id)), { signal, silent: true });
+  const payload = unwrap<any>(response);
+  const items = Array.isArray(payload?.items) ? payload.items : [];
+  return items.map(normalizeBackupFile);
+}
+
+export interface BackupBatchOutcome { file_id: number; outcome: "downloaded" | "failed"; bytes: number }
+
+export async function ackBackupFileBatch(id: BackupProgress["id"], items: BackupBatchOutcome[], signal?: AbortSignal) {
+  return normalizeBackupProgress(unwrap<any>(await apiPatch(
+    getApiUrl(API_ROUTES.backups.ackFileBatch(id)),
+    { items },
     { signal, silent: true },
   )));
 }

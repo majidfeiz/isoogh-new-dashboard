@@ -1,5 +1,5 @@
 jest.mock("./backupService", () => ({
-  ackBackupFile: jest.fn(), backupAction: jest.fn(), fetchBackupReportStream: jest.fn(), fetchProtectedStream: jest.fn(), fetchStorageStream: jest.fn(), getBackup: jest.fn(), getNextBackupFile: jest.fn(), retryAfterMilliseconds: jest.fn(() => 0), mergeBackupProgress: (previous: any, incoming: any) => ({ ...previous, ...incoming, totalFiles: Math.max(previous.totalFiles || 0, incoming.totalFiles || 0) }),
+  ackBackupFileBatch: jest.fn(), backupAction: jest.fn(), fetchBackupReportStream: jest.fn(), fetchProtectedStream: jest.fn(), fetchStorageStream: jest.fn(), getBackup: jest.fn(), getBackupFileBatch: jest.fn(), retryAfterMilliseconds: jest.fn(() => 0), mergeBackupProgress: (previous: any, incoming: any) => ({ ...previous, ...incoming, totalFiles: Math.max(previous.totalFiles || 0, incoming.totalFiles || 0) }),
 }));
 
 import { reportFilename, streamReportToFile, streamToFile } from "./backupController";
