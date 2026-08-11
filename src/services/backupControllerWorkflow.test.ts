@@ -32,10 +32,10 @@ function directoryFixture() {
     abort: jest.fn(),
   });
   const fileHandle = { createWritable: jest.fn(async () => writable()), getFile: jest.fn() };
-  const school = { getFileHandle: jest.fn(async (name: string) => {
-    if (name.startsWith("7-")) {
+  const school = { getFileHandle: jest.fn(async (_name: string, options?: { create?: boolean }) => {
+    if (!options?.create) {
       const error = new DOMException("missing", "NotFoundError");
-      if (school.getFileHandle.mock.calls.filter(([called]) => called === name).length % 2 === 1) throw error;
+      throw error;
     }
     return fileHandle;
   }) };

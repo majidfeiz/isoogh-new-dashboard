@@ -62,7 +62,12 @@ function isRetryableAckError(error: any) {
   );
 }
 
-async function streamToFile(response: Response, handle: FileSystemFileHandle, signal: AbortSignal) {
+async function streamToFile(
+  response: Response,
+  handle: FileSystemFileHandle,
+  signal: AbortSignal,
+  onProgress?: (bytes: number) => void,
+) {
   const reader = response.body!.getReader();
   const writable = await handle.createWritable();
   let bytes = 0;
@@ -73,6 +78,7 @@ async function streamToFile(response: Response, handle: FileSystemFileHandle, si
       if (done) break;
       await writable.write(value);
       bytes += value.byteLength;
+      onProgress?.(bytes);
     }
     await writable.close();
     return bytes;
@@ -224,6 +230,7 @@ export class BackupController {
       startedAt: now,
       updatedAt: now,
     };
+    this.emit(options.job);
 
     if (options.resume) {
       const state = await backupAction(options.job.id, "resume");
@@ -239,10 +246,18 @@ export class BackupController {
       while (!signal.aborted && !this.pauseRequested) {
         const file = await getNextBackupFile(options.job.id, signal);
         if (!file) break;
+        this.emit({ ...manifest.progress, currentFile: file.name });
         let bytes = 0;
         let outcome: "downloaded" | "failed" = "downloaded";
         try {
-          bytes = await this.downloadWithRetry(file, recordings, signal);
+          const baseBytes = Number(manifest.progress.downloadedBytes || 0);
+          bytes = await this.downloadWithRetry(file, recordings, signal, (currentBytes) => {
+            this.emit({
+              ...manifest.progress,
+              currentFile: file.name,
+              downloadedBytes: baseBytes + currentBytes,
+            });
+          });
         } catch (error) {
           if (signal.aborted) throw error;
           if (!options.acknowledgeFailures) throw error;
@@ -281,10 +296,15 @@ export class BackupController {
     await streamToFile(response, file, signal);
   }
 
-  private async downloadWithRetry(file: BackupFile, root: FileSystemDirectoryHandle, signal: AbortSignal) {
+  private async downloadWithRetry(
+    file: BackupFile,
+    root: FileSystemDirectoryHandle,
+    signal: AbortSignal,
+    onProgress?: (bytes: number) => void,
+  ) {
     let lastError: unknown;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try { return await this.downloadFile(file, root, signal); }
+      try { return await this.downloadFile(file, root, signal, onProgress); }
       catch (error) {
         lastError = error;
         if (signal.aborted || attempt === 3) break;
@@ -316,7 +336,12 @@ export class BackupController {
     throw new DOMException("Aborted", "AbortError");
   }
 
-  private async downloadFile(file: BackupFile, root: FileSystemDirectoryHandle, signal: AbortSignal) {
+  private async downloadFile(
+    file: BackupFile,
+    root: FileSystemDirectoryHandle,
+    signal: AbortSignal,
+    onProgress?: (bytes: number) => void,
+  ) {
     const school = await root.getDirectoryHandle(`${file.schoolId}-${safeName(file.schoolName, "school")}`, { create: true });
     const finalName = `${file.id}-${safeName(file.name)}`;
     try {
@@ -329,12 +354,29 @@ export class BackupController {
 
     const canMove = typeof FileSystemFileHandle !== "undefined" && "move" in FileSystemFileHandle.prototype;
     const targetName = canMove ? `${file.id}.part` : finalName;
-    const target = await school.getFileHandle(targetName, { create: true }) as FileHandleWithMove;
     const response = await fetchStorageStream(file.downloadUrl, signal);
-    const bytes = await streamToFile(response, target, signal);
+    const target = await school.getFileHandle(targetName, { create: true }) as FileHandleWithMove;
+    let bytes = 0;
+    try {
+      bytes = await streamToFile(response, target, signal, onProgress);
+    } catch (error) {
+      if (canMove) await school.removeEntry(targetName).catch(() => undefined);
+      throw error;
+    }
     if (canMove) {
-      if (!target.move) throw new Error("مرورگر انتقال امن فایل موقت را پشتیبانی نمی‌کند");
-      await target.move(finalName);
+      if (target.move) {
+        try {
+          await target.move(finalName);
+          return bytes;
+        } catch {
+          // Some external-volume providers expose move() but reject it at runtime.
+        }
+      }
+      const part = await target.getFile();
+      const finalHandle = await school.getFileHandle(finalName, { create: true });
+      await streamToFile({ body: part.stream() } as Response, finalHandle, signal);
+      await school.removeEntry(targetName);
+      return bytes;
     }
     return bytes;
   }

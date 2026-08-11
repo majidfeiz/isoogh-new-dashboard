@@ -23,11 +23,13 @@ describe("local backup streaming invariants", () => {
     };
     const handle = { createWritable: jest.fn(async () => writable) } as unknown as FileSystemFileHandle;
     const blobSpy = jest.spyOn(Response.prototype, "blob");
+    const progress = jest.fn();
 
-    const bytes = await streamToFile(responseFrom(new Uint8Array(2), new Uint8Array(3)), handle, new AbortController().signal);
+    const bytes = await streamToFile(responseFrom(new Uint8Array(2), new Uint8Array(3)), handle, new AbortController().signal, progress);
 
     expect(bytes).toBe(5);
     expect(events).toEqual(["write:2", "write:3", "close"]);
+    expect(progress.mock.calls.map(([bytes]) => bytes)).toEqual([2, 5]);
     expect(blobSpy).not.toHaveBeenCalled();
     blobSpy.mockRestore();
   });

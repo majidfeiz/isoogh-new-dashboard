@@ -11,6 +11,7 @@ import {
   executeBackup,
   getBackup,
   isTemporaryBackupError,
+  normalizeBackupProgress,
   TEMPORARY_BACKUP_ERROR_MESSAGE,
   type BackupProgress,
   type BackupSection,
@@ -64,7 +65,7 @@ export default function BackupPage() {
   const [selectedSections, setSelectedSections] = useState<BackupSection[]>(saved?.sections || sections.map((item) => item.id));
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [directoryStatus, setDirectoryStatus] = useState<"unknown" | "ready" | "missing" | "denied">("unknown");
-  const [job, setJob] = useState<BackupProgress | null>(saved?.job || null);
+  const [job, setJob] = useState<BackupProgress | null>(saved?.job ? normalizeBackupProgress(saved.job) : null);
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [acknowledgeFailures, setAcknowledgeFailures] = useState(true);

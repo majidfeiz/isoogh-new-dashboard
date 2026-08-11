@@ -3,7 +3,7 @@ jest.mock("../helpers/httpClient.jsx", () => ({
 }));
 
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
-import { ackBackupFile, executeBackup, getNextBackupFile, TEMPORARY_BACKUP_ERROR_MESSAGE } from "./backupService";
+import { ackBackupFile, executeBackup, getNextBackupFile, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE } from "./backupService";
 
 const mockedGet = apiGet as jest.Mock;
 const mockedPatch = apiPatch as jest.Mock;
@@ -42,5 +42,25 @@ describe("backup queue API", () => {
 
     expect(mockedPost).toHaveBeenCalledTimes(3);
     expect(mockedPost.mock.calls.every((call) => call[2]?.silent === true)).toBe(true);
+  });
+
+  it("normalizes snake_case progress returned by the backend", () => {
+    expect(normalizeBackupProgress({ job: {
+      id: 12,
+      total_files: 100,
+      processed_files: 25,
+      downloaded_files: 24,
+      failed_files: 1,
+      downloaded_bytes: 523845,
+      current_file: { file_name: "call.mp3" },
+    } })).toEqual(expect.objectContaining({
+      totalFiles: 100,
+      processedFiles: 25,
+      downloadedFiles: 24,
+      failedFiles: 1,
+      downloadedBytes: 523845,
+      currentFile: "call.mp3",
+      percent: 25,
+    }));
   });
 });
