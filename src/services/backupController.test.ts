@@ -1,8 +1,8 @@
 jest.mock("./backupService", () => ({
-  ackBackupFile: jest.fn(), backupAction: jest.fn(), fetchBackupReport: jest.fn(), fetchProtectedStream: jest.fn(), fetchStorageStream: jest.fn(), getBackup: jest.fn(), getNextBackupFile: jest.fn(), retryAfterMilliseconds: jest.fn(() => 0), mergeBackupProgress: (previous: any, incoming: any) => ({ ...previous, ...incoming, totalFiles: Math.max(previous.totalFiles || 0, incoming.totalFiles || 0) }),
+  ackBackupFile: jest.fn(), backupAction: jest.fn(), fetchBackupReportStream: jest.fn(), fetchProtectedStream: jest.fn(), fetchStorageStream: jest.fn(), getBackup: jest.fn(), getNextBackupFile: jest.fn(), retryAfterMilliseconds: jest.fn(() => 0), mergeBackupProgress: (previous: any, incoming: any) => ({ ...previous, ...incoming, totalFiles: Math.max(previous.totalFiles || 0, incoming.totalFiles || 0) }),
 }));
 
-import { streamToFile } from "./backupController";
+import { reportFilename, streamReportToFile, streamToFile } from "./backupController";
 import { ensureDirectoryPermission, supportsDirectoryPicker, verifyWritableDirectory } from "./backupDirectoryStore";
 
 const responseFrom = (...chunks: Uint8Array[]) => {
@@ -14,6 +14,13 @@ const responseFrom = (...chunks: Uint8Array[]) => {
 };
 
 describe("local backup streaming invariants", () => {
+  it("uses a safe Content-Disposition CSV filename with a fixed fallback", () => {
+    const withHeader = { headers: new Headers({ "Content-Disposition": "attachment; filename=custom-report.csv" }) } as Response;
+    const withoutHeader = { headers: new Headers() } as Response;
+    expect(reportFilename(withHeader, "outbound-calls.csv")).toBe("custom-report.csv");
+    expect(reportFilename(withoutHeader, "outbound-calls.csv")).toBe("outbound-calls.csv");
+  });
+
   it("streams chunks without calling Blob and closes only after all writes", async () => {
     const events: string[] = [];
     const writable = {
@@ -45,6 +52,21 @@ describe("local backup streaming invariants", () => {
     await expect(streamToFile(responseFrom(new Uint8Array(1)), handle, new AbortController().signal)).rejects.toBe(failure);
     expect(writable.abort).toHaveBeenCalled();
     expect(writable.close).not.toHaveBeenCalled();
+  });
+
+  it("streams a CSV report byte-for-byte, including its UTF-8 BOM", async () => {
+    const chunks = [new Uint8Array([0xef, 0xbb]), new Uint8Array([0xbf, 0xd9, 0x85])];
+    const writes: Uint8Array[] = [];
+    const writable = {
+      write: jest.fn(async (chunk) => writes.push(chunk)),
+      close: jest.fn(),
+      abort: jest.fn(),
+    };
+    const handle = { createWritable: jest.fn(async () => writable) } as unknown as FileSystemFileHandle;
+
+    await expect(streamReportToFile(responseFrom(...chunks), handle, new AbortController().signal, jest.fn())).resolves.toBe(5);
+    expect(Array.from(writes[0])).toEqual([0xef, 0xbb]);
+    expect(Array.from(writes[1])).toEqual([0xbf, 0xd9, 0x85]);
   });
 });
 

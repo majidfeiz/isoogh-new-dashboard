@@ -32,14 +32,14 @@ const sections: Array<{ id: BackupSection; label: string }> = [
 ];
 
 const initialReports: Record<"outbound_calls" | "support_form_answers", BackupReportProgress> = {
-  outbound_calls: { status: "idle", filename: "reports/outbound-calls.xlsx", bytes: 0 },
-  support_form_answers: { status: "idle", filename: "reports/support-form-answers.xlsx", bytes: 0 },
+  outbound_calls: { status: "idle", filename: "reports/outbound-calls.csv", bytes: 0 },
+  support_form_answers: { status: "idle", filename: "reports/support-form-answers.csv", bytes: 0 },
 };
 
 const reportStatusLabel: Record<BackupReportProgress["status"], string> = {
   idle: "در انتظار",
-  downloading: "در حال دانلود",
-  writing: "در حال ذخیره روی هارد",
+  connecting: "در حال اتصال",
+  streaming: "در حال دریافت و ذخیره روی هارد",
   completed: "ذخیره شد",
   failed: "ناموفق",
 };

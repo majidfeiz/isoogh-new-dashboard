@@ -1,7 +1,7 @@
 jest.mock("./backupService", () => ({
   ackBackupFile: jest.fn(),
   backupAction: jest.fn(),
-  fetchBackupReport: jest.fn(),
+  fetchBackupReportStream: jest.fn(),
   fetchProtectedStream: jest.fn(),
   fetchStorageStream: jest.fn(),
   getBackup: jest.fn(),
@@ -11,21 +11,21 @@ jest.mock("./backupService", () => ({
 }));
 
 import { BackupController } from "./backupController";
-import { ackBackupFile, backupAction, fetchBackupReport, fetchStorageStream, getBackup, getNextBackupFile } from "./backupService";
+import { ackBackupFile, backupAction, fetchBackupReportStream, fetchStorageStream, getBackup, getNextBackupFile } from "./backupService";
 
 const mockedAck = ackBackupFile as jest.MockedFunction<typeof ackBackupFile>;
 const mockedAction = backupAction as jest.MockedFunction<typeof backupAction>;
-const mockedReport = fetchBackupReport as jest.MockedFunction<typeof fetchBackupReport>;
+const mockedReport = fetchBackupReportStream as jest.MockedFunction<typeof fetchBackupReportStream>;
 const mockedFetch = fetchStorageStream as jest.MockedFunction<typeof fetchStorageStream>;
 const mockedGetBackup = getBackup as jest.MockedFunction<typeof getBackup>;
 const mockedNext = getNextBackupFile as jest.MockedFunction<typeof getNextBackupFile>;
 
-function streamResponse() {
+function streamResponse(filename = "outbound-calls.csv") {
   let read = false;
   return { body: { getReader: () => ({
     read: async () => read ? { done: true } : (read = true, { done: false, value: new Uint8Array([1, 2, 3]) }),
     cancel: jest.fn().mockResolvedValue(undefined),
-  }) } } as unknown as Response;
+  }) }, headers: new Headers({ "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="${filename}"` }) } as unknown as Response;
 }
 
 function directoryFixture(options: { reportCloseFails?: boolean; manifest?: object } = {}) {
@@ -82,7 +82,7 @@ describe("backup controller queue workflow", () => {
     mockedAck.mockResolvedValue({ id: 12, processedFiles: 1, totalFiles: 1, downloadedBytes: 3 });
     mockedAction.mockResolvedValue({ id: 12, status: "completed" });
     mockedFetch.mockResolvedValue(streamResponse());
-    mockedReport.mockResolvedValue({ bytes: new Uint8Array([0x50, 0x4b, 1]), contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    mockedReport.mockResolvedValue(streamResponse());
     mockedGetBackup.mockImplementation(async (id) => ({ id, totalFiles: 1, processedFiles: 0 }));
   });
 
@@ -164,7 +164,7 @@ describe("backup controller queue workflow", () => {
     expect(mockedAction).toHaveBeenCalledWith(44, "cancel");
   });
 
-  it("writes only the selected report with its canonical XLSX filename and then finalizes", async () => {
+  it("writes only the selected report with its Content-Disposition CSV filename and then finalizes", async () => {
     const fixture = directoryFixture();
     mockedAction.mockImplementation(async (id, action) => {
       if (action === "finalize") expect(fixture.events).toContain("report-close");
@@ -175,7 +175,7 @@ describe("backup controller queue workflow", () => {
 
     expect(mockedReport).toHaveBeenCalledTimes(1);
     expect(mockedReport).toHaveBeenCalledWith("/backups/31/export/calls", expect.any(AbortSignal));
-    expect(fixture.reports.getFileHandle).toHaveBeenCalledWith("outbound-calls.xlsx", { create: true });
+    expect(fixture.reports.getFileHandle).toHaveBeenCalledWith("outbound-calls.csv", { create: true });
     expect(mockedAction).toHaveBeenCalledWith(31, "finalize");
   });
 
@@ -188,15 +188,36 @@ describe("backup controller queue workflow", () => {
     expect(fixture.reportFileHandle.createWritable).toHaveBeenCalledTimes(1);
   });
 
+  it("does not mark or finalize a report when its stream disconnects", async () => {
+    const fixture = directoryFixture();
+    let reads = 0;
+    mockedReport.mockResolvedValue({
+      headers: new Headers({ "Content-Type": "text/csv", "Content-Disposition": "attachment; filename=outbound-calls.csv" }),
+      body: { getReader: () => ({
+        read: jest.fn(async () => {
+          reads += 1;
+          if (reads === 1) return { done: false, value: new Uint8Array([0xef, 0xbb, 0xbf]) };
+          throw new Error("stream disconnected");
+        }),
+        cancel: jest.fn().mockResolvedValue(undefined),
+      }) },
+    } as unknown as Response);
+
+    await expect(new BackupController().run({ job: { id: 34 }, directory: fixture.directory, schoolIds: [], sections: ["outbound_calls"], acknowledgeFailures: true })).rejects.toThrow("stream disconnected");
+
+    expect(mockedAction).not.toHaveBeenCalledWith(34, "finalize");
+    expect(fixture.writes.some((value) => typeof value === "string" && value.includes('"status": "failed"'))).toBe(true);
+  });
+
   it("skips a completed unchanged report on resume without scanning the directory", async () => {
     const fixture = directoryFixture({ manifest: {
-      reports: { outbound_calls: { status: "completed", filename: "reports/outbound-calls.xlsx", bytes: 3 } },
+      reports: { outbound_calls: { status: "completed", filename: "reports/outbound-calls.csv", bytes: 3 } },
     } });
 
     await new BackupController().run({ job: { id: 33 }, directory: fixture.directory, schoolIds: [], sections: ["outbound_calls"], acknowledgeFailures: true, resume: true });
 
     expect(mockedReport).not.toHaveBeenCalled();
-    expect(fixture.reports.getFileHandle).toHaveBeenCalledWith("outbound-calls.xlsx");
+    expect(fixture.reports.getFileHandle).toHaveBeenCalledWith("outbound-calls.csv");
     expect((fixture.reports as any).values).toBeUndefined();
     expect(mockedAction).toHaveBeenCalledWith(33, "finalize");
   });

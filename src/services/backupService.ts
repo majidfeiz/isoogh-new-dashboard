@@ -29,11 +29,6 @@ export interface BackupFile {
 
 export type BackupReportSection = "outbound_calls" | "support_form_answers";
 
-export interface BackupReportDownload {
-  bytes: Uint8Array;
-  contentType: string;
-}
-
 const unwrap = <T>(response: any): T => (response?.data?.data ?? response?.data) as T;
 
 const firstDefined = (...values: any[]) => values.find((value) => value !== undefined && value !== null);
@@ -120,10 +115,10 @@ export function retryAfterMilliseconds(error: any) {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function parseBinaryEndpointError(response: Response) {
+async function parseStreamingEndpointError(response: Response) {
   let message = `خطا در دریافت خروجی (${response.status})`;
   try {
-    const text = new TextDecoder().decode(await response.arrayBuffer());
+    const text = await response.text();
     const data = JSON.parse(text);
     const value = data?.message ?? data?.error;
     if (Array.isArray(value)) message = value.filter(Boolean).join("، ");
@@ -214,7 +209,7 @@ export async function fetchProtectedStream(path: string, signal?: AbortSignal) {
   return response;
 }
 
-export async function fetchBackupReport(path: string, signal?: AbortSignal): Promise<BackupReportDownload> {
+export async function fetchBackupReportStream(path: string, signal?: AbortSignal): Promise<Response> {
   const token = getAccessToken();
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -224,17 +219,12 @@ export async function fetchBackupReport(path: string, signal?: AbortSignal): Pro
         cache: "no-store",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      if (!response.ok) throw await parseBinaryEndpointError(response);
+      if (!response.ok) throw await parseStreamingEndpointError(response);
 
       const contentType = String(response.headers.get("Content-Type") || "").toLowerCase();
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (!contentType.includes("spreadsheetml.sheet")) {
-        throw new Error("پاسخ سرور فایل XLSX معتبر نیست");
-      }
-      if (bytes.byteLength === 0 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
-        throw new Error("محتوای خروجی XLSX معتبر نیست");
-      }
-      return { bytes, contentType };
+      if (!contentType.includes("text/csv")) throw new Error("فرمت پاسخ گزارش معتبر نیست");
+      if (!response.body) throw new Error("پاسخ قابل پخش گزارش از سرور دریافت نشد");
+      return response;
     } catch (error: any) {
       lastError = error;
       if (error?.name === "AbortError") throw error;
@@ -245,7 +235,7 @@ export async function fetchBackupReport(path: string, signal?: AbortSignal): Pro
         }
         throw error;
       }
-      if (error?.status !== 503 || attempt === 2) throw error;
+      if (![502, 503].includes(Number(error?.status)) || attempt === 2) throw error;
       await wait(Math.max(500 * 2 ** attempt, retryAfterMilliseconds(error)));
     }
   }
