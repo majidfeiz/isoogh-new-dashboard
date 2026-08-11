@@ -386,7 +386,7 @@ export class BackupController {
           outcome,
           bytes,
         }, signal);
-        manifest.progress = mergeBackupProgress(manifest.progress, state);
+        manifest.progress = state;
         manifest.lastAcknowledgedFileId = file.id;
         manifest.updatedAt = new Date().toISOString();
         await writeJson(root, manifest);

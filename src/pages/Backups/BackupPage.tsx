@@ -11,11 +11,13 @@ import type { BackupReportProgress } from "../../services/backupController";
 import { ensureDirectoryPermission, getBackupDirectory, saveBackupDirectory, supportsDirectoryPicker, verifyWritableDirectory } from "../../services/backupDirectoryStore";
 import {
   executeBackup,
+  buildExecuteBackupPayload,
   getBackup,
   isTemporaryBackupError,
-  mergeBackupProgress,
+  isBackupAdmin,
   normalizeBackupProgress,
   TEMPORARY_BACKUP_ERROR_MESSAGE,
+  validateBackupSchoolScope,
   type BackupProgress,
   type BackupSection,
 } from "../../services/backupService";
@@ -74,12 +76,14 @@ const apiErrorMessage = (error: any) => {
 export default function BackupPage() {
   document.title = "بک‌آپ محلی | داشبورد آیسوق";
   const supported = supportsDirectoryPicker();
-  const { hasPermission } = useAuth() as any;
+  const { hasPermission, user } = useAuth() as any;
   const canDownloadReports = hasPermission("backups.download");
+  const isAdmin = isBackupAdmin(user);
   const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
   const saved = useMemo(loadSaved, []);
   const [schools, setSchools] = useState<any[]>([]);
   const [schoolIds, setSchoolIds] = useState<number[]>(saved?.schoolIds || []);
+  const [allSchools, setAllSchools] = useState<boolean>(Boolean(saved?.allSchools && isAdmin));
   const [selectedSections, setSelectedSections] = useState<BackupSection[]>(saved?.sections || sections.map((item) => item.id));
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [directoryStatus, setDirectoryStatus] = useState<"unknown" | "ready" | "missing" | "denied">("unknown");
@@ -97,7 +101,7 @@ export default function BackupPage() {
       .then((result) => setSchools(result.items || []))
       .catch(() => setSchools([]));
     const unsubscribe = backupController.subscribe((nextJob, nextMetrics) => {
-      setJob((current) => current?.id === nextJob.id ? mergeBackupProgress(current, nextJob) : nextJob);
+      setJob(nextJob);
       setMetrics({ bytesPerSecond: nextMetrics.bytesPerSecond, etaSeconds: nextMetrics.etaSeconds });
       setReportProgress(nextMetrics.reports);
     });
@@ -111,7 +115,7 @@ export default function BackupPage() {
     if (!job?.id || (running && Number(job.totalFiles || 0) > 0)) return;
     const refresh = () => {
       getBackup(job.id).then((nextJob) => {
-        setJob((current) => current?.id === nextJob.id ? mergeBackupProgress(current, nextJob) : nextJob);
+        setJob(nextJob);
       }).catch(() => undefined);
     };
     refresh();
@@ -127,8 +131,29 @@ export default function BackupPage() {
       localStorage.removeItem(STORAGE_KEY);
       return;
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ job, schoolIds, sections: selectedSections }));
-  }, [job, schoolIds, selectedSections]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ job, schoolIds, allSchools, sections: selectedSections }));
+  }, [job, schoolIds, allSchools, selectedSections]);
+
+  const resetActiveJob = () => {
+    backupController.stopLocal();
+    setJob(null);
+    setReportProgress(initialReports);
+    setMetrics({ bytesPerSecond: 0, etaSeconds: null });
+    setTemporaryFailure(null);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const changeSchoolIds = (ids: number[]) => {
+    resetActiveJob();
+    setAllSchools(false);
+    setSchoolIds(ids);
+  };
+
+  const changeAllSchools = (checked: boolean) => {
+    resetActiveJob();
+    setAllSchools(checked);
+    if (checked) setSchoolIds([]);
+  };
 
   const chooseDirectory = async () => {
     if (!window.showDirectoryPicker) return;
@@ -183,6 +208,14 @@ export default function BackupPage() {
   const start = async () => {
     if (!selectedSections.length) return toast.error("حداقل یک بخش را انتخاب کنید");
     if (!supported) return;
+    const selectedSchoolIds = schoolIds.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    let payload;
+    try {
+      payload = buildExecuteBackupPayload({ schoolIds: selectedSchoolIds, allSchools, isAdmin, sections: [...selectedSections] });
+    } catch (error: any) {
+      toast.error(error.message);
+      return;
+    }
     setBusy(true);
     setTemporaryFailure(null);
     try {
@@ -193,8 +226,8 @@ export default function BackupPage() {
       }
       await verifyWritableDirectory(handle);
       setDirectoryStatus("ready");
-      const payload = { sections: selectedSections, ...(schoolIds.length ? { school_ids: schoolIds } : {}) };
       const nextJob = await executeBackup(payload);
+      validateBackupSchoolScope(nextJob, selectedSchoolIds, allSchools);
       await saveBackupDirectory(nextJob.id, handle);
       setJob(nextJob);
       setBusy(false);
@@ -204,6 +237,8 @@ export default function BackupPage() {
         setTemporaryFailure({ phase: "execute" });
       } else if (error?.name !== "AbortError" && !error?.response) {
         toast.error(error?.message || "شروع بک‌آپ ممکن نشد");
+      } else if (error?.response?.status === 400) {
+        toast.error("حداقل یک مدرسه یا گزینه همه مدارس را انتخاب کنید");
       }
     } finally { setBusy(false); }
   };
@@ -291,6 +326,10 @@ export default function BackupPage() {
   const percent = Math.max(0, Math.min(100, Number(job?.percent || 0)));
   const terminal = isTerminalStatus(job?.status);
   const hasSelectedReport = selectedSections.some((section) => section === "outbound_calls" || section === "support_form_answers");
+  const adminScopeMissing = isAdmin && !allSchools && schoolIds.length === 0;
+  const activeScope = job?.allSchools
+    ? "همه مدارس"
+    : (job?.schoolIds || []).map((id) => schools.find((school) => Number(school.id) === Number(id))?.name || `مدرسه ${id}`).join("، ") || "مدارس مجاز مدیر";
 
   return <div className="page-content"><div className="container-fluid">
     <Breadcrumbs title="مدیریت داده" breadcrumbItem="بک‌آپ روی هارد کاربر" />
@@ -305,8 +344,9 @@ export default function BackupPage() {
     <Row className="g-3">
       <Col xl="5"><Card className="h-100"><CardHeader><h5 className="mb-0">تنظیمات بک‌آپ</h5></CardHeader><CardBody>
         <Alert color="info" className="small">مرورگر هیچ هاردی را خودکار شناسایی نمی‌کند. پوشه‌ای روی لپ‌تاپ یا هارد اکسترنال را خودتان انتخاب کنید؛ نام و مسیر پوشه به سرور ارسال نمی‌شود.</Alert>
-        <FormGroup><Label>مدارس (خالی یعنی همه مدارس مجاز)</Label>
-          <Input type="select" multiple value={schoolIds.map(String)} onChange={(event) => { const select = event.currentTarget as unknown as HTMLSelectElement; setSchoolIds(Array.from(select.selectedOptions).map((option) => Number(option.value))); }} style={{ minHeight: 150 }}>
+        {isAdmin && <FormGroup check className="mb-3"><Input type="checkbox" id="backup-all-schools" checked={allSchools} disabled={running || busy} onChange={(event) => changeAllSchools(event.target.checked)} /><Label check htmlFor="backup-all-schools">همه مدارس</Label></FormGroup>}
+        <FormGroup><Label>{isAdmin ? "مدارس (حداقل یک مورد انتخاب کنید)" : "مدارس مشخص (خالی یعنی همه مدارس مجاز شما)"}</Label>
+          <Input type="select" multiple value={schoolIds.map(String)} disabled={allSchools || running || busy} onChange={(event) => { const select = event.currentTarget as unknown as HTMLSelectElement; changeSchoolIds(Array.from(select.selectedOptions).map((option) => Number(option.value))); }} style={{ minHeight: 150 }}>
             {schools.map((school) => <option key={school.id} value={school.id}>{school.name || school.title || `مدرسه ${school.id}`}</option>)}
           </Input>
         </FormGroup>
@@ -319,7 +359,7 @@ export default function BackupPage() {
         <FormGroup check className="mt-3"><Input type="checkbox" id="continue-failures" checked={acknowledgeFailures} onChange={(event) => setAcknowledgeFailures(event.target.checked)} /><Label check htmlFor="continue-failures">پس از ۳ تلاش ناموفق، خطا ثبت و صف ادامه داده شود</Label></FormGroup>
         <div className="d-flex flex-wrap gap-2 mt-4">
           <Button color="secondary" outline onClick={chooseDirectory} disabled={!supported || running}>انتخاب پوشه مقصد</Button>
-          <Button color="primary" onClick={start} disabled={!supported || busy || running || !selectedSections.length || (hasSelectedReport && !canDownloadReports)}>{busy && <Spinner size="sm" className="ms-1" />}شروع بک‌آپ</Button>
+          <Button color="primary" onClick={start} disabled={!supported || busy || running || !selectedSections.length || adminScopeMissing || (hasSelectedReport && !canDownloadReports)}>{busy && <Spinner size="sm" className="ms-1" />}شروع بک‌آپ</Button>
         </div>
         {isMac && <Alert color="light" className="border mt-3 mb-0 small">
           اگر هارد در پنجره انتخاب پوشه دیده نمی‌شود، در همان پنجره کلیدهای <strong>⌘⇧G</strong> را بزنید و <code>/Volumes</code> را وارد کنید. همچنین در تنظیمات macOS، دسترسی Google Chrome به Removable Volumes را فعال و Chrome را کاملاً بسته و دوباره اجرا کنید.
@@ -328,6 +368,7 @@ export default function BackupPage() {
       </CardBody></Card></Col>
       <Col xl="7"><Card className="h-100"><CardHeader><h5 className="mb-0">وضعیت اجرا</h5></CardHeader><CardBody>
         {!job ? <div className="text-muted py-5 text-center">هنوز بک‌آپی شروع نشده است.</div> : <>
+          <div className="mb-3 small">محدوده فعال: <strong>{activeScope}</strong></div>
           <div className="d-flex justify-content-between mb-2"><span>پیشرفت</span><strong>{percent.toLocaleString("fa-IR")}%</strong></div>
           <Progress value={percent} color={Number(job.failedFiles || 0) ? "warning" : "success"} className="mb-4" />
           <Row className="g-3">
