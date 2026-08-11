@@ -3,7 +3,7 @@ import { API_ROUTES } from "../helpers/apiRoutes.jsx";
 import {
   ackBackupFile,
   backupAction,
-  fetchProtectedStream,
+  fetchBackupReport,
   fetchStorageStream,
   getBackup,
   getNextBackupFile,
@@ -11,6 +11,7 @@ import {
   retryAfterMilliseconds,
   type BackupFile,
   type BackupProgress,
+  type BackupReportSection,
   type BackupSection,
 } from "./backupService";
 
@@ -30,12 +31,35 @@ export interface BackupManifest {
   progress: BackupProgress;
   lastAcknowledgedFileId: BackupFile["id"] | null;
   failures: BackupFailure[];
+  reports: Partial<Record<BackupReportSection, BackupReportProgress>>;
   startedAt: string;
   updatedAt: string;
 }
 
-type Listener = (state: BackupProgress, metrics: { bytesPerSecond: number; etaSeconds: number | null }) => void;
+export type BackupReportStatus = "idle" | "downloading" | "writing" | "completed" | "failed";
+export interface BackupReportProgress {
+  status: BackupReportStatus;
+  filename: string;
+  bytes: number;
+  error?: string;
+}
+
+type Listener = (state: BackupProgress, metrics: {
+  bytesPerSecond: number;
+  etaSeconds: number | null;
+  reports: Record<BackupReportSection, BackupReportProgress>;
+}) => void;
 type FileHandleWithMove = FileSystemFileHandle & { move?: (name: string) => Promise<void> };
+
+const REPORTS: Record<BackupReportSection, { filename: string; api: (id: BackupProgress["id"]) => string }> = {
+  outbound_calls: { filename: "outbound-calls.xlsx", api: API_ROUTES.backups.exportCalls },
+  support_form_answers: { filename: "support-form-answers.xlsx", api: API_ROUTES.backups.exportAnswers },
+};
+
+const initialReportProgress = (): Record<BackupReportSection, BackupReportProgress> => ({
+  outbound_calls: { status: "idle", filename: `reports/${REPORTS.outbound_calls.filename}`, bytes: 0 },
+  support_form_answers: { status: "idle", filename: `reports/${REPORTS.support_form_answers.filename}`, bytes: 0 },
+});
 
 const activeJobs = new Map<string, Promise<void>>();
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -98,11 +122,22 @@ async function writeJson(directory: FileSystemDirectoryHandle, manifest: BackupM
   await writable.close();
 }
 
+async function readManifest(directory: FileSystemDirectoryHandle) {
+  try {
+    const handle = await directory.getFileHandle("backup-manifest.json");
+    const file = await handle.getFile();
+    return JSON.parse(await file.text()) as Partial<BackupManifest>;
+  } catch {
+    return null;
+  }
+}
+
 export class BackupController {
   private abortController: AbortController | null = null;
   private pauseRequested = false;
   private listeners = new Set<Listener>();
   private samples: Array<{ at: number; bytes: number }> = [];
+  private reportProgress = initialReportProgress();
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -126,7 +161,11 @@ export class BackupController {
     const bytesPerSecond = first && seconds ? Math.max(0, (bytes - first.bytes) / seconds) : 0;
     const percent = Number(state.percent || 0);
     const etaSeconds = bytesPerSecond > 0 && percent > 0 ? Math.round((seconds * (100 - percent)) / percent) : null;
-    this.listeners.forEach((listener) => listener(state, { bytesPerSecond, etaSeconds }));
+    this.listeners.forEach((listener) => listener(state, {
+      bytesPerSecond,
+      etaSeconds,
+      reports: { ...this.reportProgress },
+    }));
   }
 
   stopLocal() {
@@ -220,16 +259,23 @@ export class BackupController {
     const reports = await root.getDirectoryHandle("reports", { create: true });
     const recordings = await root.getDirectoryHandle("recordings", { create: true });
     const now = new Date().toISOString();
+    const storedManifest = await readManifest(root);
+    this.reportProgress = {
+      ...initialReportProgress(),
+      ...(storedManifest?.reports || {}),
+    };
     const manifest: BackupManifest = {
+      ...(storedManifest as BackupManifest || {}),
       version: 1,
       jobId: options.job.id,
       schoolIds: options.schoolIds,
       sections: options.sections,
       snapshot: options.job,
       progress: options.job,
-      lastAcknowledgedFileId: null,
-      failures: [],
-      startedAt: now,
+      lastAcknowledgedFileId: storedManifest?.lastAcknowledgedFileId ?? null,
+      failures: storedManifest?.failures || [],
+      reports: { ...this.reportProgress },
+      startedAt: storedManifest?.startedAt || now,
       updatedAt: now,
     };
     this.emit(options.job);
@@ -238,11 +284,22 @@ export class BackupController {
       const state = await backupAction(options.job.id, "resume");
       manifest.progress = mergeBackupProgress(manifest.progress, state);
       this.emit(manifest.progress);
-    } else {
-      if (options.sections.includes("outbound_calls")) await this.writeReport(reports, "calls.xlsx", API_ROUTES.backups.exportCalls(options.job.id), signal);
-      if (options.sections.includes("support_form_answers")) await this.writeReport(reports, "answers.xlsx", API_ROUTES.backups.exportAnswers(options.job.id), signal);
-      await writeJson(root, manifest);
     }
+
+    for (const section of ["outbound_calls", "support_form_answers"] as BackupReportSection[]) {
+      if (!options.sections.includes(section)) continue;
+      if (this.reportProgress[section].status === "completed") {
+        try {
+          const existing = await reports.getFileHandle(REPORTS[section].filename);
+          const file = await existing.getFile();
+          if (file.size === this.reportProgress[section].bytes && file.size > 0) continue;
+        } catch {
+          // Missing or changed local reports are downloaded again without scanning the directory.
+        }
+      }
+      await this.writeReport(section, options.job.id, reports, root, manifest, signal);
+    }
+    await writeJson(root, manifest);
 
     if (options.sections.includes("call_recordings")) {
       while (!signal.aborted && !this.pauseRequested) {
@@ -309,10 +366,47 @@ export class BackupController {
     this.abortController = null;
   }
 
-  private async writeReport(directory: FileSystemDirectoryHandle, name: string, path: string, signal: AbortSignal) {
-    const response = await fetchProtectedStream(path, signal);
-    const file = await directory.getFileHandle(name, { create: true });
-    await streamToFile(response, file, signal);
+  private async writeReport(
+    section: BackupReportSection,
+    jobId: BackupProgress["id"],
+    directory: FileSystemDirectoryHandle,
+    root: FileSystemDirectoryHandle,
+    manifest: BackupManifest,
+    signal: AbortSignal,
+  ) {
+    const config = REPORTS[section];
+    const update = async (progress: BackupReportProgress) => {
+      this.reportProgress = { ...this.reportProgress, [section]: progress };
+      manifest.reports = { ...manifest.reports, [section]: progress };
+      manifest.updatedAt = new Date().toISOString();
+      this.emit(manifest.progress);
+      await writeJson(root, manifest);
+    };
+
+    await update({ status: "downloading", filename: `reports/${config.filename}`, bytes: 0 });
+    try {
+      const report = await fetchBackupReport(config.api(jobId), signal);
+      await update({ status: "writing", filename: `reports/${config.filename}`, bytes: report.bytes.byteLength });
+      const file = await directory.getFileHandle(config.filename, { create: true });
+      const writable = await file.createWritable();
+      try {
+        await writable.write(report.bytes);
+        await writable.close();
+      } catch (error) {
+        await writable.abort().catch(() => undefined);
+        throw error;
+      }
+      await update({ status: "completed", filename: `reports/${config.filename}`, bytes: report.bytes.byteLength });
+    } catch (error) {
+      if ((error as any)?.name === "AbortError") throw error;
+      await update({
+        status: "failed",
+        filename: `reports/${config.filename}`,
+        bytes: 0,
+        error: error instanceof Error ? error.message : "ذخیره گزارش ناموفق بود",
+      });
+      throw error;
+    }
   }
 
   private async downloadWithRetry(
