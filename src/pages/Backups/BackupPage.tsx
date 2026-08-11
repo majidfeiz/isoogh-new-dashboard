@@ -3,10 +3,14 @@ import {
   Alert, Badge, Button, Card, CardBody, CardHeader, Col, FormGroup, Input, Label, Progress, Row, Spinner,
 } from "reactstrap";
 import { toast } from "react-toastify";
+import DatePicker from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persianFa from "react-date-object/locales/persian_fa";
 import Breadcrumbs from "../../components/Common/Breadcrumb.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { backupController } from "../../services/backupController";
+import { buildBackupDateRanges, type BackupDateDraft } from "../../services/backupDateUtils";
 import type { BackupReportProgress } from "../../services/backupController";
 import { ensureDirectoryPermission, getBackupDirectory, saveBackupDirectory, supportsDirectoryPicker, verifyWritableDirectory } from "../../services/backupDirectoryStore";
 import {
@@ -32,6 +36,16 @@ const sections: Array<{ id: BackupSection; label: string }> = [
   { id: "call_recordings", label: "فایل‌های صوتی تماس" },
   { id: "support_form_answers", label: "گزارش پاسخ فرم‌های پشتیبانی" },
 ];
+const dateLabels: Record<BackupSection, string> = {
+  outbound_calls: "تاریخ تماس‌های گزارش خروجی",
+  call_recordings: "تاریخ تماس فایل‌های صوتی",
+  support_form_answers: "تاریخ ثبت پاسخنامه",
+};
+const emptyDateDrafts: Record<BackupSection, BackupDateDraft> = {
+  outbound_calls: { from: "", to: "" },
+  call_recordings: { from: "", to: "" },
+  support_form_answers: { from: "", to: "" },
+};
 
 const initialReports: Record<"outbound_calls" | "support_form_answers", BackupReportProgress> = {
   outbound_calls: { status: "idle", filename: "reports/outbound-calls.csv", bytes: 0 },
@@ -85,13 +99,16 @@ export default function BackupPage() {
   const [schoolIds, setSchoolIds] = useState<number[]>(saved?.schoolIds || []);
   const [allSchools, setAllSchools] = useState<boolean>(Boolean(saved?.allSchools && isAdmin));
   const [selectedSections, setSelectedSections] = useState<BackupSection[]>(saved?.sections || sections.map((item) => item.id));
+  const [dateDrafts, setDateDrafts] = useState<Record<BackupSection, BackupDateDraft>>(emptyDateDrafts);
+  const [dateErrors, setDateErrors] = useState<Partial<Record<BackupSection, string>>>({});
+  const [downloadConcurrency, setDownloadConcurrency] = useState<number>(Number(saved?.job?.downloadConcurrency || 1));
   const [directory, setDirectory] = useState<FileSystemDirectoryHandle | null>(null);
   const [directoryStatus, setDirectoryStatus] = useState<"unknown" | "ready" | "missing" | "denied">("unknown");
   const [job, setJob] = useState<BackupProgress | null>(saved?.job ? normalizeBackupProgress(saved.job) : null);
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [acknowledgeFailures, setAcknowledgeFailures] = useState(true);
-  const [metrics, setMetrics] = useState({ bytesPerSecond: 0, etaSeconds: null as number | null });
+  const [metrics, setMetrics] = useState({ bytesPerSecond: 0, etaSeconds: null as number | null, activeDownloads: 0 });
   const [temporaryFailure, setTemporaryFailure] = useState<null | { phase: "execute" | "job" }>(null);
   const [reportProgress, setReportProgress] = useState(initialReports);
   const runningRef = useRef(false);
@@ -102,7 +119,7 @@ export default function BackupPage() {
       .catch(() => setSchools([]));
     const unsubscribe = backupController.subscribe((nextJob, nextMetrics) => {
       setJob(nextJob);
-      setMetrics({ bytesPerSecond: nextMetrics.bytesPerSecond, etaSeconds: nextMetrics.etaSeconds });
+      setMetrics({ bytesPerSecond: nextMetrics.bytesPerSecond, etaSeconds: nextMetrics.etaSeconds, activeDownloads: nextMetrics.activeDownloads });
       setReportProgress(nextMetrics.reports);
     });
     return () => {
@@ -138,7 +155,7 @@ export default function BackupPage() {
     backupController.stopLocal();
     setJob(null);
     setReportProgress(initialReports);
-    setMetrics({ bytesPerSecond: 0, etaSeconds: null });
+    setMetrics({ bytesPerSecond: 0, etaSeconds: null, activeDownloads: 0 });
     setTemporaryFailure(null);
     localStorage.removeItem(STORAGE_KEY);
   };
@@ -153,6 +170,12 @@ export default function BackupPage() {
     resetActiveJob();
     setAllSchools(checked);
     if (checked) setSchoolIds([]);
+  };
+
+  const changeDate = (section: BackupSection, key: keyof BackupDateDraft, value: any) => {
+    resetActiveJob();
+    setDateErrors((current) => ({ ...current, [section]: undefined }));
+    setDateDrafts((current) => ({ ...current, [section]: { ...current[section], [key]: value?.format?.("YYYY/MM/DD") || "" } }));
   };
 
   const chooseDirectory = async () => {
@@ -209,9 +232,12 @@ export default function BackupPage() {
     if (!selectedSections.length) return toast.error("حداقل یک بخش را انتخاب کنید");
     if (!supported) return;
     const selectedSchoolIds = schoolIds.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    const { ranges: dateRanges, errors } = buildBackupDateRanges(selectedSections, dateDrafts);
+    setDateErrors(errors);
+    if (Object.keys(errors).length) return;
     let payload;
     try {
-      payload = buildExecuteBackupPayload({ schoolIds: selectedSchoolIds, allSchools, isAdmin, sections: [...selectedSections] });
+      payload = buildExecuteBackupPayload({ schoolIds: selectedSchoolIds, allSchools, isAdmin, sections: [...selectedSections], dateRanges, downloadConcurrency });
     } catch (error: any) {
       toast.error(error.message);
       return;
@@ -322,7 +348,10 @@ export default function BackupPage() {
     }
   };
 
-  const toggleSection = (id: BackupSection) => setSelectedSections((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  const toggleSection = (id: BackupSection) => {
+    resetActiveJob();
+    setSelectedSections((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  };
   const percent = Math.max(0, Math.min(100, Number(job?.percent || 0)));
   const terminal = isTerminalStatus(job?.status);
   const hasSelectedReport = selectedSections.some((section) => section === "outbound_calls" || section === "support_form_answers");
@@ -356,6 +385,14 @@ export default function BackupPage() {
           const selected = selectedSections.includes(section.id);
           return <FormGroup check key={section.id} className="mb-2"><Input type="checkbox" id={section.id} checked={selected} disabled={running || busy || (isReport && !canDownloadReports && !selected)} onChange={() => toggleSection(section.id)} /><Label check htmlFor={section.id}>{section.label}</Label></FormGroup>;
         })}
+        <div className="mt-3">
+          {selectedSections.map((section) => <div className="border rounded p-3 mb-2" key={`date-${section}`}>
+            <Label className="d-block mb-2">{dateLabels[section]} <span className="text-muted small">(اختیاری)</span></Label>
+            <Row className="g-2"><Col sm="6"><DatePicker calendar={persian} locale={persianFa} value={dateDrafts[section].from || null} onChange={(value) => changeDate(section, "from", value)} format="YYYY/MM/DD" inputClass="form-control" placeholder="از تاریخ" disabled={running || busy} /></Col><Col sm="6"><DatePicker calendar={persian} locale={persianFa} value={dateDrafts[section].to || null} onChange={(value) => changeDate(section, "to", value)} format="YYYY/MM/DD" inputClass="form-control" placeholder="تا پایان روز" disabled={running || busy} /></Col></Row>
+            {dateErrors[section] && <div className="text-danger small mt-2">{dateErrors[section]}</div>}
+          </div>)}
+        </div>
+        <FormGroup className="mt-3"><Label for="backup-concurrency">تعداد دانلود هم‌زمان</Label><Input id="backup-concurrency" type="select" value={downloadConcurrency} disabled={running || busy} onChange={(event) => { resetActiveJob(); setDownloadConcurrency(Math.min(10, Math.max(1, Number(event.target.value)))); }}>{Array.from({ length: 10 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>{value.toLocaleString("fa-IR")}</option>)}</Input></FormGroup>
         <FormGroup check className="mt-3"><Input type="checkbox" id="continue-failures" checked={acknowledgeFailures} onChange={(event) => setAcknowledgeFailures(event.target.checked)} /><Label check htmlFor="continue-failures">پس از ۳ تلاش ناموفق، خطا ثبت و صف ادامه داده شود</Label></FormGroup>
         <div className="d-flex flex-wrap gap-2 mt-4">
           <Button color="secondary" outline onClick={chooseDirectory} disabled={!supported || running}>انتخاب پوشه مقصد</Button>
@@ -378,7 +415,9 @@ export default function BackupPage() {
             <Col sm="6"><div className="text-muted small">زمان تقریبی باقی‌مانده</div><strong>{formatDuration(metrics.etaSeconds)}</strong></Col>
             <Col sm="6"><div className="text-muted small">فایل جاری</div><strong className="text-break">{String(job.currentFile || "—")}</strong></Col>
             <Col sm="6"><div className="text-muted small">خطاها</div><strong className={Number(job.failedFiles || 0) ? "text-danger" : ""}>{Number(job.failedFiles || 0).toLocaleString("fa-IR")}</strong></Col>
+            <Col sm="6"><div className="text-muted small">دانلودهای فعال</div><strong>{metrics.activeDownloads.toLocaleString("fa-IR")} از {Number(job.downloadConcurrency || 1).toLocaleString("fa-IR")}</strong></Col>
           </Row>
+          {job.dateRanges && Object.keys(job.dateRanges).length > 0 && <div className="mt-3 small text-muted">بازه‌های فعال job: {Object.entries(job.dateRanges).map(([section, range]: any) => `${dateLabels[section as BackupSection]}: ${range.from} تا ${range.to}`).join(" | ")}</div>}
           <div className="mt-4">
             {([
               ["outbound_calls", "گزارش تماس‌های خروجی"],

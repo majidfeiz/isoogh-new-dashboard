@@ -3,7 +3,7 @@ jest.mock("../helpers/httpClient.jsx", () => ({
 }));
 
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
-import { ackBackupFile, buildExecuteBackupPayload, executeBackup, fetchBackupReportStream, getNextBackupFile, isBackupAdmin, mergeBackupProgress, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE, validateBackupSchoolScope } from "./backupService";
+import { ackBackupFile, ackBackupFileBatch, buildExecuteBackupPayload, clampBackupConcurrency, executeBackup, fetchBackupReportStream, getBackupFileBatch, getNextBackupFile, isBackupAdmin, mergeBackupProgress, normalizeBackupProgress, TEMPORARY_BACKUP_ERROR_MESSAGE, validateBackupSchoolScope } from "./backupService";
 
 const mockedGet = apiGet as jest.Mock;
 const mockedPatch = apiPatch as jest.Mock;
@@ -39,6 +39,15 @@ describe("backup queue API", () => {
     await expect(getNextBackupFile(12)).resolves.toBeNull();
   });
 
+  it("unwraps batch items and ACKs the exact settled batch", async () => {
+    mockedGet.mockResolvedValue({ data: { data: { items: [{ id: 7, file_name: "a.mp3", school_id: 2 }] } } });
+    await expect(getBackupFileBatch(12)).resolves.toEqual([expect.objectContaining({ id: 7, name: "a.mp3", schoolId: 2 })]);
+    mockedPatch.mockResolvedValue({ data: { data: { id: 12, progress: { totalFiles: 1 } } } });
+    const items = [{ file_id: 7, outcome: "downloaded" as const, bytes: 3 }];
+    await ackBackupFileBatch(12, items);
+    expect(mockedPatch).toHaveBeenCalledWith("http://127.0.0.1:8040/backups/12/files/batch/ack", { items }, { signal: undefined, silent: true });
+  });
+
   it.each([401, 403])("rejects protected queue status %s", async (status) => {
     mockedGet.mockRejectedValue({ response: { status } });
     await expect(getNextBackupFile(12)).rejects.toMatchObject({ response: { status } });
@@ -57,7 +66,7 @@ describe("backup queue API", () => {
   it("retries execute 503 three times, stays silent, and returns a Persian retryable error", async () => {
     mockedPost.mockRejectedValue({ response: { status: 503, headers: { "retry-after": "0" } } });
 
-    await expect(executeBackup({ sections: ["call_recordings"] })).rejects.toMatchObject({
+    await expect(executeBackup({ sections: ["call_recordings"], download_concurrency: 1 })).rejects.toMatchObject({
       message: TEMPORARY_BACKUP_ERROR_MESSAGE,
       temporaryBackupError: true,
     });
@@ -93,18 +102,25 @@ describe("backup queue API", () => {
 
   it("builds an exact numeric scope for one or multiple selected schools", () => {
     expect(buildExecuteBackupPayload({ schoolIds: ["12"], allSchools: false, isAdmin: true, sections: ["call_recordings"] })).toEqual({
-      school_ids: [12], all_schools: false, sections: ["call_recordings"],
+      school_ids: [12], all_schools: false, sections: ["call_recordings"], date_ranges: undefined, download_concurrency: 1,
     });
     expect(buildExecuteBackupPayload({ schoolIds: ["12", 19], allSchools: false, isAdmin: true, sections: ["call_recordings"] })).toEqual({
-      school_ids: [12, 19], all_schools: false, sections: ["call_recordings"],
+      school_ids: [12, 19], all_schools: false, sections: ["call_recordings"], date_ranges: undefined, download_concurrency: 1,
     });
   });
 
   it("sends all_schools without school_ids only for admins", () => {
     expect(buildExecuteBackupPayload({ schoolIds: [12], allSchools: true, isAdmin: true, sections: ["call_recordings"] })).toEqual({
-      all_schools: true, sections: ["call_recordings"],
+      all_schools: true, sections: ["call_recordings"], date_ranges: undefined, download_concurrency: 1,
     });
     expect(() => buildExecuteBackupPayload({ schoolIds: [], allSchools: true, isAdmin: false, sections: ["call_recordings"] })).toThrow("مدیر");
+  });
+
+  it("enforces the exact worker limits 1 and 10", () => {
+    expect(clampBackupConcurrency(0)).toBe(1);
+    expect(clampBackupConcurrency(1)).toBe(1);
+    expect(clampBackupConcurrency(10)).toBe(10);
+    expect(clampBackupConcurrency(99)).toBe(10);
   });
 
   it("prevents an admin from executing without a school scope", () => {

@@ -1,15 +1,16 @@
 import { AUTH_CLEARED_EVENT } from "../helpers/authStorage.jsx";
 import { API_ROUTES } from "../helpers/apiRoutes.jsx";
 import {
-  ackBackupFile,
+  ackBackupFileBatch,
   backupAction,
   fetchBackupReportStream,
   fetchStorageStream,
   getBackup,
-  getNextBackupFile,
+  getBackupFileBatch,
   mergeBackupProgress,
   retryAfterMilliseconds,
   type BackupFile,
+  type BackupBatchOutcome,
   type BackupProgress,
   type BackupReportSection,
   type BackupSection,
@@ -32,6 +33,9 @@ export interface BackupManifest {
   lastAcknowledgedFileId: BackupFile["id"] | null;
   failures: BackupFailure[];
   reports: Partial<Record<BackupReportSection, BackupReportProgress>>;
+  dateRanges: BackupProgress["dateRanges"];
+  downloadConcurrency: number;
+  lastAcknowledgedBatch: number[];
   startedAt: string;
   updatedAt: string;
 }
@@ -48,6 +52,7 @@ type Listener = (state: BackupProgress, metrics: {
   bytesPerSecond: number;
   etaSeconds: number | null;
   reports: Record<BackupReportSection, BackupReportProgress>;
+  activeDownloads: number;
 }) => void;
 type FileHandleWithMove = FileSystemFileHandle & { move?: (name: string) => Promise<void> };
 
@@ -175,6 +180,7 @@ export class BackupController {
   private listeners = new Set<Listener>();
   private samples: Array<{ at: number; bytes: number }> = [];
   private reportProgress = initialReportProgress();
+  private activeDownloads = 0;
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -202,6 +208,7 @@ export class BackupController {
       bytesPerSecond,
       etaSeconds,
       reports: { ...this.reportProgress },
+      activeDownloads: this.activeDownloads,
     }));
   }
 
@@ -312,6 +319,9 @@ export class BackupController {
       lastAcknowledgedFileId: storedManifest?.lastAcknowledgedFileId ?? null,
       failures: storedManifest?.failures || [],
       reports: { ...this.reportProgress },
+      dateRanges: options.job.dateRanges || {},
+      downloadConcurrency: Math.min(10, Math.max(1, Number(options.job.downloadConcurrency || 1))),
+      lastAcknowledgedBatch: storedManifest?.lastAcknowledgedBatch || [],
       startedAt: storedManifest?.startedAt || now,
       updatedAt: now,
     };
@@ -350,44 +360,19 @@ export class BackupController {
             // Progress refresh is best-effort; the queue endpoints remain authoritative.
           }
         }
-        const file = await getNextBackupFile(options.job.id, signal);
-        if (!file) break;
-        this.emit({ ...manifest.progress, currentFile: file.name });
-        let bytes = 0;
-        let outcome: "downloaded" | "failed" = "downloaded";
-        try {
-          const baseBytes = Number(manifest.progress.downloadedBytes || 0);
-          bytes = await this.downloadWithRetry(file, recordings, signal, (currentBytes) => {
-            const totalFiles = Number(manifest.progress.totalFiles || 0);
-            const processedFiles = Number(manifest.progress.processedFiles || 0);
-            const fileFraction = Number(file.size || 0) > 0
-              ? Math.min(1, currentBytes / Number(file.size))
-              : 0;
-            this.emit({
-              ...manifest.progress,
-              currentFile: file.name,
-              downloadedBytes: baseBytes + currentBytes,
-              percent: totalFiles > 0
-                ? Math.min(100, ((processedFiles + fileFraction) / totalFiles) * 100)
-                : Number(manifest.progress.percent || 0),
-            });
-          });
-        } catch (error) {
-          if (signal.aborted) throw error;
-          if (!options.acknowledgeFailures) throw error;
-          const failure = { fileId: file.id, name: safeName(file.name), message: error instanceof Error ? error.message : "خطای نامشخص", at: new Date().toISOString() };
-          manifest.failures.push(failure);
-          outcome = "failed";
-          bytes = 0;
-        }
-
-        const state = await this.ackWithRetry(options.job.id, {
-          file_id: file.id,
-          outcome,
-          bytes,
-        }, signal);
+        const batch = await getBackupFileBatch(options.job.id, signal);
+        if (!batch.length) break;
+        const outcomes = await this.downloadBatch(
+          batch,
+          Math.min(10, Math.max(1, Number(options.job.downloadConcurrency || manifest.downloadConcurrency || 1))),
+          recordings,
+          manifest,
+          signal,
+        );
+        const state = await this.ackBatchWithRetry(options.job.id, outcomes, signal);
         manifest.progress = state;
-        manifest.lastAcknowledgedFileId = file.id;
+        manifest.lastAcknowledgedFileId = batch[batch.length - 1]?.id ?? null;
+        manifest.lastAcknowledgedBatch = outcomes.map((item) => item.file_id);
         manifest.updatedAt = new Date().toISOString();
         await writeJson(root, manifest);
         this.emit(manifest.progress);
@@ -464,15 +449,48 @@ export class BackupController {
     throw lastError;
   }
 
-  private async ackWithRetry(
+  private async downloadBatch(
+    batch: BackupFile[],
+    concurrency: number,
+    recordings: FileSystemDirectoryHandle,
+    manifest: BackupManifest,
+    signal: AbortSignal,
+  ) {
+    const outcomes = new Array<BackupBatchOutcome>(batch.length);
+    let cursor = 0;
+    const worker = async () => {
+      while (cursor < batch.length) {
+        const index = cursor;
+        cursor += 1;
+        const file = batch[index];
+        this.activeDownloads += 1;
+        this.emit({ ...manifest.progress, currentFile: file.name });
+        try {
+          const bytes = await this.downloadWithRetry(file, recordings, signal);
+          outcomes[index] = { file_id: Number(file.id), outcome: "downloaded", bytes };
+        } catch (error) {
+          if (signal.aborted) throw error;
+          manifest.failures.push({ fileId: file.id, name: safeName(file.name), message: error instanceof Error ? error.message : "خطای نامشخص", at: new Date().toISOString() });
+          outcomes[index] = { file_id: Number(file.id), outcome: "failed", bytes: 0 };
+        } finally {
+          this.activeDownloads -= 1;
+          this.emit(manifest.progress);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(concurrency, batch.length) }, () => worker()));
+    return outcomes;
+  }
+
+  private async ackBatchWithRetry(
     jobId: BackupProgress["id"],
-    payload: { file_id: BackupFile["id"]; outcome: "downloaded" | "failed"; bytes: number },
+    items: BackupBatchOutcome[],
     signal: AbortSignal,
   ) {
     let attempt = 0;
     while (!signal.aborted) {
       try {
-        return await ackBackupFile(jobId, payload, signal);
+        return await ackBackupFileBatch(jobId, items, signal);
       } catch (error) {
         if (signal.aborted || !isRetryableAckError(error)) {
           if (error && typeof error === "object") (error as any).backupAckError = true;

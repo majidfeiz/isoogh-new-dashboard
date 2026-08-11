@@ -110,3 +110,6 @@ interface Navigator {
     ): Promise<void>;
   };
 }
+declare module "jalaali-js" {
+  export function toGregorian(year: number, month: number, day: number): { gy: number; gm: number; gd: number };
+}
