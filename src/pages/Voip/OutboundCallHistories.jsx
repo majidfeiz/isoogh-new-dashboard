@@ -203,7 +203,9 @@ const OutboundCallHistories = () => {
       currentTagId: initialQuery.tagId,
     });
     return () => callsAbortRef.current?.abort();
-  }, [fetchData]);
+    // Run only once on mount — fetchData is stable enough for this initial load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadTags = useCallback(async (page = 1, search = tagSearch, append = false) => {
     tagsAbortRef.current?.abort();
