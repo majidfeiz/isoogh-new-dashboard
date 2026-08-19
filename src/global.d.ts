@@ -36,7 +36,6 @@ declare module 'metismenujs';
 declare module 'moment';
 declare module 'nouislider-react';
 declare module 'prop-types';
-declare module 'react';
 declare module 'react-apexcharts';
 declare module 'react-auth-code-input';
 declare module 'react-bootstrap-editable';
@@ -50,7 +49,6 @@ declare module 'react-color';
 declare module 'react-countdown';
 declare module 'react-data-table-component';
 declare module 'react-datepicker';
-declare module 'react-dom';
 declare module 'react-draft-wysiwyg';
 declare module 'react-drag-listview';
 declare module 'react-dropzone';
@@ -71,7 +69,6 @@ declare module 'react-rating';
 declare module 'react-rating-tooltip';
 declare module 'react-redux';
 declare module 'react-responsive-carousel';
-declare module 'react-router-dom';
 declare module 'react-script';
 declare module 'react-scripts';
 declare module 'react-select';
@@ -81,7 +78,6 @@ declare module 'react-super-responsive-table';
 declare module 'react-switch';
 declare module 'react-table';
 declare module 'react-time-picker';
-declare module 'reactstrap';
 declare module 'recharts';
 declare module 'redux';
 declare module 'redux-form';
@@ -91,3 +87,29 @@ declare module 'styled-components';
 declare module 'toastr';
 declare module 'yup';
 declare module 'vtaits/react-color-picker';
+
+interface FileSystemHandlePermissionDescriptor {
+  mode?: "read" | "readwrite";
+}
+
+interface FileSystemDirectoryHandle {
+  queryPermission(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>;
+  requestPermission(descriptor?: FileSystemHandlePermissionDescriptor): Promise<PermissionState>;
+}
+
+interface FileSystemFileHandle {
+  createWritable(): Promise<FileSystemWritableFileStream>;
+}
+
+interface Navigator {
+  locks?: {
+    request(
+      name: string,
+      options: { ifAvailable: true },
+      callback: (lock: unknown | null) => Promise<void>
+    ): Promise<void>;
+  };
+}
+declare module "jalaali-js" {
+  export function toGregorian(year: number, month: number, day: number): { gy: number; gm: number; gd: number };
+}

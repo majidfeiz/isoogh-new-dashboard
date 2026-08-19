@@ -270,6 +270,7 @@ import DynamicReportWizard from "../pages/DynamicReports/DynamicReportWizard.jsx
 import DynamicReportView from "../pages/DynamicReports/DynamicReportView.jsx";
 import AccessDenied from "../pages/DynamicReports/AccessDenied.jsx";
 import ProtectedRoute from "../components/Access/ProtectedRoute.jsx";
+import BackupPage from "../pages/Backups/BackupPage.tsx";
 
 // admin - dashboard widgets
 import DashboardWidgetsAdmin from "../pages/Admin/DashboardWidgets/index.jsx";
@@ -430,6 +431,7 @@ const authProtectedRoutes = [
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
   { path: "/audit-logs", component: <ProtectedRoute permission="audit-logs.index"><AuditLogs /></ProtectedRoute> },
+  { path: "/backups", component: <ProtectedRoute permission="backups.execute"><BackupPage /></ProtectedRoute> },
 
   // external api clients
   { path: "/external-api-clients", component: <ExternalApiClientList /> },

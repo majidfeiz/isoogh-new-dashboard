@@ -66,17 +66,17 @@ export const toggleWidgetStatus = async (widgetId, isActive) => {
   return res.data?.data ?? res.data;
 };
 
-export const getDashboardStats = async () => {
-  const res = await apiGet(getApiUrl(`${BASE}/stats`));
+export const getDashboardStats = async ({ from, to } = {}) => {
+  const res = await apiGet(getApiUrl(`${BASE}/stats`), { params: { from, to } });
   return res.data?.data ?? res.data;
 };
 
-export const getDashboardChart = async (type) => {
-  const res = await apiGet(getApiUrl(`${BASE}/chart/${type}`));
+export const getDashboardChart = async (type, { from, to } = {}) => {
+  const res = await apiGet(getApiUrl(`${BASE}/chart/${type}`), { params: { from, to } });
   return res.data?.data ?? res.data;
 };
 
-export const getDashboardRecent = async (type, limit = 5) => {
-  const res = await apiGet(getApiUrl(`${BASE}/recent/${type}`), { params: { limit } });
+export const getDashboardRecent = async (type, limit = 5, { from, to } = {}) => {
+  const res = await apiGet(getApiUrl(`${BASE}/recent/${type}`), { params: { limit, from, to } });
   return res.data?.data ?? res.data;
 };

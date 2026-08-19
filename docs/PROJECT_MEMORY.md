@@ -1,6 +1,6 @@
 # Project Memory
 
-Last verified against the repository: 2026-08-03 (app version `1.13.0`).
+Last verified against the repository: 2026-08-11 (app version `1.14.1`).
 
 This is the short, code-derived context to read before changing the project. `AGENTS.md` remains the detailed conventions guide; `docs/DOMAIN_MAP.md` is the feature locator.
 
@@ -19,6 +19,7 @@ npm run dev
 - Build: `npm run build` (verified passing on 2026-07-11).
 - Lint baseline: `npm run lint` currently cannot start because `eslint-plugin-react` is referenced in `package.json` but is not installed.
 - Tests use the old `react-scripts test` command; do not assume the test setup is aligned with Vite.
+- TypeScript 4.9 is available for typed feature modules; `tsconfig.json` currently scopes strict checking to the local-backup feature while the legacy application remains JS/JSX.
 
 ## Runtime shape
 
@@ -68,10 +69,12 @@ Use `apiPatch` for partial updates and `getApiUrl(API_ROUTES...)` for every endp
 ## Special workflows
 
 - CSV downloads: native streaming `fetch`, bearer token from `authStorage`, UTF-8 BOM, progress from content-length headers. References: `Users.jsx`, `OutboundCallHistories.jsx`.
+- Local backups stream CSV reports and recordings directly to a user-selected File System Access directory. Each selected section can carry an independent optional Jalali UI range converted to a half-open ISO range at Tehran day boundaries. Recording downloads use the reserved `/files/batch` contract with a persisted 1–10 worker pool; every batch member settles before one idempotently retried batch ACK, and pause waits for that ACK. Report responses are raw authenticated `text/csv` Web Streams written chunk-by-chunk without Blob/ArrayBuffer buffering; report states/bytes, job date ranges, concurrency, failures, and the last acknowledged batch are tracked in the local manifest. Execute scope is explicit: admins send either numeric `school_ids` plus `all_schools: false` or only `all_schools: true`; managers never receive the all-schools control. Returned `schoolIds` must match the requested selection before local work starts, and recording totals come only from the new job's nested `progress`. `backupController.ts` owns AbortController cancellation, the cross-tab lock, storage streaming/retry, rolling progress, and finalization; directory handles are persisted only in IndexedDB by backup id.
 - Excel import: lazy `import("xlsx")`, virtualized preview, multipart upload with `onUploadProgress`. Reference: `StudentList.jsx`.
 - User role Excel import: `UserRoleImportModal.jsx` uses the protected `users.roles.import` action, downloads the backend xlsx template, submits `file` plus numeric `roleId`, and reports partial row issues without replacing existing roles.
 - Dynamic report execution separates raw and display values: tables use `displayRows ?? rows`, KPI values use `displaySummary ?? summary`, and charts continue to consume the backend-normalized raw `visualization.data`. Backend display dates are final Jalali/Tehran strings and must not be converted again.
 - Dynamic report Jalali date filters are serialized as Latin-digit `YYYY/MM/DD` strings. A `between` filter sends two independent date-only values; the backend applies Tehran start/end-of-day boundaries. Jalali strings must never be passed to the browser Gregorian `Date` parser.
+- Dashboard widget date filters are schema-driven: only widgets containing both `dateRangeFrom` and `dateRangeTo` expose the Jalali picker. They persist timezone-aware Tehran ISO values in `userConfig`, use an exclusive next-day `to`, and include the range in each data request/cache key; `/dashboard/stats` requests are grouped by identical ranges.
 - Dynamic report Preview, Execute, and widget-table requests share `useDynamicReportPagination`: `page`, capped `limit` (maximum 100), and `search` are sent in POST bodies; metadata is read from `meta ?? pagination`; browser-side row pagination/filtering is forbidden; stale requests are aborted and ignored.
 - Back-navigation list restoration: `src/hooks/useListState.js`, which persists under `sessionStorage` keys prefixed with `list:` and restores only on POP navigation.
 - User impersonation: `userSwitchService.jsx` plus `ImpersonationBanner`/`SwitchUserButton`; treat token switching as auth-sensitive work.

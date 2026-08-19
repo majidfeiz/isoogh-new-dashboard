@@ -491,6 +491,13 @@ const SidebarContent = (props) => {
       },
       {
         type: "item",
+        label: "بک‌آپ محلی",
+        icon: "bx bx-hdd",
+        to: "/backups",
+        permission: "backups.execute",
+      },
+      {
+        type: "item",
         label: "پاسخ‌نامه‌ها",
         icon: "bx bx-task",
         to: "/answer-sheets",
