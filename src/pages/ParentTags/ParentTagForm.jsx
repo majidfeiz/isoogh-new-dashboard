@@ -25,6 +25,8 @@ import {
   getParentTags,
   updateParentTag,
 } from "../../services/parentTagService.jsx";
+import { getSchools } from "../../services/schoolService.jsx";
+
 
 const ParentTagForm = () => {
   const { id } = useParams();
@@ -36,16 +38,30 @@ const ParentTagForm = () => {
   const [form, setForm] = useState({
     name: "",
     parent_id: "",
+    school_id: ""
   });
   const [errors, setErrors] = useState({});
   const [alert, setAlert] = useState(null);
   const [loading, setLoading] = useState(false);
   const [parents, setParents] = useState([]);
+  const [schools, setSchools] = useState([]);
   const [loadingParents, setLoadingParents] = useState(false);
+
+  const schoolOptions = useMemo(
+      () =>
+        (schools || []).map((school) => ({
+          value: school.id,
+          label: school.name || school.title || `مجموعه ${school.id}`,
+        })),
+      [schools]
+    );
 
   const fetchParents = useCallback(async () => {
     setLoadingParents(true);
     try {
+        const [schoolsRes] = await Promise.all([
+          getSchools({ page: 1, limit: 200 }),
+        ]);
       const res = await getParentTags({
         page: 1,
         limit: 200,
@@ -53,6 +69,8 @@ const ParentTagForm = () => {
         sortOrder: "ASC",
       });
       setParents(res.items || []);
+      setSchools(schoolsRes.items || []);
+
     } catch (e) {
       console.error("خطا در دریافت لیست والد‌ها", e);
       setParents([]);
@@ -84,6 +102,7 @@ const ParentTagForm = () => {
         setForm({
           name: data?.name || "",
           parent_id: parentId ?? "",
+          school_id: data?.school_id ?? ""
         });
       } catch (e) {
         console.error("خطا در دریافت تگ", e);
@@ -122,6 +141,8 @@ const ParentTagForm = () => {
     const payload = {
       name: form.name.trim(),
       parent_id: form.parent_id ? Number(form.parent_id) : null,
+      school_id: form?.school_id ?? "",
+
     };
 
     setLoading(true);
@@ -163,6 +184,7 @@ const ParentTagForm = () => {
       <FormFeedback className="d-block">{errors[field][0]}</FormFeedback>
     ) : null;
 
+    console.log(form)
   return (
     <div className="page-content">
       <Container fluid>
@@ -184,7 +206,7 @@ const ParentTagForm = () => {
 
                 <Form onSubmit={handleSubmit}>
                   <Row className="g-3">
-                    <Col md="6">
+                    <Col md="4">
                       <FormGroup>
                         <Label for="name">نام تگ</Label>
                         <Input
@@ -199,8 +221,33 @@ const ParentTagForm = () => {
                         {renderError("name")}
                       </FormGroup>
                     </Col>
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="school_id">مجموعه</Label>
 
-                    <Col md="6">
+                        <Input
+                          id="school_id"
+                          name="school_id"
+                          type="select"
+                          value={form.school_id != null ? String(form.school_id) : ""}
+                          required
+                          onChange={handleChange}
+                        >
+                          <option value="">انتخاب مجموعه</option>
+
+                          {schoolOptions.map((opt) => (
+                            <option
+                              key={opt.value}
+                              value={String(opt.value)}
+                            >
+                              {opt.label}
+                            </option>
+                          ))}
+                        </Input>
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
                       <FormGroup>
                         <Label for="parent_id">تگ والد (اختیاری)</Label>
                         <div className="d-flex align-items-center gap-2">
