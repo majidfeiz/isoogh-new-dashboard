@@ -387,9 +387,9 @@ const authProtectedRoutes = [
   { path: "/schools/:id/edit", component: <SchoolForm /> },
 
   // Grades
-  { path: "/grades", component: <GradeList /> },
-  { path: "/grades/create", component: <GradeForm /> },
-  { path: "/grades/:id/edit", component: <GradeForm /> },
+  { path: "/grades", component: <ProtectedRoute permission="grades.index"><GradeList /></ProtectedRoute> },
+  { path: "/grades/create", component: <ProtectedRoute permission="grades.create"><GradeForm /></ProtectedRoute> },
+  { path: "/grades/:id/edit", component: <ProtectedRoute permission="grades.update"><GradeForm /></ProtectedRoute> },
 
   // Parent Tags
   { path: "/parent-tags", component: <ParentTagList /> },

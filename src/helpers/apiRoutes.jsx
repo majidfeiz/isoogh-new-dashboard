@@ -309,6 +309,7 @@ export const API_ROUTES = {
     performanceReport: "/super-adviser-portal/performance-report",
     monitoring: "/super-adviser-portal/monitoring",
     salary: "/super-adviser-portal/salary",
+    salaryExport: "/super-adviser-portal/salary/export",
     answerSheet: (formId) => `/super-adviser-portal/support-forms/${formId}/answer-sheet`,
     answerSheetExport: (formId) => `/super-adviser-portal/support-forms/${formId}/answer-sheet/export`,
     answerSheetStudentDetail: (formId, studentId) => `/super-adviser-portal/support-forms/${formId}/students/${studentId}/answers`,

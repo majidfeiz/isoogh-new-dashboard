@@ -399,3 +399,27 @@ export async function getSuperAdviserSalary({
     durationFormatted: data.duration_formatted ?? data.durationFormatted ?? "00:00:00",
   };
 }
+
+export async function exportSuperAdviserSalary({
+  year,
+  month,
+  adviserId = "",
+  supportFormId = "",
+} = {}) {
+  const params = new URLSearchParams();
+  if (year !== undefined && year !== null && year !== "") params.set("year", String(year));
+  if (month !== undefined && month !== null && month !== "") params.set("month", String(month));
+  if (adviserId !== undefined && adviserId !== null && adviserId !== "") params.set("adviserId", String(adviserId));
+  if (supportFormId !== undefined && supportFormId !== null && supportFormId !== "") params.set("supportFormId", String(supportFormId));
+
+  const response = await apiGet(getApiUrl(API_ROUTES.superAdviserPortal.salaryExport), {
+    params,
+    responseType: "blob",
+    headers: { Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+    silent: true,
+  });
+  return {
+    blob: response.data,
+    contentDisposition: response.headers?.["content-disposition"] || "",
+  };
+}

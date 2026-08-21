@@ -23,6 +23,7 @@ const normalizeSupportForm = (item = {}) => ({
   headings: item?.headings ?? item?.description ?? "",
   totalStudents: item?.total_students ?? item?.totalStudents ?? 0,
   stats: item?.stats ?? null,
+  gradeId: item?.grade_id ?? item?.gradeId ?? item?.grade?.id ?? null,
   grade: item?.grade ?? null,
   questions: (item?.questions ?? []).map(normalizeQuestion),
 });
@@ -217,10 +218,18 @@ export async function getAdviserSupportForms({
   search = "",
   sortBy = "created_at",
   sortOrder = "DESC",
+  gradeId = "",
 } = {}) {
   const url = getApiUrl(API_ROUTES.adviserPortal.schoolSupportForms(schoolId));
   const res = await apiGet(url, {
-    params: { page, limit, search: search || undefined, sortBy, sortOrder },
+    params: {
+      page,
+      limit,
+      search: search || undefined,
+      sortBy,
+      sortOrder,
+      gradeId: gradeId === "" || gradeId === null || typeof gradeId === "undefined" ? undefined : gradeId,
+    },
   });
   const payload = res?.data;
   const data = payload?.data || {};
@@ -447,8 +456,14 @@ export async function deleteStudentContact(formId, studentId, contactId) {
 
 // ─── Statistics ───────────────────────────────────────────────────────────────
 
-export async function getAdviserStats() {
+export async function getAdviserStats({ year, month, signal } = {}) {
   const url = getApiUrl(API_ROUTES.adviserPortal.stats);
-  const res = await apiGet(url);
+  const res = await apiGet(url, {
+    params: {
+      year: year === "" || year === null || typeof year === "undefined" ? undefined : year,
+      month: month === "" || month === null || typeof month === "undefined" ? undefined : month,
+    },
+    signal,
+  });
   return res?.data?.data || res?.data || {};
 }
