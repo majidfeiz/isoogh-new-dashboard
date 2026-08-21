@@ -81,5 +81,7 @@ export const API_ROUTES = {
     supportFormGrades: "/super-adviser-portal/support-forms/grades",
     students: "/super-adviser-portal/students",
     studentsExport: "/super-adviser-portal/students/export",
+    salary: "/super-adviser-portal/salary",
+    salaryExport: "/super-adviser-portal/salary/export",
   },
 }
