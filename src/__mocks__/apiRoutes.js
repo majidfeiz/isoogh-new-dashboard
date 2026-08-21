@@ -74,7 +74,9 @@ export const API_ROUTES = {
     finalize: (id) => `/backups/${id}/finalize`,
   },
   adviserPortal: {
+    schoolSupportForms: (schoolId) => `/adviser-portal/schools/${schoolId}/support-forms`,
     supportFormStudents: (formId) => `/adviser-portal/support-forms/${formId}/students`,
+    stats: "/adviser-portal/stats",
   },
   superAdviserPortal: {
     supportForms: "/super-adviser-portal/support-forms",

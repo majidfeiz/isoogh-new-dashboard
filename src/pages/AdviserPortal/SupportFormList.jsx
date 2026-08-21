@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Card,
   CardBody,
@@ -11,8 +11,9 @@ import {
   Progress,
   InputGroup,
   InputGroupText,
+  Alert,
 } from "reactstrap";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import moment from "moment-jalaali";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
@@ -20,6 +21,8 @@ import {
   getAdviserSupportForms,
   getAdviserSchoolDetail,
 } from "../../services/adviserPortalService.jsx";
+import { getGrades } from "../../services/gradeService.jsx";
+import { parseAdviserSupportFormQuery, serializeAdviserSupportFormQuery } from "./supportFormListQuery.js";
 
 const formatJalali = (value) => {
   if (!value) return "—";
@@ -41,13 +44,21 @@ const formatDuration = (seconds) => {
 const SupportFormList = () => {
   const { schoolId } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryString = searchParams.toString();
+  const query = useMemo(
+    () => parseAdviserSupportFormQuery(new URLSearchParams(queryString)),
+    [queryString]
+  );
 
   const [school, setSchool] = useState(null);
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
-  const [search, setSearch] = useState("");
-  const [sortOrder, setSortOrder] = useState("DESC");
+  const [search, setSearch] = useState(query.search);
+  const [grades, setGrades] = useState([]);
+  const [gradesLoading, setGradesLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   document.title = `فرم‌های تماس | داشبورد آیسوق`;
 
@@ -60,42 +71,71 @@ const SupportFormList = () => {
     }
   }, [schoolId]);
 
+  useEffect(() => {
+    let active = true;
+    setGradesLoading(true);
+    getGrades({ page: 1, limit: 200, sortBy: "sort", sortOrder: "ASC" })
+      .then((result) => { if (active) setGrades(result.items || []); })
+      .catch(() => { if (active) setGrades([]); })
+      .finally(() => { if (active) setGradesLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    setSearch(query.search);
+  }, [query.search]);
+
   const fetchData = useCallback(
-    async (page = 1, q = "", order = sortOrder) => {
+    async (currentQuery) => {
       setLoading(true);
+      setError("");
       try {
         const res = await getAdviserSupportForms({
           schoolId,
-          page,
+          page: currentQuery.page,
           limit: 15,
-          search: q,
+          search: currentQuery.search,
           sortBy: "created_at",
-          sortOrder: order,
+          sortOrder: currentQuery.sortOrder,
+          gradeId: currentQuery.gradeId || undefined,
         });
         setData(res.items || []);
-        setMeta(res.pagination || { page, limit: 15, total: 0, lastPage: 1 });
-      } catch {
+        setMeta(res.pagination || { page: currentQuery.page, limit: 15, total: 0, lastPage: 1 });
+      } catch (requestError) {
         setData([]);
+        setMeta((previous) => ({ ...previous, page: currentQuery.page, total: 0, lastPage: 1 }));
+        const message = requestError?.response?.data?.message;
+        setError(Array.isArray(message) ? message.join("، ") : message || "دریافت فرم‌های تماس انجام نشد.");
       } finally {
         setLoading(false);
       }
     },
-    [schoolId, sortOrder]
+    [schoolId]
   );
 
   useEffect(() => {
     fetchSchool();
-    fetchData(1, "");
-  }, [fetchSchool, fetchData]);
+  }, [fetchSchool]);
+
+  useEffect(() => {
+    fetchData(query);
+  }, [fetchData, query.page, query.search, query.sortOrder, query.gradeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateQuery = (changes) => {
+    setSearchParams(serializeAdviserSupportFormQuery({ ...query, ...changes }));
+  };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchData(1, search, sortOrder);
+    updateQuery({ search, page: 1 });
   };
 
   const handleSortChange = (order) => {
-    setSortOrder(order);
-    fetchData(1, search, order);
+    updateQuery({ sortOrder: order, page: 1 });
+  };
+
+  const handleGradeChange = (event) => {
+    updateQuery({ gradeId: event.target.value, page: 1 });
   };
 
   const schoolName = school?.name || `مجموعه ${schoolId}`;
@@ -134,10 +174,17 @@ const SupportFormList = () => {
               </InputGroup>
             </form>
           </Col>
-          <Col xs="auto" className="ms-auto d-flex gap-2">
+          <Col md={3} lg={2}>
+            <label className="form-label" htmlFor="adviser-support-form-grade">پایه</label>
+            <Input id="adviser-support-form-grade" type="select" value={query.gradeId} onChange={handleGradeChange} disabled={gradesLoading || loading}>
+              <option value="">همه پایه‌ها</option>
+              {grades.map((grade) => <option key={grade.id} value={String(grade.id)}>{grade.name}</option>)}
+            </Input>
+          </Col>
+          <Col xs="auto" className="ms-auto d-flex gap-2 align-self-end">
             <Button
               size="sm"
-              color={sortOrder === "DESC" ? "primary" : "light"}
+              color={query.sortOrder === "DESC" ? "primary" : "light"}
               onClick={() => handleSortChange("DESC")}
             >
               <i className="bx bx-sort-down me-1" />
@@ -145,7 +192,7 @@ const SupportFormList = () => {
             </Button>
             <Button
               size="sm"
-              color={sortOrder === "ASC" ? "primary" : "light"}
+              color={query.sortOrder === "ASC" ? "primary" : "light"}
               onClick={() => handleSortChange("ASC")}
             >
               <i className="bx bx-sort-up me-1" />
@@ -153,6 +200,8 @@ const SupportFormList = () => {
             </Button>
           </Col>
         </Row>
+
+        {error && <Alert color="danger">{error}</Alert>}
 
         {loading ? (
           <div className="text-center py-5">
@@ -277,7 +326,7 @@ const SupportFormList = () => {
             data={data}
             totalRecords={meta.total}
             currentPage={meta.page}
-            setCurrentPage={(page) => fetchData(page, search, sortOrder)}
+            setCurrentPage={(page) => updateQuery({ page })}
             isShowingPageLength={true}
             paginationDiv="col-sm-auto"
             paginationClass="pagination pagination-sm mb-0"
