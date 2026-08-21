@@ -20,7 +20,7 @@ import {
   InputGroupText,
   Progress,
 } from "reactstrap";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useListState } from "../../hooks/useListState";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
@@ -492,7 +492,7 @@ const UserList = () => {
                 </Button>
               )}
 
-              {isAdmin && (
+              {isAdmin && row.original.accountType !== "student" && (
                 <Button
                   color="info"
                   size="sm"
@@ -502,13 +502,9 @@ const UserList = () => {
                 </Button>
               )}
 
-              <Button
-                color="warning"
-                size="sm"
-                onClick={() => handleEdit(id)}
-              >
-                ویرایش
-              </Button>
+              {hasPermission("users.show") && hasPermission("users.update") && (
+                <Button color="warning" size="sm" onClick={() => handleEdit(id)}>ویرایش</Button>
+              )}
 
               <Button
                 color="danger"
@@ -555,6 +551,8 @@ const UserList = () => {
     [fetchData, filters, roleId, saveState]
   );
 
+  if (!hasPermission("users.index")) return <Navigate to="/" replace />;
+
   return (
     <div className="page-content">
       <div className="container-fluid">
@@ -584,13 +582,7 @@ const UserList = () => {
                   >
                     {exportLoading ? "در حال دریافت..." : "خروجی CSV"}
                   </Button>
-                  <Button
-                    color="primary"
-                    onClick={handleCreateClick}
-                    style={{ whiteSpace: "nowrap" }}
-                  >
-                    + کاربر جدید
-                  </Button>
+                  {hasPermission("users.create") && <Button color="primary" onClick={handleCreateClick} style={{ whiteSpace: "nowrap" }}>+ کاربر جدید</Button>}
                 </div>
               </CardHeader>
 
