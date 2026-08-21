@@ -83,9 +83,9 @@ export async function exportUsers({
 }
 
 // ساخت کاربر جدید
-export async function createUser(payload) {
+export async function createUser(payload, config = {}) {
   const url = getApiUrl(API_ROUTES.users.create);
-  const res = await apiPost(url, payload);
+  const res = await apiPost(url, payload, config);
   return res.data;
 }
 
@@ -97,9 +97,9 @@ export async function getUser(id, config = {}) {
 }
 
 // ویرایش کاربر
-export async function updateUser(id, payload) {
+export async function updateUser(id, payload, config = {}) {
   const url = getApiUrl(API_ROUTES.users.update(id));
-  const res = await apiPatch(url, payload);
+  const res = await apiPatch(url, payload, config);
   return res.data;
 }
 
