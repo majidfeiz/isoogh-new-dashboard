@@ -199,5 +199,19 @@ export async function importParentTagUsers(formData, config = {}) {
     },
     ...config,
   });
-  return res?.data;
+  return res?.data?.data ?? res?.data;
+}
+
+export async function getParentTagImportStatus(
+  logId,
+  { schoolId, page = 1, limit = 50 } = {},
+  signal
+) {
+  const url = getApiUrl(API_ROUTES.parentTags.importStatus(logId));
+  const res = await apiGet(url, {
+    params: { schoolId, page, limit },
+    signal,
+    silent: true,
+  });
+  return res?.data?.data ?? res?.data;
 }

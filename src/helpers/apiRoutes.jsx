@@ -160,6 +160,7 @@ export const API_ROUTES = {
     delete: (id) => `/parent-tags/${id}`,
     export: "/parent-tags/export",
     import: "/parent-tags/import",
+    importStatus: (logId) => `/parent-tags/imports/${logId}`,
     users: (id) => `/parent-tags/${id}/users`,
     detachUser: (id, userId) => `/parent-tags/${id}/users/${userId}`,
     exportUsers: (id) => `/parent-tags/${id}/users/export`,
