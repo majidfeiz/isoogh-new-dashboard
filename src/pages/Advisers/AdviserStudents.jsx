@@ -71,13 +71,10 @@ const AdviserStudents = () => {
   const [selectedCandidates, setSelectedCandidates] = useState(new Set());
 
   const [tagModal, setTagModal] = useState(false);
-  const [tagSearch, setTagSearch] = useState("");
   const [parentTags, setParentTags] = useState([]);
   const [selectedParentTag, setSelectedParentTag] = useState("");
   const [tagValues, setTagValues] = useState([]);
   const [selectedTagValue, setSelectedTagValue] = useState("");
-  const [tagText, setTagText] = useState("");
-  const [subTagText, setSubTagText] = useState("");
   const [tagLoading, setTagLoading] = useState(false);
   const [tagAlert, setTagAlert] = useState(null);
 
@@ -333,10 +330,10 @@ const AdviserStudents = () => {
     }
   };
 
-  const fetchParentTags = useCallback(async (search = "") => {
+  const fetchParentTags = useCallback(async () => {
     setTagLoading(true);
     try {
-      const res = await getParentTags({ page: 1, limit: 50, search });
+      const res = await getParentTags({ page: 1, limit: 50 });
       setParentTags(res.items || []);
     } catch (e) {
       console.error("خطا در دریافت تگ‌ها", e);
@@ -345,7 +342,7 @@ const AdviserStudents = () => {
     }
   }, []);
 
-  const fetchTagValues = useCallback(async (parentTagId, search = "") => {
+  const fetchTagValues = useCallback(async (parentTagId) => {
     if (!parentTagId) {
       setTagValues([]);
       return;
@@ -353,7 +350,7 @@ const AdviserStudents = () => {
 
     setTagLoading(true);
     try {
-      const res = await getParentTagValues(parentTagId, { page: 1, limit: 50, search });
+      const res = await getParentTagValues(parentTagId, { page: 1, limit: 50 });
       setTagValues(res.items || []);
     } catch (e) {
       console.error("خطا در دریافت مقادیر زیرتگ", e);
@@ -364,18 +361,16 @@ const AdviserStudents = () => {
 
   const handleOpenTagModal = () => {
     setTagModal(true);
-    setTagSearch("");
     setSelectedParentTag("");
     setSelectedTagValue("");
-    setTagText("");
-    setSubTagText("");
+    setTagValues([]);
     setTagAlert(null);
-    fetchParentTags("");
+    fetchParentTags();
   };
 
   const handleAttachByTag = async () => {
-    if (!selectedTagValue && !subTagText.trim() && !tagText.trim() && !selectedParentTag) {
-      const warn = { type: "warning", message: "حداقل یک تگ انتخاب کنید." };
+    if (!selectedParentTag) {
+      const warn = { type: "warning", message: "یک سرتگ انتخاب کنید." };
       setAlert(warn);
       setTagAlert(warn);
       return;
@@ -387,9 +382,7 @@ const AdviserStudents = () => {
     try {
       const payload = {};
       if (selectedParentTag) payload.tagId = Number(selectedParentTag);
-      if (tagText.trim()) payload.tag = tagText.trim();
       if (selectedTagValue) payload.subTagId = Number(selectedTagValue);
-      if (subTagText.trim()) payload.subTag = subTagText.trim();
 
       const res = await attachAdviserStudentsByTag(adviserId, payload);
       const result = res?.data || res || {};
@@ -784,7 +777,7 @@ const AdviserStudents = () => {
       </div>
 
       <Modal isOpen={tagModal} toggle={() => setTagModal(false)} centered>
-        <ModalHeader toggle={() => setTagModal(false)}>افزودن دانش‌آموز بر اساس تگ</ModalHeader>
+        <ModalHeader toggle={() => setTagModal(false)}>افزودن با تگ</ModalHeader>
         <ModalBody>
           {tagAlert && (
             <Alert color={tagAlert.type} className="mb-3">
@@ -800,28 +793,6 @@ const AdviserStudents = () => {
           >
             <Row className="g-3">
               <Col md="12">
-                <Label className="form-label">جستجوی سرتگ</Label>
-                <InputGroup>
-                  <Input
-                    value={tagSearch}
-                    onChange={(e) => {
-                      setTagSearch(e.target.value);
-                      fetchParentTags(e.target.value);
-                    }}
-                    placeholder="نام سرتگ..."
-                  />
-                  <Button
-                    color="light"
-                    type="button"
-                    onClick={() => fetchParentTags(tagSearch)}
-                    disabled={tagLoading}
-                  >
-                    جستجو
-                  </Button>
-                </InputGroup>
-              </Col>
-
-              <Col md="12">
                 <Label className="form-label">سرتگ</Label>
                 <Input
                   type="select"
@@ -830,8 +801,7 @@ const AdviserStudents = () => {
                     const next = e.target.value;
                     setSelectedParentTag(next);
                     setSelectedTagValue("");
-                    setSubTagText("");
-                    fetchTagValues(next, "");
+                    fetchTagValues(next);
                   }}
                 >
                   <option value="">انتخاب سرتگ</option>
@@ -844,15 +814,12 @@ const AdviserStudents = () => {
               </Col>
 
               <Col md="12">
-                <Label className="form-label">زیرتگ</Label>
+                <Label className="form-label">زیرتگ (اختیاری)</Label>
                 <Input
                   type="select"
                   value={selectedTagValue}
-                  onChange={(e) => {
-                    setSelectedTagValue(e.target.value);
-                    setSubTagText("");
-                  }}
-                  disabled={!selectedParentTag}
+                  onChange={(e) => setSelectedTagValue(e.target.value)}
+                  disabled={!selectedParentTag || tagLoading}
                 >
                   <option value="">انتخاب زیرتگ</option>
                   {tagValues.map((tagValue) => (
@@ -863,31 +830,13 @@ const AdviserStudents = () => {
                 </Input>
               </Col>
 
-              <Col md="12">
-                <Label className="form-label">یا نام/شناسه تگ</Label>
-                <Input
-                  value={tagText}
-                  onChange={(e) => setTagText(e.target.value)}
-                  placeholder="نام یا شناسه تگ"
-                />
-              </Col>
-
-              <Col md="12">
-                <Label className="form-label">یا نام/شناسه زیرتگ</Label>
-                <Input
-                  value={subTagText}
-                  onChange={(e) => setSubTagText(e.target.value)}
-                  placeholder="نام یا شناسه زیرتگ"
-                  disabled={!selectedParentTag && !tagText.trim()}
-                />
-              </Col>
             </Row>
 
             <div className="d-flex justify-content-end gap-2 mt-4">
               <Button color="light" type="button" onClick={() => setTagModal(false)}>
-                بستن
+                انصراف
               </Button>
-              <Button color="primary" type="submit" disabled={submitLoading}>
+              <Button color="primary" type="submit" disabled={submitLoading || !selectedParentTag}>
                 {submitLoading ? "در حال افزودن..." : "افزودن"}
               </Button>
             </div>
