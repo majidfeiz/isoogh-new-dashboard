@@ -11,16 +11,20 @@ import {
   Row,
   Spinner,
   Table,
+  Alert,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
 
 import moment from "moment-jalaali";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
+  exportSuperAdviserSalary,
   getSuperAdviserSalary,
   getSuperAdviserAdvisers,
   getSuperAdviserSupportForms,
 } from "../../services/superAdviserPortalService.jsx";
+import { salaryExportErrorMessage, saveSalaryExportBlob } from "./salaryExportUtils.js";
 
 const PERSIAN_MONTHS = [
   { value: 1, label: "فروردین" },
@@ -45,6 +49,7 @@ const Salary = () => {
   document.title = "حقوق | سر مشاور | داشبورد آیسوق";
 
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
 
   const [salaryData, setSalaryData] = useState({
     year: currentJalaliYear,
@@ -59,9 +64,17 @@ const Salary = () => {
     adviserId: "",
     supportFormId: "",
   });
+  const [appliedFilters, setAppliedFilters] = useState({
+    year: currentJalaliYear,
+    month: currentJalaliMonth,
+    adviserId: "",
+    supportFormId: "",
+  });
   const [advisers, setAdvisers] = useState([]);
   const [supportForms, setSupportForms] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     getSuperAdviserAdvisers({ page: 1, limit: 100 })
@@ -73,7 +86,7 @@ const Salary = () => {
   }, []);
 
   const fetchData = useCallback(
-    async (currentFilters = filters) => {
+    async (currentFilters) => {
       setLoading(true);
       try {
         const res = await getSuperAdviserSalary({
@@ -82,6 +95,7 @@ const Salary = () => {
           adviserId: currentFilters.adviserId,
           supportFormId: currentFilters.supportFormId,
         });
+        setAppliedFilters(currentFilters);
         setSalaryData(res);
       } catch (e) {
         if (e?.response?.status === 403) navigate("/pages-404");
@@ -103,6 +117,7 @@ const Salary = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    setNotice(null);
     fetchData(filters);
   };
 
@@ -114,7 +129,28 @@ const Salary = () => {
       supportFormId: "",
     };
     setFilters(reset);
+    setNotice(null);
     fetchData(reset);
+  };
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    setNotice(null);
+    try {
+      const result = await exportSuperAdviserSalary(appliedFilters);
+      saveSalaryExportBlob(
+        result.blob,
+        result.contentDisposition,
+        appliedFilters.year,
+        appliedFilters.month
+      );
+      setNotice({ color: "success", message: "فایل Excel با موفقیت دریافت شد" });
+    } catch (error) {
+      setNotice({ color: "danger", message: await salaryExportErrorMessage(error) });
+    } finally {
+      setExporting(false);
+    }
   };
 
   const monthLabel = useMemo(
@@ -147,6 +183,7 @@ const Salary = () => {
               </CardHeader>
 
               <CardBody>
+                {notice && <Alert color={notice.color}>{notice.message}</Alert>}
                 <Form className="mb-4" onSubmit={handleSearchSubmit}>
                   <Row className="g-3 align-items-end">
                     <Col xl="2" lg="3" md="4">
@@ -203,13 +240,19 @@ const Salary = () => {
                         ))}
                       </Input>
                     </Col>
-                    <Col className="d-flex gap-2" xl="2" lg="3" md="4">
+                    <Col className="d-flex gap-2 flex-wrap" xl="2" lg="3" md="4">
                       <Button color="primary" type="submit" disabled={loading}>
                         اعمال
                       </Button>
                       <Button color="light" type="button" onClick={handleResetFilters} disabled={loading}>
                         ریست
                       </Button>
+                      {hasPermission("super-adviser-portal.salary.index") && (
+                        <Button color="success" outline type="button" onClick={handleExport} disabled={exporting}>
+                          {exporting ? <Spinner size="sm" className="ms-1" /> : <i className="bx bx-spreadsheet ms-1" />}
+                          خروجی Excel
+                        </Button>
+                      )}
                     </Col>
                   </Row>
                 </Form>

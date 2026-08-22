@@ -74,12 +74,16 @@ export const API_ROUTES = {
     finalize: (id) => `/backups/${id}/finalize`,
   },
   adviserPortal: {
+    schoolSupportForms: (schoolId) => `/adviser-portal/schools/${schoolId}/support-forms`,
     supportFormStudents: (formId) => `/adviser-portal/support-forms/${formId}/students`,
+    stats: "/adviser-portal/stats",
   },
   superAdviserPortal: {
     supportForms: "/super-adviser-portal/support-forms",
     supportFormGrades: "/super-adviser-portal/support-forms/grades",
     students: "/super-adviser-portal/students",
     studentsExport: "/super-adviser-portal/students/export",
+    salary: "/super-adviser-portal/salary",
+    salaryExport: "/super-adviser-portal/salary/export",
   },
 }

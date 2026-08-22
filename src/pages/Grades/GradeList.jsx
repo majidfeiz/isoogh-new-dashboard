@@ -21,6 +21,7 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { getGrades, deleteGrade } from "../../services/gradeService.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -32,6 +33,10 @@ const formatDateTime = (value) => {
 
 const GradeList = () => {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission("grades.create");
+  const canUpdate = hasPermission("grades.update");
+  const canDelete = hasPermission("grades.delete");
   document.title = "پایه‌ها | داشبورد آیسوق";
 
   const { saved, saveState } = useListState("grades");
@@ -209,24 +214,28 @@ const GradeList = () => {
 
           return (
             <div className="d-flex gap-2">
-              <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
-                ویرایش
-              </Button>
+              {canUpdate && (
+                <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
+                  ویرایش
+                </Button>
+              )}
 
-              <Button
-                color="danger"
-                size="sm"
-                onClick={() => handleDelete(id)}
-                disabled={loading}
-              >
-                حذف
-              </Button>
+              {canDelete && (
+                <Button
+                  color="danger"
+                  size="sm"
+                  onClick={() => handleDelete(id)}
+                  disabled={loading}
+                >
+                  حذف
+                </Button>
+              )}
             </div>
           );
         },
       },
     ],
-    [handleEdit, handleDelete, loading]
+    [canUpdate, canDelete, handleEdit, handleDelete, loading]
   );
 
   const handleSortingChange = useCallback(
@@ -277,10 +286,12 @@ const GradeList = () => {
 
                 <div className="d-flex align-items-center gap-2">
                   {loading && <Spinner size="sm" color="primary" />}
-                  <Button color="primary" onClick={handleCreate}>
-                    <i className="mdi mdi-plus me-1" />
-                    افزودن پایه جدید
-                  </Button>
+                  {canCreate && (
+                    <Button color="primary" onClick={handleCreate}>
+                      <i className="mdi mdi-plus me-1" />
+                      افزودن پایه جدید
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
 
