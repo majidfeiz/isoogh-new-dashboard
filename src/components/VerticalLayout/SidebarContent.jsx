@@ -491,6 +491,13 @@ const SidebarContent = (props) => {
       },
       {
         type: "item",
+        label: "لاگ ورود اطلاعات",
+        icon: "bx bx-import",
+        to: "/import-logs",
+        permission: "import-logs.index",
+      },
+      {
+        type: "item",
         label: "بک‌آپ محلی",
         icon: "bx bx-hdd",
         to: "/backups",

@@ -131,6 +131,13 @@ export const API_ROUTES = {
     actors: "/audit-logs/actors",
     stats: "/audit-logs/stats",
   },
+  importLogs: {
+    list: "/import-logs",
+    detail: (id) => `/import-logs/${id}`,
+    rows: (id) => `/import-logs/${id}/rows`,
+    export: "/import-logs/export",
+    exportRows: (id) => `/import-logs/${id}/rows/export`,
+  },
   backups: {
     execute: "/backups/execute",
     detail: (id) => `/backups/${id}`,
