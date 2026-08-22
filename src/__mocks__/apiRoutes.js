@@ -26,6 +26,11 @@ export const API_ROUTES = {
     importRoles: "/authorization/users/roles/import",
     importRolesTemplate: "/authorization/users/roles/import/template",
   },
+  parentTags: {
+    list: "/parent-tags",
+    import: "/parent-tags/import",
+    importStatus: (logId) => `/parent-tags/imports/${logId}`,
+  },
   reports: {
     callsByAdviser: "/reports/calls-by-adviser",
     callsByAdviserExport: "/reports/calls-by-adviser/export",

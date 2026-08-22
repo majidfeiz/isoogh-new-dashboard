@@ -15,6 +15,7 @@ import {
   Spinner,
   Progress,
   Alert,
+  Badge,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
 import { useListState } from "../../hooks/useListState";
@@ -26,9 +27,25 @@ import {
   getParentTags,
   deleteParentTag,
   importParentTagUsers,
+  getParentTagImportStatus,
 } from "../../services/parentTagService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
+import {
+  getParentTagImportProgress,
+  isParentTagImportTerminal,
+  PARENT_TAG_IMPORT_ACTIONS,
+  removeParentTagImportHeaders,
+  toParentTagImportSheetRows,
+} from "./parentTagImportUtils.js";
+
+const IMPORT_JOB_STORAGE_KEY = "parent-tags:active-import";
+const IMPORT_STATUS_LABELS = {
+  pending: "در صف",
+  processing: "در حال پردازش",
+  success: "تکمیل‌شده",
+  failed: "تکمیل با خطا/ناموفق",
+};
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -79,10 +96,20 @@ const ParentTagList = () => {
   const [importSchoolId, setImportSchoolId] = useState("");
   const [importLoading, setImportLoading] = useState(false);
   const [importUploadProgress, setImportUploadProgress] = useState(null);
-  const [importResult, setImportResult] = useState(null);
   const [importError, setImportError] = useState(null);
   const [importPreviewPage, setImportPreviewPage] = useState(1);
   const [importPreviewPageSize, setImportPreviewPageSize] = useState(200);
+  const [importJob, setImportJob] = useState(() => {
+    try {
+      return JSON.parse(sessionStorage.getItem(IMPORT_JOB_STORAGE_KEY)) || null;
+    } catch {
+      return null;
+    }
+  });
+  const [importLogPage, setImportLogPage] = useState(1);
+  const [importLogLoading, setImportLogLoading] = useState(false);
+  const [importPollingWarning, setImportPollingWarning] = useState("");
+  const importSubmitRef = useRef(false);
   const [virtualRange, setVirtualRange] = useState({ start: 0, end: 40 });
   const ROW_HEIGHT = 44;
   const VIRTUAL_BUFFER = 10;
@@ -344,7 +371,6 @@ const ParentTagList = () => {
     if (!file) return;
     setImportLoading(true);
     setImportError(null);
-    setImportResult(null);
     try {
       const XLSX = await import("xlsx");
       const buffer = await file.arrayBuffer();
@@ -355,7 +381,7 @@ const ParentTagList = () => {
       const rowsRaw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
 
       let detectedMaxTags = 1;
-      const normalized = (rowsRaw || [])
+      const normalized = removeParentTagImportHeaders(rowsRaw)
         .map((rowArr) => {
           if (!Array.isArray(rowArr)) return null;
           const username = rowArr[0] ?? "";
@@ -399,8 +425,8 @@ const ParentTagList = () => {
 
   const handleImportSubmit = async (e) => {
     e.preventDefault();
+    if (importSubmitRef.current || (importJob && !isParentTagImportTerminal(importJob.status))) return;
     setImportError(null);
-    setImportResult(null);
 
     if (!importRows.length) {
       setImportError("ابتدا فایل را لود یا ردیف‌ها را وارد کنید.");
@@ -410,20 +436,23 @@ const ParentTagList = () => {
       setImportError("شناسه مجموعه الزامی است.");
       return;
     }
+    const invalidAction = importRows.find(
+      (row) => !PARENT_TAG_IMPORT_ACTIONS.includes(String(row?.action || "").trim())
+    );
+    if (invalidAction) {
+      setImportError("مقدار action همه ردیف‌ها باید یکی از Append، Replace یا Remove باشد.");
+      return;
+    }
 
+    importSubmitRef.current = true;
     setImportLoading(true);
     setImportUploadProgress(0);
     try {
       const XLSX = await import("xlsx");
       const workbook = XLSX.utils.book_new();
-      const sheetData = importRows.map((row) => {
-        const obj = {};
-        previewColumns.forEach((col) => {
-          obj[col] = row?.[col] ?? "";
-        });
-        return obj;
-      });
-      const sheet = XLSX.utils.json_to_sheet(sheetData);
+      const sheet = XLSX.utils.aoa_to_sheet(
+        toParentTagImportSheetRows(importRows, previewColumns)
+      );
       XLSX.utils.book_append_sheet(workbook, sheet, "tags");
       const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
       const blob = new Blob([wbout], {
@@ -435,6 +464,7 @@ const ParentTagList = () => {
       formData.append("schoolId", importSchoolId);
 
       const res = await importParentTagUsers(formData, {
+        timeout: 30000,
         onUploadProgress: (evt) => {
           const total = evt?.total;
           const loaded = evt?.loaded;
@@ -447,14 +477,24 @@ const ParentTagList = () => {
         },
       });
 
-      setImportResult(res?.data || res || {});
+      const accepted = res || {};
+      if (!accepted.logId) throw new Error("IMPORT_LOG_ID_MISSING");
+      const nextJob = { ...accepted, schoolId: Number(importSchoolId), rows: [], meta: { page: 1, limit: 50, total: 0, lastPage: 1 } };
+      setImportJob(nextJob);
+      sessionStorage.setItem(IMPORT_JOB_STORAGE_KEY, JSON.stringify({
+        logId: accepted.logId,
+        jobId: accepted.jobId,
+        schoolId: Number(importSchoolId),
+        status: accepted.status || "pending",
+        totalRows: accepted.totalRows || 0,
+      }));
+      setImportLogPage(1);
+      setImportPollingWarning("");
       setImportRows([]);
       setImportFileName("");
-      setImportSchoolId("");
       setImportPreviewPage(1);
       setVirtualRange({ start: 0, end: 40 });
       setImportUploadProgress(100);
-      fetchData(meta.page, filters, sort);
     } catch (err) {
       console.error("خطا در ایمپورت تگ‌ها", err);
       const msg =
@@ -463,10 +503,69 @@ const ParentTagList = () => {
         "ایمپورت با خطا مواجه شد.";
       setImportError(msg);
     } finally {
+      importSubmitRef.current = false;
       setImportLoading(false);
       setTimeout(() => setImportUploadProgress(null), 1000);
     }
   };
+
+  useEffect(() => {
+    if (!importJob?.logId || !importJob?.schoolId) return undefined;
+    let stopped = false;
+    let timer;
+    let delay = 2000;
+    let controller;
+
+    const poll = async () => {
+      controller?.abort();
+      controller = new AbortController();
+      setImportLogLoading(true);
+      try {
+        const result = await getParentTagImportStatus(
+          importJob.logId,
+          { schoolId: importJob.schoolId, page: importLogPage, limit: 50 },
+          controller.signal
+        );
+        if (stopped) return;
+        const next = { ...result, schoolId: importJob.schoolId };
+        setImportJob(next);
+        setImportPollingWarning("");
+        delay = 2000;
+        if (isParentTagImportTerminal(next.status)) {
+          sessionStorage.removeItem(IMPORT_JOB_STORAGE_KEY);
+          fetchData(meta.page, filters, sort);
+          return;
+        }
+        sessionStorage.setItem(IMPORT_JOB_STORAGE_KEY, JSON.stringify({
+          logId: next.logId,
+          jobId: next.jobId,
+          schoolId: next.schoolId,
+          status: next.status,
+          totalRows: next.totalRows,
+        }));
+        timer = setTimeout(poll, delay);
+      } catch (err) {
+        if (stopped || err?.code === "ERR_CANCELED") return;
+        if (err?.response?.status === 403) {
+          sessionStorage.removeItem(IMPORT_JOB_STORAGE_KEY);
+          setImportPollingWarning("این job متعلق به مجموعه انتخاب‌شده نیست؛ پیگیری متوقف شد.");
+          return;
+        }
+        delay = Math.min(10000, delay * 2);
+        setImportPollingWarning("ارتباط موقتاً قطع شد؛ تلاش مجدد برای دریافت وضعیت ادامه دارد.");
+        timer = setTimeout(poll, delay);
+      } finally {
+        if (!stopped) setImportLogLoading(false);
+      }
+    };
+
+    poll();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      controller?.abort();
+    };
+  }, [importJob?.logId, importJob?.schoolId, importLogPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleExport = useCallback(async () => {
     const params = new URLSearchParams();
@@ -604,6 +703,17 @@ const ParentTagList = () => {
     setVirtualRange({ start: 0, end: 40 });
   }, [importPreviewPage, importPreviewPageSize]);
 
+  useEffect(() => {
+    if (importJob?.schoolId) setImportSchoolId(String(importJob.schoolId));
+  }, [importJob?.schoolId]);
+
+  const importJobActive = Boolean(
+    importJob?.logId && !isParentTagImportTerminal(importJob.status)
+  );
+  const importJobProgress = getParentTagImportProgress(importJob);
+  const importLogRows = Array.isArray(importJob?.rows) ? importJob.rows : [];
+  const importLogMeta = importJob?.meta || { page: 1, limit: 50, total: 0, lastPage: 1 };
+
   return (
     <div className="page-content">
       <div className="container-fluid">
@@ -627,25 +737,103 @@ const ParentTagList = () => {
                     {importError}
                   </Alert>
                 )}
-                {importResult && (
-                  <Alert color="success" className="mb-3">
-                    <div>کل ردیف‌ها: {importResult.totalRows ?? "-"}</div>
-                    <div>پردازش شده: {importResult.processedRows ?? "-"}</div>
-                    <div>ناموفق: {importResult.failedRows ?? "-"}</div>
-                    {Array.isArray(importResult.errors) && importResult.errors.length > 0 && (
-                      <div className="mt-2">
-                        خطاها:
-                        <ul className="mb-0">
-                          {importResult.errors.slice(0, 5).map((er, idx) => (
-                            <li key={`imp-err-${idx}`}>{typeof er === "string" ? er : JSON.stringify(er)}</li>
-                          ))}
-                          {importResult.errors.length > 5 ? (
-                            <li>... {importResult.errors.length - 5} مورد دیگر</li>
-                          ) : null}
-                        </ul>
-                      </div>
+                {importJob?.logId && (
+                  <div className="border rounded p-3 mb-3">
+                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                      <strong>وضعیت ایمپورت #{importJob.logId}</strong>
+                      <Badge
+                        color={
+                          importJob.status === "success"
+                            ? "success"
+                            : importJob.status === "failed"
+                            ? "danger"
+                            : importJob.status === "processing"
+                            ? "info"
+                            : "warning"
+                        }
+                      >
+                        {IMPORT_STATUS_LABELS[importJob.status] || importJob.status}
+                      </Badge>
+                    </div>
+                    <Progress
+                      animated={importJobActive}
+                      striped={importJobActive}
+                      color={Number(importJob.failedRows) > 0 ? "warning" : "success"}
+                      value={importJobProgress}
+                    >
+                      %{importJobProgress}
+                    </Progress>
+                    <div className="d-flex flex-wrap gap-3 small mt-2">
+                      <span>کل: {importJob.totalRows ?? 0}</span>
+                      <span>موفق: {importJob.processedRows ?? 0}</span>
+                      <span className={Number(importJob.failedRows) > 0 ? "text-danger fw-bold" : ""}>
+                        ناموفق: {importJob.failedRows ?? 0}
+                      </span>
+                      {importLogLoading && <Spinner size="sm" color="primary" />}
+                    </div>
+                    {Number(importJob.failedRows) > 0 && (
+                      <Alert color="warning" className="mt-2 mb-0">
+                        {importJob.failedRows} ردیف ناموفق است؛ جزئیات دقیق در جدول زیر آمده است.
+                      </Alert>
                     )}
-                  </Alert>
+                    {importJob.errorMessage && (
+                      <Alert color="danger" className="mt-2 mb-0">
+                        {importJob.errorMessage}
+                      </Alert>
+                    )}
+                    {importPollingWarning && (
+                      <Alert color="warning" className="mt-2 mb-0">
+                        {importPollingWarning}
+                      </Alert>
+                    )}
+
+                    <div className="table-responsive mt-3">
+                      <table className="table table-sm table-bordered align-middle mb-2">
+                        <thead className="table-light">
+                          <tr>
+                            <th>شماره ردیف</th>
+                            <th>نام کاربری</th>
+                            <th>عملیات</th>
+                            <th>تگ‌ها</th>
+                            <th>وضعیت</th>
+                            <th>پیام خطا</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {importLogRows.length === 0 ? (
+                            <tr><td colSpan="6" className="text-center text-muted">هنوز لاگ ردیفی ثبت نشده است.</td></tr>
+                          ) : importLogRows.map((row) => (
+                            <tr key={row.id}>
+                              <td>{row.rowNumber ?? "-"}</td>
+                              <td>{row.data?.username || "-"}</td>
+                              <td>{row.action || row.data?.action || "-"}</td>
+                              <td>
+                                {(row.data?.tags || row.data?.tagIds || []).join("، ") || "-"}
+                              </td>
+                              <td>
+                                <Badge color={row.status === "success" ? "success" : "danger"}>
+                                  {row.status === "success" ? "موفق" : "ناموفق"}
+                                </Badge>
+                              </td>
+                              <td>{row.errorMessage || "-"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {importLogMeta.total > 0 && (
+                      <Paginations
+                        perPageData={importLogMeta.limit}
+                        data={importLogRows}
+                        totalRecords={importLogMeta.total}
+                        currentPage={importLogMeta.page}
+                        setCurrentPage={setImportLogPage}
+                        isShowingPageLength={false}
+                        paginationDiv="col-sm-auto"
+                        paginationClass="pagination pagination-sm mb-0"
+                      />
+                    )}
+                  </div>
                 )}
 
                 {(importLoading || importUploadProgress !== null) && (
@@ -671,7 +859,7 @@ const ParentTagList = () => {
                         type="file"
                         accept=".xlsx,.xls"
                         onChange={handleImportFileChange}
-                        disabled={importLoading}
+                        disabled={importLoading || importJobActive}
                       />
                       {importFileName ? (
                         <div className="mt-1 text-muted" style={{ fontSize: "0.9rem" }}>
@@ -686,7 +874,7 @@ const ParentTagList = () => {
                         value={importSchoolId}
                         onChange={(e) => setImportSchoolId(e.target.value)}
                         placeholder="مثلاً 94"
-                        disabled={importLoading}
+                        disabled={importLoading || importJobActive}
                       />
                     </Col>
                     <Col md="5">
@@ -702,7 +890,7 @@ const ParentTagList = () => {
                         outline
                         className="w-100"
                         onClick={handleAddImportRow}
-                        disabled={importLoading}
+                        disabled={importLoading || importJobActive}
                       >
                         افزودن ردیف دستی
                       </Button>
@@ -712,7 +900,7 @@ const ParentTagList = () => {
                         outline
                         className="w-100"
                         onClick={() => setImportRows([])}
-                        disabled={importLoading || importRows.length === 0}
+                        disabled={importLoading || importJobActive || importRows.length === 0}
                       >
                         پاک‌کردن
                       </Button>
@@ -808,16 +996,22 @@ const ParentTagList = () => {
                                             <td key={`${absoluteIndex}-${col}`}>
                                               <Input
                                                 bsSize="sm"
+                                                type={col === "action" ? "select" : "text"}
                                                 value={row?.[col] ?? ""}
                                                 onChange={(e) =>
-                                                  handleImportRowChange(
-                                                    absoluteIndex,
-                                                    col,
-                                                    e.target.value
-                                                  )
+                                                  handleImportRowChange(absoluteIndex, col, e.target.value)
                                                 }
-                                                placeholder={col === "action" ? "Append/Replace/Remove" : ""}
-                                              />
+                                                disabled={importJobActive}
+                                              >
+                                                {col === "action" ? (
+                                                  <>
+                                                    <option value="">انتخاب کنید</option>
+                                                    {PARENT_TAG_IMPORT_ACTIONS.map((action) => (
+                                                      <option key={action} value={action}>{action}</option>
+                                                    ))}
+                                                  </>
+                                                ) : null}
+                                              </Input>
                                             </td>
                                           ))}
                                           <td style={{ width: 80 }} className="text-center">
@@ -826,7 +1020,7 @@ const ParentTagList = () => {
                                               size="sm"
                                               outline
                                               onClick={() => handleRemoveImportRow(absoluteIndex)}
-                                              disabled={importLoading}
+                                              disabled={importLoading || importJobActive}
                                             >
                                               حذف
                                             </Button>
@@ -854,7 +1048,7 @@ const ParentTagList = () => {
                   )}
 
                   <div className="d-flex gap-2 mt-3">
-                    <Button type="submit" color="primary" disabled={importLoading || importRows.length === 0}>
+                    <Button type="submit" color="primary" disabled={importLoading || importJobActive || importRows.length === 0}>
                       {importLoading ? "در حال ارسال..." : "آپلود و ایمپورت"}
                     </Button>
                     <Button
@@ -864,13 +1058,12 @@ const ParentTagList = () => {
                         setImportRows([]);
                         setImportFileName("");
                         setImportSchoolId("");
-                        setImportResult(null);
                         setImportError(null);
                         setImportPreviewPage(1);
                         setImportUploadProgress(null);
                         setMaxTagColumns(3);
                       }}
-                      disabled={importLoading}
+                      disabled={importLoading || importJobActive}
                     >
                       پاک‌کردن فرم
                     </Button>
