@@ -242,6 +242,8 @@ import CallQueue from "../pages/Voip/CallQueue/CallQueue.jsx";
 import AnswerSheetList from "../pages/AnswerSheets/AnswerSheetList.jsx";
 import VoipAnalytics from "../pages/Voip/Analytics/VoipAnalytics.jsx";
 import AuditLogs from "../pages/AuditLogs/AuditLogs.jsx";
+import ImportLogList from "../pages/ImportLogs/ImportLogList.jsx";
+import ImportLogDetail from "../pages/ImportLogs/ImportLogDetail.jsx";
 
 // external api clients
 import ExternalApiClientList from "../pages/ExternalApi/ExternalApiClientList.jsx";
@@ -431,6 +433,8 @@ const authProtectedRoutes = [
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
   { path: "/audit-logs", component: <ProtectedRoute permission="audit-logs.index"><AuditLogs /></ProtectedRoute> },
+  { path: "/import-logs", component: <ProtectedRoute permission="import-logs.index"><ImportLogList /></ProtectedRoute> },
+  { path: "/import-logs/:id", component: <ProtectedRoute permission="import-logs.show"><ImportLogDetail /></ProtectedRoute> },
   { path: "/backups", component: <ProtectedRoute permission="backups.execute"><BackupPage /></ProtectedRoute> },
 
   // external api clients
