@@ -36,8 +36,10 @@ import {
   updateAdviserStudentWorkShift,
 } from "../../services/adviserPortalService.jsx";
 import {
+  getWorkShiftName,
   nextAdviserStudentSort,
-  readAdviserStudentSort,
+  readAdviserStudentQuery,
+  updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
 
 const formatJalali = (value, withTime = false) => {
@@ -396,7 +398,8 @@ const FormDetail = () => {
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [callStatus, setCallStatus] = useState(searchParams.get("status") ?? "");
-  const [sort, setSort] = useState(() => readAdviserStudentSort(searchParams));
+  const [workShiftId, setWorkShiftId] = useState(searchParams.get("workShiftId") ?? "");
+  const [sort, setSort] = useState(() => readAdviserStudentQuery(searchParams).sort);
   const [loading, setLoading] = useState(false);
   const [workShifts, setWorkShifts] = useState([]);
   const [workShiftsLoading, setWorkShiftsLoading] = useState(true);
@@ -439,7 +442,7 @@ const FormDetail = () => {
   }, [formId]);
 
   const fetchStudents = useCallback(
-    async (page = 1, q = "", status = "", currentSort = { by: "id", order: "ASC" }) => {
+    async (page = 1, q = "", status = "", shiftId = "", currentSort = { by: "id", order: "ASC" }) => {
       studentsRequest.current?.abort();
       const controller = new AbortController();
       studentsRequest.current = controller;
@@ -451,6 +454,7 @@ const FormDetail = () => {
           limit: 15,
           search: q,
           status,
+          workShiftId: shiftId,
           sortBy: currentSort.by,
           sortOrder: currentSort.order,
           signal: controller.signal,
@@ -458,13 +462,6 @@ const FormDetail = () => {
         if (controller.signal.aborted) return;
         setData(res.items || []);
         setMeta(res.pagination || { page, limit: 15, total: 0, lastPage: 1 });
-        const next = {};
-        if (q) next.search = q;
-        if (status !== "") next.status = String(status);
-        if (currentSort.by !== "id") next.sortBy = currentSort.by;
-        if (currentSort.by !== "id" || currentSort.order !== "ASC") next.sortOrder = currentSort.order;
-        if (page > 1) next.page = String(page);
-        setSearchParams(next, { replace: true });
       } catch (error) {
         if (error?.code === "ERR_CANCELED" || controller.signal.aborted) return;
         setData([]);
@@ -472,7 +469,7 @@ const FormDetail = () => {
         if (studentsRequest.current === controller && !controller.signal.aborted) setLoading(false);
       }
     },
-    [formId, setSearchParams]
+    [formId]
   );
 
   useEffect(() => () => studentsRequest.current?.abort(), []);
@@ -495,10 +492,24 @@ const FormDetail = () => {
     fetchForm();
     fetchStats();
     fetchWorkShifts();
-    fetchStudents(Number(searchParams.get("page")) || 1, search, callStatus, sort);
-    // Initial query state is intentionally read once; later changes go through handlers.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchForm, fetchStats, fetchStudents, fetchWorkShifts]);
+  }, [fetchForm, fetchStats, fetchWorkShifts]);
+
+  useEffect(() => {
+    const query = readAdviserStudentQuery(searchParams);
+    setSearch(query.search);
+    setCallStatus(query.status);
+    setWorkShiftId(query.workShiftId);
+    setSort(query.sort);
+    fetchStudents(query.page, query.search, query.status, query.workShiftId, query.sort);
+  }, [fetchStudents, searchParams]);
+
+  useEffect(() => {
+    if (search === (searchParams.get("search") || "")) return undefined;
+    const timeout = setTimeout(() => {
+      setSearchParams((current) => updateAdviserStudentQuery(current, { search, page: 1 }));
+    }, 400);
+    return () => clearTimeout(timeout);
+  }, [search, searchParams, setSearchParams]);
 
   const handleCallClick = async (student) => {
     const id = student.id;
@@ -524,7 +535,7 @@ const FormDetail = () => {
         const controller = new AbortController();
         queuedTraceRequest.current = controller;
         pollQueuedCallTrace({ traceId: queued.traceId, getTrace: getCallTrace, signal: controller.signal })
-          .then(() => { if (!controller.signal.aborted) { fetchStudents(meta.page, search, callStatus, sort); fetchStats(); } })
+          .then(() => { if (!controller.signal.aborted) { fetchStudents(meta.page, search, callStatus, workShiftId, sort); fetchStats(); } })
           .catch(() => {});
         return;
       }
@@ -536,7 +547,7 @@ const FormDetail = () => {
       setLastVoipCallId(result?.voipCallId || result?.id || null);
       setSelectedStudent(student);
       setDrawerOpen(true);
-      fetchStudents(meta.page, search, callStatus, sort);
+      fetchStudents(meta.page, search, callStatus, workShiftId, sort);
       fetchStats();
     } catch {
       // handled by httpClient
@@ -552,28 +563,29 @@ const FormDetail = () => {
   };
 
   const handleAnswerSubmitted = () => {
-    fetchStudents(meta.page, search, callStatus, sort);
+    fetchStudents(meta.page, search, callStatus, workShiftId, sort);
     fetchStats();
   };
 
   const handleCallStatusChange = (status) => {
-    setCallStatus(status);
-    fetchStudents(1, search, status, sort);
+    setSearchParams((current) => updateAdviserStudentQuery(current, { status, page: 1 }));
+  };
+
+  const handleWorkShiftFilterChange = (shiftId) => {
+    setSearchParams((current) => updateAdviserStudentQuery(current, { workShiftId: shiftId, page: 1 }));
   };
 
   const handleStatusSort = () => {
     const nextSort = nextAdviserStudentSort(sort, "status");
-    setSort(nextSort);
-    fetchStudents(1, search, callStatus, nextSort);
+    setSearchParams((current) => updateAdviserStudentQuery(current, { sortBy: nextSort.by, sortOrder: nextSort.order, page: 1 }));
   };
 
   const handleWorkShiftSort = () => {
     const nextSort = nextAdviserStudentSort(sort, "workShiftId");
-    setSort(nextSort);
-    fetchStudents(1, search, callStatus, nextSort);
+    setSearchParams((current) => updateAdviserStudentQuery(current, { sortBy: nextSort.by, sortOrder: nextSort.order, page: 1 }));
   };
 
-  const handleWorkShiftChange = async (student, workShiftId) => {
+  const handleWorkShiftChange = async (student, selectedWorkShiftId) => {
     const studentId = student.studentId;
     if (updatingShiftIds[studentId]) return;
 
@@ -585,7 +597,7 @@ const FormDetail = () => {
       const updated = await updateAdviserStudentWorkShift({
         formId: Number(formId),
         studentId,
-        workShiftId: Number(workShiftId),
+        workShiftId: Number(selectedWorkShiftId),
       });
       if (shiftRequestVersions.current[studentId] !== requestVersion) return;
       setData((prev) => prev.map((item) => (
@@ -603,7 +615,7 @@ const FormDetail = () => {
         toast.error("دانش‌آموز یا شیفت انتخاب‌شده یافت نشد؛ اطلاعات دوباره دریافت شد");
         await Promise.allSettled([
           fetchWorkShifts(true),
-          fetchStudents(meta.page, search, callStatus, sort),
+          fetchStudents(meta.page, search, callStatus, workShiftId, sort),
         ]);
       } else {
         toast.error(error?.response?.data?.message || "به‌روزرسانی شیفت انجام نشد");
@@ -695,6 +707,21 @@ const FormDetail = () => {
                 ))}
               </div>
 
+              <Input
+                type="select"
+                bsSize="sm"
+                value={workShiftId}
+                disabled={workShiftsLoading || workShiftsError}
+                onChange={(event) => handleWorkShiftFilterChange(event.target.value)}
+                style={{ width: 180 }}
+                aria-label="فیلتر شیفت"
+              >
+                <option value="">همه شیفت‌ها</option>
+                {workShifts.map((shift) => (
+                  <option key={shift.id} value={shift.id}>{shift.name}</option>
+                ))}
+              </Input>
+
               <div className="input-group input-group-sm" style={{ width: 220 }}>
                 <span className="input-group-text">
                   <i className="bx bx-search" />
@@ -702,13 +729,14 @@ const FormDetail = () => {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="نام، تلفن یا کد ملی..."
+                  placeholder="نام، تلفن، کد ملی یا شیفت..."
                   value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    if (!e.target.value) fetchStudents(1, "", callStatus, sort);
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setSearchParams((current) => updateAdviserStudentQuery(current, { search, page: 1 }));
+                    }
                   }}
-                  onKeyDown={(e) => e.key === "Enter" && fetchStudents(1, search, callStatus, sort)}
                 />
               </div>
             </div>
@@ -798,7 +826,7 @@ const FormDetail = () => {
                               {workShiftsLoading && <option value="">در حال دریافت شیفت‌ها...</option>}
                               {!workShiftsLoading && (
                                 student.workShiftId === null || !workShifts.some((shift) => String(shift.id) === String(student.workShiftId))
-                              ) && <option value={student.workShiftId ?? ""}>شیفت ناشناخته</option>}
+                              ) && <option value={student.workShiftId ?? ""}>{getWorkShiftName(student)}</option>}
                               {workShifts.map((shift) => (
                                 <option key={shift.id} value={shift.id}>{shift.name}</option>
                               ))}
@@ -860,7 +888,7 @@ const FormDetail = () => {
               data={data}
               totalRecords={meta.total}
               currentPage={meta.page}
-              setCurrentPage={(page) => fetchStudents(page, search, callStatus, sort)}
+              setCurrentPage={(page) => setSearchParams((current) => updateAdviserStudentQuery(current, { page }))}
               isShowingPageLength={true}
               paginationDiv="col-sm-auto"
               paginationClass="pagination pagination-sm mb-0"
