@@ -1,6 +1,7 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
 import {
   getStudents,
+  getStudentProfile,
   getStudentRegistrationAvailability,
   getStudentContactSubjects,
   getStudentContacts,
@@ -69,6 +70,19 @@ test("passes list filters and abort signal and maps items/meta", async () => {
     signal: controller.signal,
     params: expect.objectContaining({ schoolId: 4, archiveStatus: "all" }),
   }))
+})
+
+test("gets the student profile with the required student and school context", async () => {
+  const controller = new AbortController()
+  const profile = { student: { id: 12 }, identity: { name: "علی" } }
+  apiGet.mockResolvedValue({ data: { data: profile } })
+
+  await expect(getStudentProfile({ studentId: 12, schoolId: "7", signal: controller.signal })).resolves.toEqual(profile)
+
+  expect(apiGet).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/students/12/profile",
+    { params: { schoolId: 7 }, signal: controller.signal, silent: true }
+  )
 })
 
 test("uses public student contact endpoints for CRUD and default selection", async () => {

@@ -68,6 +68,16 @@ export async function getStudent(id) {
   return res.data?.data || res.data;
 }
 
+export async function getStudentProfile({ studentId, schoolId, signal }) {
+  const url = getApiUrl(API_ROUTES.students.profile(studentId));
+  const res = await apiGet(url, {
+    params: { schoolId: Number(schoolId) },
+    signal,
+    silent: true,
+  });
+  return res?.data?.data || res?.data;
+}
+
 // ویرایش دانش‌آموز
 export async function updateStudent(id, payload) {
   const url = getApiUrl(API_ROUTES.students.update(id));

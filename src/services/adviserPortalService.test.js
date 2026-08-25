@@ -87,6 +87,7 @@ test("sends server-side work shift sorting with filters, pagination and abort si
     page: 2,
     search: "علی",
     status: "1",
+    workShiftId: "2",
     sortBy: "workShiftId",
     sortOrder: "DESC",
     signal: controller.signal,
@@ -98,8 +99,17 @@ test("sends server-side work shift sorting with filters, pagination and abort si
       page: 2,
       search: "علی",
       status: 1,
+      workShiftId: 2,
       sortBy: "workShiftId",
       sortOrder: "DESC",
     }),
   }))
+})
+
+test("omits the work shift filter when all shifts are selected", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [], meta: {} } } })
+
+  await getAdviserFormStudents({ formId: 14, workShiftId: "" })
+
+  expect(apiGet.mock.calls[0][1].params.workShiftId).toBeUndefined()
 })
