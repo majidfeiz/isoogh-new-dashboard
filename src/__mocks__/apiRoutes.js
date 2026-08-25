@@ -15,6 +15,7 @@ export const API_ROUTES = {
   },
   students: {
     list: "/students",
+    profile: (studentId) => `/students/${studentId}/profile`,
     registrationAvailability: "/students/registration-availability",
     contactSubjects: "/students/contact-subjects",
     contacts: (studentId) => `/students/${studentId}/contacts`,

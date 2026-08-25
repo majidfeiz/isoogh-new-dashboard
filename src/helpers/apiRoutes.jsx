@@ -83,6 +83,7 @@ export const API_ROUTES = {
     list: "/students",
     create: "/students",
     detail: (id) => `/students/${id}`,
+    profile: (id) => `/students/${id}/profile`,
     update: (id) => `/students/${id}`,
     delete: (id) => `/students/${id}`,
     export: "/students/export",

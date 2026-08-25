@@ -27,6 +27,7 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
+import StudentProfileModal from "./StudentProfileModal.jsx";
 
 import {
   archiveStudent,
@@ -96,6 +97,7 @@ const StudentList = () => {
   const [tagModalItems, setTagModalItems] = useState([]);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [profileStudent, setProfileStudent] = useState(null);
   const archiveStatusParam = searchParams.get("archiveStatus");
   const archiveStatus = ["active", "archived", "all"].includes(archiveStatusParam)
     ? archiveStatusParam
@@ -929,6 +931,16 @@ const StudentList = () => {
 
           return (
             <div className="d-flex gap-2">
+              <Button
+                color="primary"
+                outline
+                size="sm"
+                onClick={() => setProfileStudent(row.original)}
+                title="مشاهده پرونده دانش‌آموز"
+              >
+                <i className="bx bx-id-card ms-1" aria-hidden="true" />
+                پرونده دانش‌آموز
+              </Button>
               {!isArchived && (
                 <Button
                   color="warning"
@@ -1624,6 +1636,13 @@ const StudentList = () => {
           </Col>
         </Row>
       </div>
+
+      <StudentProfileModal
+        isOpen={Boolean(profileStudent)}
+        student={profileStudent}
+        activeSchoolId={filters.schoolId}
+        onClose={() => setProfileStudent(null)}
+      />
 
       <Modal isOpen={tagModalOpen} toggle={() => setTagModalOpen(false)} size="lg" centered>
         <ModalHeader toggle={() => setTagModalOpen(false)}>
