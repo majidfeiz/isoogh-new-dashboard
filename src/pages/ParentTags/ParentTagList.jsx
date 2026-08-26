@@ -31,7 +31,10 @@ import {
 } from "../../services/parentTagService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
+import { getSchools } from "../../services/schoolService.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import {
+  getParentTagImportSchoolMode,
   getParentTagImportProgress,
   isParentTagImportTerminal,
   PARENT_TAG_IMPORT_ACTIONS,
@@ -68,6 +71,7 @@ const getParentName = (row) =>
 
 const ParentTagList = () => {
   const navigate = useNavigate();
+  const auth = useAuth?.();
   document.title = "مدیریت تگ‌ها | داشبورد آیسوق";
 
   const { saved, saveState } = useListState("parent-tags");
@@ -109,10 +113,37 @@ const ParentTagList = () => {
   const [importLogPage, setImportLogPage] = useState(1);
   const [importLogLoading, setImportLogLoading] = useState(false);
   const [importPollingWarning, setImportPollingWarning] = useState("");
+  const [schools, setSchools] = useState([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(false);
   const importSubmitRef = useRef(false);
   const [virtualRange, setVirtualRange] = useState({ start: 0, end: 40 });
   const ROW_HEIGHT = 44;
   const VIRTUAL_BUFFER = 10;
+
+  const isAdminLike = useMemo(() => {
+    const roles = auth?.user?.roles || [];
+    return roles.some((role) => {
+      const name = (typeof role === "string" ? role : role?.name || role?.label || "").toLowerCase();
+      return ["admin", "super_admin", "super-admin", "super admin"].includes(name);
+    });
+  }, [auth?.user?.roles]);
+  const { managerAutoSchool, needsSchoolSelect } = useMemo(
+    () => getParentTagImportSchoolMode({ isAdminLike, schools }),
+    [isAdminLike, schools]
+  );
+
+  useEffect(() => {
+    if (!auth?.user) return undefined;
+    let active = true;
+    setSchoolsLoading(true);
+    getSchools(isAdminLike
+      ? { limit: 500, sortBy: "name", sortOrder: "ASC" }
+      : { managerId: auth.user.id, limit: 200, sortBy: "name", sortOrder: "ASC" })
+      .then((result) => { if (active) setSchools(result.items || []); })
+      .catch(() => { if (active) setSchools([]); })
+      .finally(() => { if (active) setSchoolsLoading(false); });
+    return () => { active = false; };
+  }, [auth?.user?.id, isAdminLike]);
 
   const baseImportColumns = useMemo(
     () => {
@@ -432,8 +463,17 @@ const ParentTagList = () => {
       setImportError("ابتدا فایل را لود یا ردیف‌ها را وارد کنید.");
       return;
     }
-    if (!importSchoolId) {
-      setImportError("شناسه مجموعه الزامی است.");
+    if (schoolsLoading) {
+      setImportError("فهرست مجموعه‌ها هنوز در حال بارگذاری است.");
+      return;
+    }
+    if (!isAdminLike && schools.length === 0) {
+      setImportError("هیچ مجموعه‌ای به حساب شما اختصاص داده نشده است.");
+      return;
+    }
+    const effectiveSchoolId = managerAutoSchool ? String(managerAutoSchool.id) : importSchoolId;
+    if (!effectiveSchoolId) {
+      setImportError("انتخاب مجموعه الزامی است.");
       return;
     }
     const invalidAction = importRows.find(
@@ -461,7 +501,7 @@ const ParentTagList = () => {
 
       const formData = new FormData();
       formData.append("file", blob, importFileName || "parent-tags-import.xlsx");
-      formData.append("schoolId", importSchoolId);
+      formData.append("schoolId", effectiveSchoolId);
 
       const res = await importParentTagUsers(formData, {
         timeout: 30000,
@@ -479,12 +519,12 @@ const ParentTagList = () => {
 
       const accepted = res || {};
       if (!accepted.logId) throw new Error("IMPORT_LOG_ID_MISSING");
-      const nextJob = { ...accepted, schoolId: Number(importSchoolId), rows: [], meta: { page: 1, limit: 50, total: 0, lastPage: 1 } };
+      const nextJob = { ...accepted, schoolId: Number(effectiveSchoolId), rows: [], meta: { page: 1, limit: 50, total: 0, lastPage: 1 } };
       setImportJob(nextJob);
       sessionStorage.setItem(IMPORT_JOB_STORAGE_KEY, JSON.stringify({
         logId: accepted.logId,
         jobId: accepted.jobId,
-        schoolId: Number(importSchoolId),
+        schoolId: Number(effectiveSchoolId),
         status: accepted.status || "pending",
         totalRows: accepted.totalRows || 0,
       }));
@@ -727,7 +767,7 @@ const ParentTagList = () => {
                   <h4 className="card-title mb-0">ایمپورت اکسل تگ‌ها برای کاربران</h4>
                   <div className="text-muted small mt-1">
                     فایل Excel با ستون‌های: A=نام‌کاربری، B=Action (Append|Replace|Remove)، C به بعد: شناسه/نام تگ.
-                    schoolId الزامی است (برای مدیران فقط در صورت داشتن چند مجموعه).
+                    مجموعه مدیر تک‌مجموعه‌ای خودکار انتخاب می‌شود؛ مدیر چندمجموعه‌ای و ادمین باید مجموعه را انتخاب کنند.
                   </div>
                 </div>
               </CardHeader>
@@ -867,16 +907,27 @@ const ParentTagList = () => {
                         </div>
                       ) : null}
                     </Col>
-                    <Col md="3">
-                      <Label className="form-label">شناسه مجموعه</Label>
+                    {needsSchoolSelect && <Col md="3">
+                      <Label className="form-label">مجموعه <span className="text-danger fw-bold">*</span></Label>
                       <Input
-                        type="number"
+                        type="select"
                         value={importSchoolId}
                         onChange={(e) => setImportSchoolId(e.target.value)}
-                        placeholder="مثلاً 94"
-                        disabled={importLoading || importJobActive}
-                      />
-                    </Col>
+                        disabled={importLoading || importJobActive || schoolsLoading}
+                        aria-label="مجموعه ایمپورت تگ‌ها"
+                      >
+                        <option value="">{schoolsLoading ? "در حال بارگذاری..." : "انتخاب مجموعه..."}</option>
+                        {schools.map((school) => <option key={school.id} value={String(school.id)}>{school.name || school.title || `مجموعه ${school.id}`}</option>)}
+                      </Input>
+                    </Col>}
+                    {managerAutoSchool && <Col md="3">
+                      <Label className="form-label">مجموعه</Label>
+                      <div className="border rounded px-3 py-2" style={{ background: "rgba(var(--bs-success-rgb), 0.06)", minHeight: 38 }}>
+                        <div><i className="bx bxs-school me-1 text-success" /><strong>{managerAutoSchool.name || managerAutoSchool.title || `مجموعه ${managerAutoSchool.id}`}</strong></div>
+                        <div className="text-muted small">خودکار انتخاب می‌شود</div>
+                      </div>
+                    </Col>}
+                    {!isAdminLike && !schoolsLoading && schools.length === 0 && <Col md="3"><Alert color="warning" className="mb-0 py-2">مجموعه‌ای به حساب شما اختصاص داده نشده است.</Alert></Col>}
                     <Col md="5">
                       <div className="text-muted small">
                         <strong>راهنما:</strong> Action=Append تگ‌های جدید را اضافه می‌کند (تگ والد در نبود ایجاد می‌شود)،
@@ -1048,7 +1099,7 @@ const ParentTagList = () => {
                   )}
 
                   <div className="d-flex gap-2 mt-3">
-                    <Button type="submit" color="primary" disabled={importLoading || importJobActive || importRows.length === 0}>
+                    <Button type="submit" color="primary" disabled={importLoading || importJobActive || importRows.length === 0 || schoolsLoading || (!isAdminLike && schools.length === 0)}>
                       {importLoading ? "در حال ارسال..." : "آپلود و ایمپورت"}
                     </Button>
                     <Button

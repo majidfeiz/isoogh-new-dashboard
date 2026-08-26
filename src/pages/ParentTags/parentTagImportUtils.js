@@ -1,5 +1,10 @@
 export const PARENT_TAG_IMPORT_ACTIONS = ["Append", "Replace", "Remove"];
 
+export const getParentTagImportSchoolMode = ({ isAdminLike, schools = [] }) => ({
+  managerAutoSchool: !isAdminLike && schools.length === 1 ? schools[0] : null,
+  needsSchoolSelect: isAdminLike || schools.length > 1,
+});
+
 const normalizedCell = (value) => String(value ?? "").trim().toLowerCase();
 
 export const isParentTagImportHeader = (row) => {
