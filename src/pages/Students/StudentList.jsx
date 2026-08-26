@@ -28,6 +28,11 @@ import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
 import StudentProfileModal from "./StudentProfileModal.jsx";
+import UsernameAsPhoneSwitch from "./UsernameAsPhoneSwitch.jsx";
+import {
+  appendStudentCreateImportFields,
+  DEFAULT_USE_USERNAME_AS_PHONE,
+} from "./studentImportUtils.js";
 
 import {
   archiveStudent,
@@ -81,6 +86,7 @@ const StudentList = () => {
   const [importFileName, setImportFileName] = useState("");
   const [importSchoolId, setImportSchoolId] = useState("");
   const [importDefaultPassword, setImportDefaultPassword] = useState("");
+  const [useUsernameAsPhone, setUseUsernameAsPhone] = useState(DEFAULT_USE_USERNAME_AS_PHONE);
   const [importError, setImportError] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
@@ -335,6 +341,10 @@ const StudentList = () => {
       setImportMode("unarchive");
     }
   }, [archiveStatus, canArchive, canCreate, canUnarchive, importMode]);
+
+  useEffect(() => {
+    if (importMode !== "create") setUseUsernameAsPhone(DEFAULT_USE_USERNAME_AS_PHONE);
+  }, [importMode]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -656,12 +666,11 @@ const StudentList = () => {
       formData.append("file", blob, importFileName || importModeMeta.sampleFileName);
       if (importMode === "create") {
         const effectiveSchoolId = importSchoolId || (managerAutoSchool ? String(managerAutoSchool.id) : null);
-        if (effectiveSchoolId) {
-          formData.append("schoolId", effectiveSchoolId);
-        }
-        if (importDefaultPassword) {
-          formData.append("defaultPassword", importDefaultPassword);
-        }
+        appendStudentCreateImportFields(formData, {
+          schoolId: effectiveSchoolId,
+          defaultPassword: importDefaultPassword,
+          useUsernameAsPhone,
+        });
       }
 
       const importRequest =
@@ -689,6 +698,7 @@ const StudentList = () => {
       setImportFileName("");
       setImportSchoolId("");
       setImportDefaultPassword("");
+      setUseUsernameAsPhone(DEFAULT_USE_USERNAME_AS_PHONE);
       setImportPreviewPage(1);
       setVirtualRange({ start: 0, end: 40 });
       setImportUploadProgress(100);
@@ -1228,6 +1238,16 @@ const StudentList = () => {
                         </div>
                         <div className="text-muted" style={{ fontSize: "0.78rem" }}>خودکار انتخاب می‌شود</div>
                       </div>
+                    </Col>
+                  )}
+
+                  {importMode === "create" && (
+                    <Col md="5">
+                      <UsernameAsPhoneSwitch
+                        checked={useUsernameAsPhone}
+                        disabled={importLoading}
+                        onChange={setUseUsernameAsPhone}
+                      />
                     </Col>
                   )}
 
