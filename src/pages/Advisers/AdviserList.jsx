@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { useListState } from "../../hooks/useListState";
 import {
   Badge,
+  Alert,
   Button,
   Card,
   CardBody,
@@ -32,9 +33,15 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { getAdvisers, syncAdviserGrades } from "../../services/adviserService.jsx";
+import { updateAdviserSuperStatus } from "../../services/adviserService.jsx";
 import { getGrades } from "../../services/gradeService.jsx";
+import { getSchools } from "../../services/schoolService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { toast } from "react-toastify";
+import AdviserRowActions from "./AdviserRowActions.jsx";
+import AdviserSubordinatesModal from "./AdviserSubordinatesModal.jsx";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -47,6 +54,7 @@ const formatDateTime = (value) => {
 const AdviserList = () => {
   document.title = "مشاوران | داشبورد آیسوق";
   const navigate = useNavigate();
+  const auth = useAuth?.();
 
   const { saved, saveState } = useListState("advisers");
 
@@ -58,10 +66,12 @@ const AdviserList = () => {
     lastPage: 1,
   });
   const [filters, setFilters] = useState(
-    { code: "", name: "", username: "", phone: "", parentId: "", isSuper: "", gradeId: "", ...(saved?.filters ?? {}) }
+    { code: "", name: "", username: "", phone: "", schoolId: "", parentId: "", isSuper: "", gradeId: "", ...(saved?.filters ?? {}) }
   );
 
   const [allGrades, setAllGrades] = useState([]);
+  const [schools, setSchools] = useState([]);
+  const [schoolsLoading, setSchoolsLoading] = useState(false);
   const [gradeModal, setGradeModal] = useState(false);
   const [modalAdviser, setModalAdviser] = useState(null);
   const [modalSelectedIds, setModalSelectedIds] = useState([]);
@@ -73,6 +83,17 @@ const AdviserList = () => {
   const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
   const initialPageRef = useRef(saved?.page ?? 1);
   const approxTotalRef = useRef(null);
+  const superMutationRef = useRef(new Set());
+  const [superMutationIds, setSuperMutationIds] = useState({});
+  const [mutationError, setMutationError] = useState("");
+  const [subordinatesAdviser, setSubordinatesAdviser] = useState(null);
+  const canShow = auth?.hasPermission?.("advisers.show") === true;
+  const canUpdate = auth?.hasPermission?.("advisers.update") === true;
+  const isAdminLike = useMemo(() => (auth?.user?.roles || []).some((role) => {
+    const name = (typeof role === "string" ? role : role?.name || role?.label || "").toLowerCase();
+    return ["admin", "super_admin", "super-admin", "super admin"].includes(name);
+  }), [auth?.user?.roles]);
+  const managerAutoSchool = !isAdminLike && schools.length === 1 ? schools[0] : null;
 
   const buildSearchQuery = useCallback((currentFilters) => {
     return [currentFilters.code, currentFilters.name, currentFilters.username, currentFilters.phone]
@@ -107,6 +128,7 @@ const AdviserList = () => {
           parentId: parseParentId(currentFilters.parentId),
           isSuper: parseIsSuper(currentFilters.isSuper),
           gradeId: currentFilters.gradeId ? Number(currentFilters.gradeId) : undefined,
+          schoolId: currentFilters.schoolId || undefined,
         });
 
         setData(res.items || []);
@@ -142,6 +164,30 @@ const AdviserList = () => {
       .then((res) => setAllGrades(res.items || []))
       .catch(() => setAllGrades([]));
   }, []);
+
+  useEffect(() => {
+    if (!auth?.user) return undefined;
+    let active = true;
+    setSchoolsLoading(true);
+    getSchools(isAdminLike ? { limit: 500, sortBy: "name", sortOrder: "ASC" } : { managerId: auth.user.id, limit: 200, sortBy: "name", sortOrder: "ASC" })
+      .then((result) => {
+        if (!active) return;
+        const nextSchools = result.items || [];
+        setSchools(nextSchools);
+      })
+      .catch(() => { if (active) setSchools([]); })
+      .finally(() => { if (active) setSchoolsLoading(false); });
+    return () => { active = false; };
+  }, [auth?.user?.id, isAdminLike]);
+
+  useEffect(() => {
+    if (!managerAutoSchool || filters.schoolId) return;
+    const nextFilters = { ...filters, schoolId: String(managerAutoSchool.id) };
+    setFilters(nextFilters);
+    saveState({ page: 1, filters: nextFilters, sort, sorting });
+    fetchData(1, nextFilters, sort);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [managerAutoSchool?.id]);
 
   const openGradeModal = useCallback((adviser) => {
     setModalAdviser(adviser);
@@ -179,6 +225,10 @@ const AdviserList = () => {
       ...prev,
       [name]: value,
     }));
+    if (name === "schoolId") {
+      setSubordinatesAdviser(null);
+      setMeta((current) => ({ ...current, page: 1 }));
+    }
   };
 
   const handleSearchSubmit = (e) => {
@@ -193,6 +243,7 @@ const AdviserList = () => {
       name: "",
       username: "",
       phone: "",
+      schoolId: managerAutoSchool ? String(managerAutoSchool.id) : "",
       parentId: "",
       isSuper: "",
       gradeId: "",
@@ -201,6 +252,27 @@ const AdviserList = () => {
     saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
   };
+
+  const handleSuperStatus = useCallback(async (adviser, nextIsSuper) => {
+    if (!filters.schoolId || superMutationRef.current.has(adviser.id)) return;
+    const confirmed = window.confirm(nextIsSuper ? "این مشاور به سرمشاور تبدیل شود؟" : "سرمشاوری این مشاور لغو شود؟");
+    if (!confirmed) return;
+    superMutationRef.current.add(adviser.id);
+    setSuperMutationIds((current) => ({ ...current, [adviser.id]: true }));
+    setMutationError("");
+    try {
+      await updateAdviserSuperStatus(adviser.id, { schoolId: filters.schoolId, isSuper: nextIsSuper });
+      toast.success(nextIsSuper ? "مشاور به سرمشاور تبدیل شد" : "سرمشاوری لغو شد");
+      await fetchData(meta.page, filters, sort);
+    } catch (error) {
+      const message = error?.response?.data?.message || error?.response?.data?.error || "تغییر وضعیت سرمشاور انجام نشد.";
+      const normalized = Array.isArray(message) ? message.join("، ") : message;
+      setMutationError(!nextIsSuper && error?.response?.status === 400 ? `${normalized} ابتدا از بخش «زیرمجموعه‌ها» همه مشاوران متصل را جدا کنید.` : normalized);
+    } finally {
+      superMutationRef.current.delete(adviser.id);
+      setSuperMutationIds((current) => ({ ...current, [adviser.id]: false }));
+    }
+  }, [filters, meta.page, sort, fetchData]);
 
   const handlePageChange = (page) => {
     saveState({ page, filters, sort, sorting });
@@ -230,6 +302,7 @@ const AdviserList = () => {
       if (parentId !== undefined) params.append("parentId", String(parentId));
       if (isSuper !== undefined) params.append("isSuper", isSuper ? "true" : "false");
       if (gradeId !== undefined) params.append("gradeId", String(gradeId));
+      if (filters.schoolId) params.append("schoolId", String(filters.schoolId));
 
       const url = `${getApiUrl(API_ROUTES.advisers.export)}?${params.toString()}`;
       const token = getAccessToken();
@@ -385,7 +458,7 @@ const AdviserList = () => {
           const isSuper = value === true || value === 1 || value === "1" || value === "true";
           return (
             <Badge color={isSuper ? "primary" : "secondary"}>
-              {isSuper ? "سر مشاور" : "مشاور"}
+              {isSuper ? "سرمشاور" : "مشاور"}
             </Badge>
           );
         },
@@ -464,38 +537,12 @@ const AdviserList = () => {
         enableColumnFilter: false,
         enableSorting: false,
         cell: ({ row }) => {
-          const adviserId = row.original?.id;
-          return (
-            <div className="d-flex flex-column gap-1">
-              <Button
-                color="primary"
-                size="sm"
-                onClick={() =>
-                  navigate(`/advisers/${adviserId}/students`, {
-                    state: { adviser: row.original },
-                  })
-                }
-                disabled={!adviserId}
-                style={{ whiteSpace: "nowrap" }}
-              >
-                دانش‌آموزان
-              </Button>
-              <Button
-                color="warning"
-                size="sm"
-                onClick={() => openGradeModal(row.original)}
-                disabled={!adviserId}
-                style={{ whiteSpace: "nowrap" }}
-              >
-                <i className="bx bx-book me-1" />
-                پایه‌ها
-              </Button>
-            </div>
-          );
+          const adviser = row.original;
+          return <AdviserRowActions adviser={adviser} canShow={canShow} canUpdate={canUpdate} schoolId={filters.schoolId} busy={Boolean(superMutationIds[adviser.id])} onStudents={(item) => navigate(`/advisers/${item.id}/students`, { state: { adviser: item } })} onGrades={openGradeModal} onSuperStatus={handleSuperStatus} onSubordinates={setSubordinatesAdviser} />;
         },
       },
     ],
-    [navigate, openGradeModal]
+    [navigate, openGradeModal, canShow, canUpdate, filters.schoolId, superMutationIds, handleSuperStatus]
   );
 
   const handleSortingChange = useCallback(
@@ -635,6 +682,32 @@ const AdviserList = () => {
                     </Col>
 
                     <Col xl="3" lg="4" md="6">
+                      <Label className="form-label" htmlFor="schoolId">
+                        مجموعه فعال
+                      </Label>
+                      <InputGroup>
+                        <InputGroupText>
+                          <i className="bx bx-building-house" />
+                        </InputGroupText>
+                        <Input
+                          type="select"
+                          id="schoolId"
+                          name="schoolId"
+                          value={filters.schoolId}
+                          onChange={handleFilterChange}
+                          disabled={schoolsLoading || Boolean(managerAutoSchool)}
+                        >
+                          <option value="">انتخاب مجموعه</option>
+                          {schools.map((school) => (
+                            <option key={school.id} value={school.id}>
+                              {school.name || school.title || school.code}
+                            </option>
+                          ))}
+                        </Input>
+                      </InputGroup>
+                    </Col>
+
+                    <Col xl="3" lg="4" md="6">
                       <Label className="form-label" htmlFor="parentId">
                         سر مشاور (ID)
                       </Label>
@@ -721,6 +794,17 @@ const AdviserList = () => {
                   </Row>
                 </Form>
 
+                {!filters.schoolId && (canShow || canUpdate) && (
+                  <Alert color="info">
+                    برای مدیریت سرمشاور و مشاهده زیرمجموعه‌ها، ابتدا مجموعه فعال را انتخاب کنید.
+                  </Alert>
+                )}
+                {mutationError && (
+                  <Alert color="danger" toggle={() => setMutationError("")}>
+                    {mutationError}
+                  </Alert>
+                )}
+
                 {(exportLoading || exportProgress !== null) && (
                   <div className="mb-3">
                     <Label className="form-label d-flex justify-content-between">
@@ -764,6 +848,16 @@ const AdviserList = () => {
         </Row>
       </div>
     </div>
+
+    <AdviserSubordinatesModal
+      isOpen={Boolean(subordinatesAdviser)}
+      adviser={subordinatesAdviser}
+      schoolId={filters.schoolId}
+      grades={allGrades}
+      canUpdate={canUpdate}
+      onClose={() => setSubordinatesAdviser(null)}
+      onChanged={() => fetchData(meta.page, filters, sort)}
+    />
 
     <Modal isOpen={gradeModal} toggle={() => !modalSaving && setGradeModal(false)} size="lg">
       <ModalHeader toggle={() => !modalSaving && setGradeModal(false)}>
