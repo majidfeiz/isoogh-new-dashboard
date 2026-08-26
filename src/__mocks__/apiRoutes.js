@@ -84,6 +84,13 @@ export const API_ROUTES = {
     supportFormStudents: (formId) => `/adviser-portal/support-forms/${formId}/students`,
     stats: "/adviser-portal/stats",
   },
+  advisers: {
+    list: "/advisers",
+    superStatus: (adviserId) => `/advisers/${adviserId}/super-status`,
+    subordinates: (adviserId) => `/advisers/${adviserId}/subordinates`,
+    subordinate: (adviserId, subordinateId) => `/advisers/${adviserId}/subordinates/${subordinateId}`,
+    subordinatesExport: (adviserId) => `/advisers/${adviserId}/subordinates/export`,
+  },
   superAdviserPortal: {
     supportForms: "/super-adviser-portal/support-forms",
     supportFormGrades: "/super-adviser-portal/support-forms/grades",

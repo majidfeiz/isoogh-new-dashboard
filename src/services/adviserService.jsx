@@ -13,9 +13,11 @@ export async function getAdvisers({
   parentId,
   isSuper,
   gradeId,
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.advisers.list);
   const response = await apiGet(url, {
+    signal,
     params: {
       page,
       limit,
@@ -150,4 +152,71 @@ export async function syncAdviserGrades(adviserId, gradeIds) {
   const url = getApiUrl(API_ROUTES.advisers.grades(adviserId));
   const res = await apiPut(url, { gradeIds });
   return res?.data?.data || [];
+}
+
+export async function updateAdviserSuperStatus(adviserId, { schoolId, isSuper }) {
+  const url = getApiUrl(API_ROUTES.advisers.superStatus(adviserId));
+  const res = await apiPatch(url, { schoolId: Number(schoolId), isSuper: Boolean(isSuper) }, { silent: true });
+  return res?.data?.data ?? res?.data;
+}
+
+export async function getAdviserSubordinates(adviserId, {
+  schoolId,
+  page = 1,
+  limit = 10,
+  search = "",
+  gradeId,
+  sortBy = "id",
+  sortOrder = "DESC",
+  signal,
+} = {}) {
+  const url = getApiUrl(API_ROUTES.advisers.subordinates(adviserId));
+  const response = await apiGet(url, {
+    params: { schoolId: Number(schoolId), page, limit, search: search || undefined, gradeId: gradeId || undefined, sortBy, sortOrder },
+    signal,
+    silent: true,
+  });
+  return normalizePagedResponse(response, { page, limit });
+}
+
+export async function syncAdviserSubordinates(adviserId, { schoolId, adviserIds }) {
+  const url = getApiUrl(API_ROUTES.advisers.subordinates(adviserId));
+  const res = await apiPut(url, { schoolId: Number(schoolId), adviserIds: adviserIds.map(Number) }, { silent: true });
+  return res?.data?.data ?? res?.data;
+}
+
+export async function detachAdviserSubordinate(adviserId, subordinateId, schoolId) {
+  const url = getApiUrl(API_ROUTES.advisers.subordinate(adviserId, subordinateId));
+  const res = await apiDelete(url, {
+    params: { schoolId: Number(schoolId) },
+    silent: true,
+  });
+  return res?.data?.data ?? res?.data;
+}
+
+const parseDispositionFilename = (disposition, fallback) => {
+  if (!disposition) return fallback;
+  const utf = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const plain = disposition.match(/filename="?([^";]+)"?/i);
+  const raw = utf?.[1] || plain?.[1];
+  if (!raw) return fallback;
+  try { return decodeURIComponent(raw.trim()); } catch { return raw.trim(); }
+};
+
+export async function exportAdviserSubordinates(adviserId, params = {}) {
+  const url = getApiUrl(API_ROUTES.advisers.subordinatesExport(adviserId));
+  const res = await apiGet(url, {
+    params: {
+      schoolId: Number(params.schoolId),
+      search: params.search || undefined,
+      gradeId: params.gradeId || undefined,
+      sortBy: params.sortBy || "id",
+      sortOrder: params.sortOrder || "DESC",
+    },
+    responseType: "blob",
+  });
+  return {
+    blob: res.data,
+    filename: parseDispositionFilename(res.headers?.["content-disposition"], `adviser-${adviserId}-subordinates.csv`),
+  };
 }
