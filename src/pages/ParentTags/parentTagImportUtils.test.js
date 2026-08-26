@@ -1,5 +1,6 @@
 import {
   getParentTagImportProgress,
+  getParentTagImportSchoolMode,
   isParentTagImportHeader,
   isParentTagImportTerminal,
   removeParentTagImportHeaders,
@@ -37,4 +38,14 @@ test("only success and failed stop polling", () => {
   expect(isParentTagImportTerminal("processing")).toBe(false);
   expect(isParentTagImportTerminal("success")).toBe(true);
   expect(isParentTagImportTerminal("failed")).toBe(true);
+});
+
+test("auto-selects a manager's only school and requires selection for admins or multi-school managers", () => {
+  const school = { id: 7, name: "امید" };
+  expect(getParentTagImportSchoolMode({ isAdminLike: false, schools: [school] })).toEqual({
+    managerAutoSchool: school,
+    needsSchoolSelect: false,
+  });
+  expect(getParentTagImportSchoolMode({ isAdminLike: false, schools: [school, { id: 8 }] }).needsSchoolSelect).toBe(true);
+  expect(getParentTagImportSchoolMode({ isAdminLike: true, schools: [school] }).needsSchoolSelect).toBe(true);
 });
