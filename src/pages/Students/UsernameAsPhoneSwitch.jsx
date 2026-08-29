@@ -24,7 +24,7 @@ const UsernameAsPhoneSwitch = ({ checked, disabled, onChange }) => <div classNam
     </button>
   <div className="text-warning-emphasis small">
     <i className="bx bx-info-circle ms-1" aria-hidden="true" />
-    برای فایل‌هایی که شماره تلفن تکراری دارند فعال کنید. نام کاربری هر ردیف باید یکتا باشد.
+    در این حالت نام کاربری در فیلد شماره ورود ذخیره می‌شود؛ شماره واقعی اکسل همچنان در دفترچه تلفن و به‌عنوان شماره پیش‌فرض ثبت خواهد شد.
   </div>
 </div>;
 
