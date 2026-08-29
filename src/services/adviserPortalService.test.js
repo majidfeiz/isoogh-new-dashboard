@@ -40,6 +40,26 @@ test("sends an incomplete form adviser override as boolean true and reads the se
   expect(result).toEqual({ count: 1, isComplete: false, status: 1 })
 })
 
+test("allows submitting answers without a current VoIP call id", async () => {
+  apiPost.mockResolvedValue({ data: { data: { count: 1, isComplete: true, status: 1 } } })
+
+  await submitAnswers({
+    formId: 14,
+    studentId: 255046,
+    voipCallId: null,
+    callSuccessful: true,
+    answers: [{ questionId: 10, answer: "پاسخ" }],
+  })
+
+  expect(apiPost).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/support-forms/14/students/255046/answers",
+    {
+      answers: [{ questionId: 10, answer: "پاسخ" }],
+      callSuccessful: true,
+    }
+  )
+})
+
 test("normalizes zero and populated call counts and preserves pagination", async () => {
   apiGet.mockResolvedValue({
     data: {
