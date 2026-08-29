@@ -1,5 +1,5 @@
-import { apiGet } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents } from "./adviserPortalService.jsx"
+import { apiGet, apiPost } from "../helpers/httpClient.jsx"
+import { getAdviserFormStudents, submitAnswers } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -8,7 +8,36 @@ jest.mock("../helpers/httpClient.jsx", () => ({
   apiDelete: jest.fn(),
 }))
 
-beforeEach(() => apiGet.mockReset())
+beforeEach(() => {
+  apiGet.mockReset()
+  apiPost.mockReset()
+})
+
+test("sends an incomplete form adviser override as boolean true and reads the server status", async () => {
+  apiPost.mockResolvedValue({
+    data: { data: { count: 1, isComplete: false, status: 1 } },
+  })
+
+  const result = await submitAnswers({
+    formId: 14,
+    studentId: 255046,
+    voipCallId: 12345,
+    callSuccessful: true,
+    answers: [{ questionId: 10, answer: "پاسخ" }],
+  })
+
+  expect(apiPost).toHaveBeenCalledTimes(1)
+  expect(apiPost).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/support-forms/14/students/255046/answers",
+    {
+      answers: [{ questionId: 10, answer: "پاسخ" }],
+      callSuccessful: true,
+      voipCallId: 12345,
+    }
+  )
+  expect(typeof apiPost.mock.calls[0][1].callSuccessful).toBe("boolean")
+  expect(result).toEqual({ count: 1, isComplete: false, status: 1 })
+})
 
 test("normalizes zero and populated call counts and preserves pagination", async () => {
   apiGet.mockResolvedValue({
