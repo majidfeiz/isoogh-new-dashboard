@@ -1,5 +1,5 @@
-import { apiGet, apiPost } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents, submitAnswers } from "./adviserPortalService.jsx"
+import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
+import { getAdviserFormStudents, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -10,6 +10,7 @@ jest.mock("../helpers/httpClient.jsx", () => ({
 
 beforeEach(() => {
   apiGet.mockReset()
+  apiPatch.mockReset()
   apiPost.mockReset()
 })
 
@@ -141,4 +142,35 @@ test("omits the work shift filter when all shifts are selected", async () => {
   await getAdviserFormStudents({ formId: 14, workShiftId: "" })
 
   expect(apiGet.mock.calls[0][1].params.workShiftId).toBeUndefined()
+})
+
+test.each(["0", "1", "2"])("preserves call status %s as a numeric API filter", async (status) => {
+  apiGet.mockResolvedValue({ data: { data: { items: [], meta: {} } } })
+
+  await getAdviserFormStudents({ formId: 14, status })
+
+  expect(apiGet.mock.calls[0][1].params.status).toBe(Number(status))
+})
+
+test("updates work shift with the student id and uses the returned row values", async () => {
+  apiPatch.mockResolvedValue({
+    data: { data: { studentId: 437845, workShiftId: 5, workShift: { id: 5, name: "عصر" } } },
+  })
+
+  const result = await updateAdviserStudentWorkShift({
+    formId: 14,
+    studentId: 437845,
+    workShiftId: 5,
+  })
+
+  expect(apiPatch).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/support-forms/14/students/437845/work-shift",
+    { workShiftId: 5 },
+    { silent: true }
+  )
+  expect(result).toEqual({
+    studentId: 437845,
+    workShiftId: 5,
+    workShift: { id: 5, name: "عصر" },
+  })
 })

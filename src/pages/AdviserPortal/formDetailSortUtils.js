@@ -43,5 +43,5 @@ export function updateAdviserStudentQuery(searchParams, changes) {
 }
 
 export function getWorkShiftName(student) {
-  return student?.workShift?.name || "بدون شیفت";
+  return student?.workShift?.name || "شیفت ناشناخته";
 }

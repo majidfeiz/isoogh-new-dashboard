@@ -101,10 +101,15 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
     });
 
   const questions = form?.questions || [];
+  const hasCurrentCall = Number.isInteger(Number(voipCallId)) && Number(voipCallId) > 0;
   const unansweredCount = getUnansweredQuestions(questions, answers).length;
   const isComplete = unansweredCount === 0;
 
   const handleSubmit = async (callSuccessful) => {
+    if (!hasCurrentCall) {
+      toast.warning("برای ثبت پاسخنامه ابتدا تماس جدیدی با این دانش‌آموز برقرار کنید");
+      return;
+    }
     if (submittingRef.current) return;
     submittingRef.current = true;
     setSubmittingAction(callSuccessful ? "success" : "incomplete");
@@ -143,6 +148,9 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
         </div>
       </ModalHeader>
       <ModalBody className="p-4">
+        {!hasCurrentCall && (
+          <Alert color="warning">برای ثبت پاسخنامه جدید ابتدا تماس تازه‌ای برقرار کنید.</Alert>
+        )}
         <div className="vstack gap-4">
           {(form?.questions || []).map((q, idx) => (
             <FormGroup key={q.id} className="mb-0">
@@ -194,7 +202,7 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
           <Button color="light" onClick={onClose} disabled={submitting}>انصراف</Button>
-          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting}>
+          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting || !hasCurrentCall}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
@@ -790,7 +798,12 @@ const StudentProfile = () => {
         const controller = new AbortController();
         queuedTraceRequest.current = controller;
         pollQueuedCallTrace({ traceId: queued.traceId, getTrace: getCallTrace, signal: controller.signal })
-          .then(() => { if (!controller.signal.aborted) { fetchProfile(); setRefreshKey((key) => key + 1); } })
+          .then((trace) => {
+            if (controller.signal.aborted) return;
+            fetchProfile();
+            setRefreshKey((key) => key + 1);
+            if (trace?.status === "completed" && queued.voipCallId) setDrawerOpen(true);
+          })
           .catch(() => {});
         return;
       }
@@ -814,8 +827,8 @@ const StudentProfile = () => {
   };
 
   const handleFillAnswers = () => {
-    setDrawerOpen(true);
     setLastVoipCallId(null);
+    setDrawerOpen(true);
   };
 
   const breadcrumbTitle = profile?.supportFormTitle || `فرم ${formId}`;

@@ -33,9 +33,9 @@ test("resets page when applying a shift and removes the filter for all shifts", 
   expect(all.get("workShiftId")).toBeNull();
 });
 
-test("shows the work shift name and labels null shifts", () => {
+test("shows the work shift name and labels null or unknown shifts", () => {
   expect(getWorkShiftName({ workShift: { name: "صبح" } })).toBe("صبح");
-  expect(getWorkShiftName({ workShift: null })).toBe("بدون شیفت");
+  expect(getWorkShiftName({ workShift: null })).toBe("شیفت ناشناخته");
 });
 
 test("starts work shift sorting ascending and toggles it descending", () => {
