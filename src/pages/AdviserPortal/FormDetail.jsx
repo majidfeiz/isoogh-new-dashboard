@@ -41,6 +41,7 @@ import {
   readAdviserStudentQuery,
   updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
+import { buildAnswerPayload, getAnswerSubmitMessage, getUnansweredQuestions } from "./answerFormUtils.js";
 
 const formatJalali = (value, withTime = false) => {
   if (!value) return "—";
@@ -57,12 +58,6 @@ const formatDuration = (seconds) => {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
-};
-
-const hasAnswer = (value) => {
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "string") return value.trim() !== "";
-  return value !== undefined && value !== null && value !== "";
 };
 
 const callStatusConfig = {
@@ -82,8 +77,10 @@ const hasValidCallGroupId = (value) => {
 const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted }) => {
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -109,39 +106,32 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
     });
   };
 
-  const buildPayload = () => {
-    const questions = form?.questions || [];
-    return questions.filter((q) => hasAnswer(answers[q.id])).map((q) => {
-      const val = answers[q.id];
-      if (q.type === 1) return { questionId: q.id, answerId: val };
-      if (q.type === 2) return { questionId: q.id, answerId: val };
-      return { questionId: q.id, answer: val ?? "" };
-    });
-  };
-
-  const isComplete = (form?.questions || []).every((q) => hasAnswer(answers[q.id]));
+  const questions = form?.questions || [];
+  const unansweredCount = getUnansweredQuestions(questions, answers).length;
+  const isComplete = unansweredCount === 0;
 
   const handleSubmit = async (callSuccessful) => {
-    if (callSuccessful && !isComplete) {
-      toast.warning("فرم کامل نیست؛ سرور این تماس را ناموفق/ناقص ثبت می‌کند");
-    }
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmittingAction(callSuccessful ? "success" : "incomplete");
     setSubmitting(true);
     try {
       const result = await submitAnswers({
         formId: form.id,
-        studentId: student.id,
-        answers: buildPayload(),
+        studentId: student.studentId ?? student.id,
+        answers: buildAnswerPayload(questions, answers),
         voipCallId,
         callSuccessful,
       });
-      const resultStatus = callStatusConfig[result?.status] || callStatusConfig[0];
-      toast.success(`پاسخ‌ها ثبت شد؛ وضعیت تماس: ${resultStatus.label}`);
+      toast.success(getAnswerSubmitMessage(result));
       setConfirmationOpen(false);
       onSubmitted?.(result);
       onClose();
     } catch {
       // handled by httpClient
     } finally {
+      submittingRef.current = false;
+      setSubmittingAction(null);
       setSubmitting(false);
     }
   };
@@ -149,8 +139,8 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
   const sessions = student?.answerSessions || [];
 
   return (
-    <Modal isOpen={open} toggle={onClose} size="lg" scrollable>
-      <ModalHeader toggle={onClose}>
+    <Modal isOpen={open} toggle={() => !submitting && onClose()} size="lg" scrollable>
+      <ModalHeader toggle={() => !submitting && onClose()}>
         <div>
           <div className="fw-semibold">تکمیل فرم تماس</div>
           {student && (
@@ -296,7 +286,7 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
           <Button color="light" onClick={onClose} disabled={submitting}>
             انصراف
           </Button>
-          <Button color="primary" onClick={() => setConfirmationOpen(true)} disabled={submitting}>
+          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
@@ -305,18 +295,17 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
       <Modal isOpen={confirmationOpen} toggle={() => !submitting && setConfirmationOpen(false)} centered>
         <ModalHeader toggle={() => !submitting && setConfirmationOpen(false)}>نتیجه تماس</ModalHeader>
         <ModalBody>
-          <p className="mb-2 fw-semibold">آیا تماس موفق بود؟</p>
-          {!isComplete && (
-            <div className="alert alert-warning py-2 small">
-              حداقل یک سؤال بدون پاسخ است. حتی با انتخاب «موفق»، وضعیت نهایی سرور ناموفق/ناقص خواهد بود.
-            </div>
-          )}
+          <p className="mb-2 fw-semibold">پاسخنامه کامل نیست. آیا با این حال تماس موفق ثبت شود؟</p>
+          <div className="alert alert-warning py-2 small">تعداد سؤال‌های بی‌پاسخ: {unansweredCount}</div>
           <div className="d-flex justify-content-end gap-2 mt-3">
             <Button color="light" onClick={() => setConfirmationOpen(false)} disabled={submitting}>انصراف</Button>
-            <Button color="danger" onClick={() => handleSubmit(false)} disabled={submitting}>ناموفق</Button>
+            <Button color="danger" onClick={() => handleSubmit(false)} disabled={submitting}>
+              {submittingAction === "incomplete" && <Spinner size="sm" className="me-2" />}
+              ثبت ناقص/ناموفق
+            </Button>
             <Button color="success" onClick={() => handleSubmit(true)} disabled={submitting}>
-              {submitting && <Spinner size="sm" className="me-2" />}
-              موفق
+              {submittingAction === "success" && <Spinner size="sm" className="me-2" />}
+              ثبت تماس موفق
             </Button>
           </div>
         </ModalBody>
@@ -512,7 +501,7 @@ const FormDetail = () => {
   }, [search, searchParams, setSearchParams]);
 
   const handleCallClick = async (student) => {
-    const id = student.id;
+    const id = student.studentId ?? student.id;
     if (callCooldown.current[id]) return;
 
     callCooldown.current[id] = true;
@@ -544,7 +533,7 @@ const FormDetail = () => {
         return;
       }
       toast.success("تماس برقرار شد");
-      setLastVoipCallId(result?.voipCallId || result?.id || null);
+      setLastVoipCallId(result?.voipCallId ?? null);
       setSelectedStudent(student);
       setDrawerOpen(true);
       fetchStudents(meta.page, search, callStatus, workShiftId, sort);
@@ -839,11 +828,11 @@ const FormDetail = () => {
                             <Button
                               color="primary"
                               size="sm"
-                              disabled={callingIds[student.id]}
+                              disabled={callingIds[student.studentId ?? student.id]}
                               onClick={() => handleCallClick(student)}
                               title="برقراری تماس"
                             >
-                              {callingIds[student.id] ? (
+                              {callingIds[student.studentId ?? student.id] ? (
                                 <Spinner size="sm" />
                               ) : (
                                 <i className="bx bx-phone" />
