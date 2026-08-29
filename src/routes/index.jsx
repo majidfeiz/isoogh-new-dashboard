@@ -494,7 +494,7 @@ const authProtectedRoutes = [
   { path: "/adviser-calls", component: <AdviserPortalSchools /> },
   { path: "/adviser-calls/schools/:schoolId", component: <AdviserPortalSchoolTasks /> },
   { path: "/adviser-calls/schools/:schoolId/planned-calls", component: <AdviserPortalSupportForms /> },
-  { path: "/adviser-calls/schools/:schoolId/incomplete-calls", component: <AdviserPortalIncompleteCalls /> },
+  { path: "/adviser-calls/schools/:schoolId/incomplete-calls", component: <ProtectedRoute permission="adviser-portal.students.index"><AdviserPortalIncompleteCalls /></ProtectedRoute> },
   { path: "/adviser-calls/forms/:formId", component: <ProtectedRoute permission="adviser-portal.students.index"><AdviserPortalFormDetail /></ProtectedRoute> },
   { path: "/adviser-calls/forms/:formId/students/:studentId", component: <AdviserPortalStudentProfile /> },
   { path: "/adviser-calls/logs", component: <AdviserPortalCallLogs /> },

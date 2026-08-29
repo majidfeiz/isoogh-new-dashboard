@@ -524,7 +524,12 @@ const FormDetail = () => {
         const controller = new AbortController();
         queuedTraceRequest.current = controller;
         pollQueuedCallTrace({ traceId: queued.traceId, getTrace: getCallTrace, signal: controller.signal })
-          .then(() => { if (!controller.signal.aborted) { fetchStudents(meta.page, search, callStatus, workShiftId, sort); fetchStats(); } })
+          .then((trace) => {
+            if (controller.signal.aborted) return;
+            fetchStudents(meta.page, search, callStatus, workShiftId, sort);
+            fetchStats();
+            if (trace?.status === "completed" && queued.voipCallId) setDrawerOpen(true);
+          })
           .catch(() => {});
         return;
       }
@@ -551,7 +556,15 @@ const FormDetail = () => {
     setDrawerOpen(true);
   };
 
-  const handleAnswerSubmitted = () => {
+  const handleAnswerSubmitted = (result) => {
+    const returnedStatus = Number(result?.status);
+    if ([0, 1, 2].includes(returnedStatus) && selectedStudent) {
+      setData((current) => current
+        .map((student) => student.studentId === selectedStudent.studentId
+          ? { ...student, status: returnedStatus, hasAnswers: true }
+          : student)
+        .filter((student) => callStatus === "" || String(student.status) === callStatus));
+    }
     fetchStudents(meta.page, search, callStatus, workShiftId, sort);
     fetchStats();
   };

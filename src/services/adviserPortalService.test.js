@@ -1,5 +1,5 @@
-import { apiGet } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents } from "./adviserPortalService.jsx"
+import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
+import { getAdviserFormStudents, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -8,7 +8,57 @@ jest.mock("../helpers/httpClient.jsx", () => ({
   apiDelete: jest.fn(),
 }))
 
-beforeEach(() => apiGet.mockReset())
+beforeEach(() => {
+  apiGet.mockReset()
+  apiPatch.mockReset()
+  apiPost.mockReset()
+})
+
+test("sends an incomplete form adviser override as boolean true and reads the server status", async () => {
+  apiPost.mockResolvedValue({
+    data: { data: { count: 1, isComplete: false, status: 1 } },
+  })
+
+  const result = await submitAnswers({
+    formId: 14,
+    studentId: 255046,
+    voipCallId: 12345,
+    callSuccessful: true,
+    answers: [{ questionId: 10, answer: "پاسخ" }],
+  })
+
+  expect(apiPost).toHaveBeenCalledTimes(1)
+  expect(apiPost).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/support-forms/14/students/255046/answers",
+    {
+      answers: [{ questionId: 10, answer: "پاسخ" }],
+      callSuccessful: true,
+      voipCallId: 12345,
+    }
+  )
+  expect(typeof apiPost.mock.calls[0][1].callSuccessful).toBe("boolean")
+  expect(result).toEqual({ count: 1, isComplete: false, status: 1 })
+})
+
+test("allows submitting answers without a current VoIP call id", async () => {
+  apiPost.mockResolvedValue({ data: { data: { count: 1, isComplete: true, status: 1 } } })
+
+  await submitAnswers({
+    formId: 14,
+    studentId: 255046,
+    voipCallId: null,
+    callSuccessful: true,
+    answers: [{ questionId: 10, answer: "پاسخ" }],
+  })
+
+  expect(apiPost).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/support-forms/14/students/255046/answers",
+    {
+      answers: [{ questionId: 10, answer: "پاسخ" }],
+      callSuccessful: true,
+    }
+  )
+})
 
 test("normalizes zero and populated call counts and preserves pagination", async () => {
   apiGet.mockResolvedValue({
@@ -112,4 +162,35 @@ test("omits the work shift filter when all shifts are selected", async () => {
   await getAdviserFormStudents({ formId: 14, workShiftId: "" })
 
   expect(apiGet.mock.calls[0][1].params.workShiftId).toBeUndefined()
+})
+
+test.each(["0", "1", "2"])("preserves call status %s as a numeric API filter", async (status) => {
+  apiGet.mockResolvedValue({ data: { data: { items: [], meta: {} } } })
+
+  await getAdviserFormStudents({ formId: 14, status })
+
+  expect(apiGet.mock.calls[0][1].params.status).toBe(Number(status))
+})
+
+test("updates work shift with the student id and uses the returned row values", async () => {
+  apiPatch.mockResolvedValue({
+    data: { data: { studentId: 437845, workShiftId: 5, workShift: { id: 5, name: "عصر" } } },
+  })
+
+  const result = await updateAdviserStudentWorkShift({
+    formId: 14,
+    studentId: 437845,
+    workShiftId: 5,
+  })
+
+  expect(apiPatch).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/support-forms/14/students/437845/work-shift",
+    { workShiftId: 5 },
+    { silent: true }
+  )
+  expect(result).toEqual({
+    studentId: 437845,
+    workShiftId: 5,
+    workShift: { id: 5, name: "عصر" },
+  })
 })

@@ -790,7 +790,12 @@ const StudentProfile = () => {
         const controller = new AbortController();
         queuedTraceRequest.current = controller;
         pollQueuedCallTrace({ traceId: queued.traceId, getTrace: getCallTrace, signal: controller.signal })
-          .then(() => { if (!controller.signal.aborted) { fetchProfile(); setRefreshKey((key) => key + 1); } })
+          .then((trace) => {
+            if (controller.signal.aborted) return;
+            fetchProfile();
+            setRefreshKey((key) => key + 1);
+            if (trace?.status === "completed" && queued.voipCallId) setDrawerOpen(true);
+          })
           .catch(() => {});
         return;
       }
@@ -814,8 +819,8 @@ const StudentProfile = () => {
   };
 
   const handleFillAnswers = () => {
-    setDrawerOpen(true);
     setLastVoipCallId(null);
+    setDrawerOpen(true);
   };
 
   const breadcrumbTitle = profile?.supportFormTitle || `فرم ${formId}`;

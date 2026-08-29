@@ -22,6 +22,7 @@ import {
   getAdviserIncompleteCalls,
   getAdviserSchoolDetail,
 } from "../../services/adviserPortalService.jsx";
+import { readIncompleteCallsQuery, updateIncompleteCallsQuery } from "./incompleteCallsQueryUtils.js";
 
 const getDownloadFilename = (contentDisposition) => {
   if (!contentDisposition) return null;
@@ -48,17 +49,12 @@ const IncompleteCalls = () => {
   const [school, setSchool] = useState(null);
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
-  const [search, setSearch] = useState(searchParams.get("search") || "");
-  const [sort, setSort] = useState({
-    by: searchParams.get("sortBy") || "id",
-    order: searchParams.get("sortOrder") === "ASC" ? "ASC" : "DESC",
-  });
+  const query = readIncompleteCallsQuery(searchParams);
+  const [search, setSearch] = useState(query.search);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState(null);
   const requestId = useRef(0);
-  const initialPage = useRef(Number(searchParams.get("page")) || 1);
-  const initialSearch = useRef(search);
 
   document.title = "تماس‌های ناقص | داشبورد آیسوق";
 
@@ -70,7 +66,7 @@ const IncompleteCalls = () => {
     getAdviserSchoolDetail(schoolId).then(setSchool).catch(() => setSchool(null));
   }, [navigate, schoolId, validSchoolId]);
 
-  const fetchData = useCallback(async (page, query, currentSort) => {
+  const fetchData = useCallback(async (page, currentSearch, currentSort) => {
     const currentRequest = ++requestId.current;
     setLoading(true);
     setError(null);
@@ -79,7 +75,7 @@ const IncompleteCalls = () => {
         schoolId,
         page,
         limit: 15,
-        search: query,
+        search: currentSearch,
         sortBy: currentSort.by,
         sortOrder: currentSort.order,
       });
@@ -87,12 +83,6 @@ const IncompleteCalls = () => {
       setData(result.items || []);
       setMeta(result.pagination || { page, limit: 15, total: 0, lastPage: 1 });
 
-      const next = {};
-      if (query) next.search = query;
-      if (page > 1) next.page = String(page);
-      if (currentSort.by !== "id") next.sortBy = currentSort.by;
-      if (currentSort.by !== "id" || currentSort.order !== "DESC") next.sortOrder = currentSort.order;
-      setSearchParams(next, { replace: true });
     } catch (requestError) {
       if (requestId.current !== currentRequest) return;
       const status = requestError?.response?.status;
@@ -102,34 +92,45 @@ const IncompleteCalls = () => {
     } finally {
       if (requestId.current === currentRequest) setLoading(false);
     }
-  }, [schoolId, setSearchParams]);
+  }, [schoolId]);
 
   useEffect(() => {
     if (!canList || !validSchoolId) {
       setLoading(false);
       return undefined;
     }
-    const isInitialSearch = search === initialSearch.current;
+    fetchData(query.page, query.search, query.sort);
+    return undefined;
+  }, [canList, fetchData, searchParams, validSchoolId]);
+
+  useEffect(() => {
+    setSearch(query.search);
+  }, [query.search]);
+
+  useEffect(() => {
+    if (search === query.search) return undefined;
     const timer = setTimeout(() => {
-      fetchData(isInitialSearch ? initialPage.current : 1, search, sort);
-      initialPage.current = 1;
-      initialSearch.current = null;
+      setSearchParams((current) => updateIncompleteCallsQuery(current, { search, page: 1 }));
     }, 400);
     return () => clearTimeout(timer);
-  }, [canList, fetchData, search, sort, validSchoolId]);
+  }, [query.search, search, setSearchParams]);
 
   const handleSort = (by) => {
     const next = {
       by,
-      order: sort.by === by && sort.order === "ASC" ? "DESC" : "ASC",
+      order: query.sort.by === by && query.sort.order === "ASC" ? "DESC" : "ASC",
     };
-    setSort(next);
+    setSearchParams((current) => updateIncompleteCallsQuery(current, {
+      sortBy: next.by,
+      sortOrder: next.order,
+      page: 1,
+    }));
   };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const response = await exportAdviserIncompleteCalls({ schoolId, search });
+      const response = await exportAdviserIncompleteCalls({ schoolId, search: query.search });
       const url = URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
@@ -197,8 +198,8 @@ const IncompleteCalls = () => {
                 </InputGroup>
               </Col>
               <Col xs="auto" className="ms-auto d-flex gap-2">
-                <Button size="sm" color={sort.by === "id" ? "primary" : "light"} onClick={() => handleSort("id")}>شناسه</Button>
-                <Button size="sm" color={sort.by === "form_title" ? "primary" : "light"} onClick={() => handleSort("form_title")}>عنوان فرم</Button>
+                <Button size="sm" color={query.sort.by === "id" ? "primary" : "light"} onClick={() => handleSort("id")}>شناسه</Button>
+                <Button size="sm" color={query.sort.by === "form_title" ? "primary" : "light"} onClick={() => handleSort("form_title")}>عنوان فرم</Button>
                 {loading && data.length > 0 && <Spinner size="sm" color="primary" />}
               </Col>
             </Row>
@@ -206,7 +207,7 @@ const IncompleteCalls = () => {
             {error && (
               <Alert color="danger" className="d-flex align-items-center justify-content-between">
                 <span>{error}</span>
-                <Button color="danger" outline size="sm" onClick={() => fetchData(meta.page, search, sort)}>تلاش مجدد</Button>
+                <Button color="danger" outline size="sm" onClick={() => fetchData(query.page, query.search, query.sort)}>تلاش مجدد</Button>
               </Alert>
             )}
 
@@ -251,7 +252,7 @@ const IncompleteCalls = () => {
                   data={data}
                   totalRecords={meta.total}
                   currentPage={meta.page}
-                  setCurrentPage={(page) => fetchData(page, search, sort)}
+                  setCurrentPage={(page) => setSearchParams((current) => updateIncompleteCallsQuery(current, { page }))}
                   isShowingPageLength
                   paginationDiv="col-sm-auto"
                   paginationClass="pagination pagination-sm mb-0"
