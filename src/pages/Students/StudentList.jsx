@@ -506,6 +506,7 @@ const StudentList = () => {
     setImportFileName("");
     setImportSchoolId("");
     setImportDefaultPassword("");
+    setUseUsernameAsPhone(DEFAULT_USE_USERNAME_AS_PHONE);
     setImportError(null);
     setImportResult(null);
     setImportPreviewPage(1);

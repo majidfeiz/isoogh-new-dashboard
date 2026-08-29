@@ -16,7 +16,7 @@ test("starts off and lets the user enable username as phone", () => {
   fireEvent.click(input);
   expect(input).toHaveAttribute("aria-checked", "true");
   expect(screen.getByText("فعال")).toBeInTheDocument();
-  expect(screen.getByText(/شماره تلفن تکراری/)).toBeInTheDocument();
+  expect(screen.getByText(/شماره واقعی اکسل همچنان در دفترچه تلفن/)).toBeInTheDocument();
 });
 
 test("is disabled while import is loading", () => {
