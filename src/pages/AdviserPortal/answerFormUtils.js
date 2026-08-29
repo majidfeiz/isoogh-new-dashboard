@@ -36,6 +36,6 @@ export const buildAnswerPayload = (questions = [], answers = {}) =>
 export const getAnswerSubmitMessage = ({ status, isComplete } = {}) => {
   if (Number(status) === 1 && isComplete === false) return "تماس با تأیید مشاور موفق ثبت شد";
   if (Number(status) === 1) return "تماس موفق ثبت شد";
-  if (Number(status) === 2) return "تماس ناقص/ناموفق ثبت شد";
+  if (Number(status) === 2) return "تماس ناموفق/ناقص ثبت شد";
   return "پاسخ‌ها ثبت شد";
 };
