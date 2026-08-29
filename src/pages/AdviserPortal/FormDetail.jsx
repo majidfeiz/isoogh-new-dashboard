@@ -107,10 +107,15 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
   };
 
   const questions = form?.questions || [];
+  const hasCurrentCall = Number.isInteger(Number(voipCallId)) && Number(voipCallId) > 0;
   const unansweredCount = getUnansweredQuestions(questions, answers).length;
   const isComplete = unansweredCount === 0;
 
   const handleSubmit = async (callSuccessful) => {
+    if (!hasCurrentCall) {
+      toast.warning("برای ثبت پاسخنامه ابتدا تماس جدیدی با این دانش‌آموز برقرار کنید");
+      return;
+    }
     if (submittingRef.current) return;
     submittingRef.current = true;
     setSubmittingAction(callSuccessful ? "success" : "incomplete");
@@ -151,6 +156,11 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
         </div>
       </ModalHeader>
       <ModalBody className="p-4">
+        {!hasCurrentCall && (
+          <Alert color="warning">
+            پاسخ‌های قبلی قابل مشاهده‌اند؛ برای ثبت پاسخنامه جدید ابتدا تماس تازه‌ای برقرار کنید.
+          </Alert>
+        )}
         {sessions.length > 0 && (
           <div className="mb-4">
             <Button
@@ -286,7 +296,7 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
           <Button color="light" onClick={onClose} disabled={submitting}>
             انصراف
           </Button>
-          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting}>
+          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting || !hasCurrentCall}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
@@ -524,7 +534,12 @@ const FormDetail = () => {
         const controller = new AbortController();
         queuedTraceRequest.current = controller;
         pollQueuedCallTrace({ traceId: queued.traceId, getTrace: getCallTrace, signal: controller.signal })
-          .then(() => { if (!controller.signal.aborted) { fetchStudents(meta.page, search, callStatus, workShiftId, sort); fetchStats(); } })
+          .then((trace) => {
+            if (controller.signal.aborted) return;
+            fetchStudents(meta.page, search, callStatus, workShiftId, sort);
+            fetchStats();
+            if (trace?.status === "completed" && queued.voipCallId) setDrawerOpen(true);
+          })
           .catch(() => {});
         return;
       }
@@ -551,7 +566,15 @@ const FormDetail = () => {
     setDrawerOpen(true);
   };
 
-  const handleAnswerSubmitted = () => {
+  const handleAnswerSubmitted = (result) => {
+    const returnedStatus = Number(result?.status);
+    if ([0, 1, 2].includes(returnedStatus) && selectedStudent) {
+      setData((current) => current
+        .map((student) => student.studentId === selectedStudent.studentId
+          ? { ...student, status: returnedStatus, hasAnswers: true }
+          : student)
+        .filter((student) => callStatus === "" || String(student.status) === callStatus));
+    }
     fetchStudents(meta.page, search, callStatus, workShiftId, sort);
     fetchStats();
   };

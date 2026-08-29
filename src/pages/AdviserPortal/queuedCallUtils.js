@@ -6,7 +6,7 @@ export const normalizeQueuedCall = (result = {}) => ({
   queueJobId: result.queueJobId ?? null,
   traceId: result.traceId ?? null,
   correlationId: result.correlationId ?? null,
-  voipCallId: result.voipCallId ?? result.id ?? null,
+  voipCallId: result.voipCallId ?? null,
   progress: Number(result.progress ?? 30),
   status: "queued",
 });
