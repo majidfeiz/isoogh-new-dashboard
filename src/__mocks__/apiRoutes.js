@@ -28,6 +28,7 @@ export const API_ROUTES = {
     importRolesTemplate: "/authorization/users/roles/import/template",
   },
   parentTags: {
+    studentTags: (studentId) => `/parent-tags/students/${studentId}`,
     list: "/parent-tags",
     import: "/parent-tags/import",
     importStatus: (logId) => `/parent-tags/imports/${logId}`,
