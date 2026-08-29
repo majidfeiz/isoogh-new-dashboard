@@ -139,6 +139,21 @@ export async function deleteParentTagValue(id, userId) {
   return res.data;
 }
 
+export async function getStudentParentTags(studentId, schoolId) {
+  const url = getApiUrl(API_ROUTES.parentTags.studentTags(studentId));
+  const res = await apiGet(url, { params: { schoolId: Number(schoolId) }, silent: true });
+  return res?.data?.data ?? res?.data ?? {};
+}
+
+export async function syncStudentParentTags(studentId, { schoolId, tagIds }) {
+  const url = getApiUrl(API_ROUTES.parentTags.studentTags(studentId));
+  const res = await apiPatch(url, {
+    schoolId: Number(schoolId),
+    tagIds: (tagIds || []).map(Number),
+  }, { silent: true });
+  return res?.data?.data ?? res?.data ?? {};
+}
+
 export async function getParentTagValues(id, { page = 1, limit = 200, search = "" } = {}) {
   const url = getApiUrl(API_ROUTES.parentTags.values(id));
   const response = await apiGet(url, {

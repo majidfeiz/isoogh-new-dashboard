@@ -28,6 +28,8 @@ import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
 import StudentProfileModal from "./StudentProfileModal.jsx";
+import StudentTagsModal from "./StudentTagsModal.jsx";
+import StudentTagEditButton from "./StudentTagEditButton.jsx";
 import UsernameAsPhoneSwitch from "./UsernameAsPhoneSwitch.jsx";
 import {
   appendStudentCreateImportFields,
@@ -104,6 +106,7 @@ const StudentList = () => {
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [profileStudent, setProfileStudent] = useState(null);
+  const [tagEditorStudent, setTagEditorStudent] = useState(null);
   const archiveStatusParam = searchParams.get("archiveStatus");
   const archiveStatus = ["active", "archived", "all"].includes(archiveStatusParam)
     ? archiveStatusParam
@@ -112,6 +115,11 @@ const StudentList = () => {
   const canCreate = auth?.hasPermission?.("students.create");
   const canArchive = auth?.hasPermission?.("students.archive");
   const canUnarchive = auth?.hasPermission?.("students.unarchive");
+  const canViewStudentTags = auth?.hasPermission?.("parent-tag-users.index");
+  const canEditStudentTags = auth?.hasAllPermissions?.([
+    "parent-tag-users.create",
+    "parent-tag-users.delete",
+  ]);
 
   const pagedImportRows = useMemo(() => {
     const start = (importPreviewPage - 1) * importPreviewPageSize;
@@ -962,6 +970,11 @@ const StudentList = () => {
                 </Button>
               )}
 
+              <StudentTagEditButton
+                canView={Boolean(canViewStudentTags)}
+                onClick={() => setTagEditorStudent(row.original)}
+              />
+
               {showArchive && canArchive && (
                 <Button
                   color="danger"
@@ -990,6 +1003,7 @@ const StudentList = () => {
       archiveStatus,
       canArchive,
       canUnarchive,
+      canViewStudentTags,
       handleEdit,
       openArchiveConfirm,
       openUnarchiveConfirm,
@@ -1663,6 +1677,15 @@ const StudentList = () => {
         student={profileStudent}
         activeSchoolId={filters.schoolId}
         onClose={() => setProfileStudent(null)}
+      />
+
+      <StudentTagsModal
+        open={Boolean(tagEditorStudent)}
+        student={tagEditorStudent}
+        activeSchoolId={filters.schoolId}
+        canEdit={Boolean(canEditStudentTags)}
+        onClose={() => setTagEditorStudent(null)}
+        onSaved={() => fetchData(meta.page, filters, sort)}
       />
 
       <Modal isOpen={tagModalOpen} toggle={() => setTagModalOpen(false)} size="lg" centered>

@@ -178,6 +178,7 @@ export const API_ROUTES = {
     exportUsers: (id) => `/parent-tags/${id}/users/export`,
     values: (id) => `/parent-tags/${id}/values`,
     deleteValue: (id, userId) => `/parent-tags/${id}/values/${userId}`,
+    studentTags: (studentId) => `/parent-tags/students/${studentId}`,
   },
   voip: {
     outboundCallHistories: "/voip/outbound-call-histories",
