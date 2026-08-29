@@ -68,7 +68,7 @@ const dispositionConfig = {
   ANSWERED: { label: "پاسخ داده شد", color: "success" },
   "NO ANSWER": { label: "پاسخ داده نشد", color: "danger" },
   BUSY: { label: "مشغول", color: "warning" },
-  FAILED: { label: "ناموفق", color: "secondary" },
+  FAILED: { label: "ناموفق/ناقص", color: "secondary" },
 };
 
 const hasValidCallGroupId = (value) => {
@@ -209,7 +209,7 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
             <Button color="light" onClick={() => setConfirmationOpen(false)} disabled={submitting}>انصراف</Button>
             <Button color="danger" onClick={() => handleSubmit(false)} disabled={submitting}>
               {submittingAction === "incomplete" && <Spinner size="sm" className="me-2" />}
-              ثبت ناقص/ناموفق
+              ثبت ناموفق/ناقص
             </Button>
             <Button color="success" onClick={() => handleSubmit(true)} disabled={submitting}>
               {submittingAction === "success" && <Spinner size="sm" className="me-2" />}

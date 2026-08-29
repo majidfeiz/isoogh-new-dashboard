@@ -301,7 +301,7 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
             <Button color="light" onClick={() => setConfirmationOpen(false)} disabled={submitting}>انصراف</Button>
             <Button color="danger" onClick={() => handleSubmit(false)} disabled={submitting}>
               {submittingAction === "incomplete" && <Spinner size="sm" className="me-2" />}
-              ثبت ناقص/ناموفق
+              ثبت ناموفق/ناقص
             </Button>
             <Button color="success" onClick={() => handleSubmit(true)} disabled={submitting}>
               {submittingAction === "success" && <Spinner size="sm" className="me-2" />}
@@ -751,7 +751,7 @@ const FormDetail = () => {
                       <th>تلفن</th>
                       <th>کد ملی</th>
                       <th style={{ width: 100 }}>تماس موفق</th>
-                      <th style={{ width: 100 }}>تماس ناموفق</th>
+                      <th style={{ width: 100 }}>تماس ناموفق/ناقص</th>
                       <th style={{ width: 110 }}>مجموع تماس‌ها</th>
                       <th>آخرین تماس</th>
                       <th style={{ width: 80 }}>پاسخ</th>

@@ -47,7 +47,7 @@ const dispositionConfig = {
   ANSWERED: { label: "پاسخ داده شد", color: "success" },
   "NO ANSWER": { label: "پاسخ داده نشد", color: "danger" },
   BUSY: { label: "مشغول", color: "warning" },
-  FAILED: { label: "ناموفق", color: "secondary" },
+  FAILED: { label: "ناموفق/ناقص", color: "secondary" },
 };
 
 const toTimestamp = (dateValue) => {

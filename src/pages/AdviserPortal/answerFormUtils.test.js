@@ -26,5 +26,5 @@ test("builds the API payload only from the current question list", () => {
 
 test("uses the returned status and completeness for the success message", () => {
   expect(getAnswerSubmitMessage({ status: 1, isComplete: false })).toBe("تماس با تأیید مشاور موفق ثبت شد");
-  expect(getAnswerSubmitMessage({ status: 2, isComplete: false })).toBe("تماس ناقص/ناموفق ثبت شد");
+  expect(getAnswerSubmitMessage({ status: 2, isComplete: false })).toBe("تماس ناموفق/ناقص ثبت شد");
 });
