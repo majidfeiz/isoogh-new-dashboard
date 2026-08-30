@@ -31,6 +31,8 @@ import {
   getAdviserSupportFormStats,
   getAdviserFormStudents,
   getAdviserWorkShifts,
+  getStudentAnswers,
+  getStudentCallLogs,
   makeCall,
   submitAnswers,
   updateAdviserStudentWorkShift,
@@ -41,7 +43,7 @@ import {
   readAdviserStudentQuery,
   updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
-import { buildAnswerPayload, getAnswerSubmitMessage, getUnansweredQuestions } from "./answerFormUtils.js";
+import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
 
 const formatJalali = (value, withTime = false) => {
   if (!value) return "—";
@@ -74,21 +76,49 @@ const hasValidCallGroupId = (value) => {
 
 // ─── Answer Form Drawer ───────────────────────────────────────────────────────
 
-const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted }) => {
+export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubmitted }) => {
+  const { studentId, voipCallId } = callContext || {};
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submittingAction, setSubmittingAction] = useState(null);
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [answersLoading, setAnswersLoading] = useState(false);
+  const [answersReady, setAnswersReady] = useState(false);
+  const [answerError, setAnswerError] = useState("");
+  const [currentSession, setCurrentSession] = useState(null);
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
-      setAnswers({});
-      setSessionsOpen(false);
-      setConfirmationOpen(false);
+    let cancelled = false;
+    setAnswers({});
+    setCurrentSession(null);
+    setAnswersReady(false);
+    setSessionsOpen(false);
+    setConfirmationOpen(false);
+    setAnswerError("");
+    setAnswersLoading(false);
+    if (!open) return undefined;
+    if (!voipCallId) {
+      setAnswerError("تماس معتبر پیدا نشد");
+      return undefined;
     }
-  }, [open, student?.id]);
+    setAnswersLoading(true);
+    getStudentAnswers(callContext.formId, studentId, voipCallId)
+      .then((sessions) => {
+        if (cancelled) return;
+        const session = getSessionForVoipCall(sessions, voipCallId);
+        setCurrentSession(session);
+        setAnswers(hydrateAnswers(form?.questions || [], session));
+        setAnswersReady(true);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAnswerError(getAnswerRequestError(error));
+      })
+      .finally(() => { if (!cancelled) setAnswersLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, studentId, callContext?.formId, form?.questions, voipCallId]);
 
   const setAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -115,20 +145,25 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
     submittingRef.current = true;
     setSubmittingAction(callSuccessful ? "success" : "incomplete");
     setSubmitting(true);
+    setAnswerError("");
     try {
       const result = await submitAnswers({
-        formId: form.id,
-        studentId: student.studentId ?? student.id,
+        formId: callContext.formId,
+        studentId,
         answers: buildAnswerPayload(questions, answers),
         voipCallId,
         callSuccessful,
       });
+      if (Number(result?.voipCallId) !== Number(voipCallId)) throw new Error("شناسه تماس پاسخ ذخیره‌شده با تماس انتخاب‌شده مطابقت ندارد");
+      const refreshedSessions = await getStudentAnswers(callContext.formId, studentId, voipCallId);
+      getSessionForVoipCall(refreshedSessions, voipCallId);
       toast.success(getAnswerSubmitMessage(result));
       setConfirmationOpen(false);
       onSubmitted?.(result);
       onClose();
-    } catch {
-      // handled by httpClient
+    } catch (error) {
+      setAnswerError(getAnswerRequestError(error));
+      setConfirmationOpen(false);
     } finally {
       submittingRef.current = false;
       setSubmittingAction(null);
@@ -136,7 +171,7 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
     }
   };
 
-  const sessions = student?.answerSessions || [];
+  const sessions = currentSession ? [currentSession] : [];
 
   return (
     <Modal isOpen={open} toggle={() => !submitting && onClose()} size="lg" scrollable>
@@ -151,6 +186,9 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
         </div>
       </ModalHeader>
       <ModalBody className="p-4">
+        {answerError ? <Alert color="danger">{answerError}</Alert> : null}
+        {answersLoading ? <div className="text-center py-5"><Spinner color="primary" /><div className="text-muted mt-2">در حال دریافت پاسخنامه تماس...</div></div> : null}
+        {!answersLoading && <>
         {sessions.length > 0 && (
           <div className="mb-4">
             <Button
@@ -286,11 +324,12 @@ const AnswerDrawer = ({ open, onClose, student, form, voipCallId, onSubmitted })
           <Button color="light" onClick={onClose} disabled={submitting}>
             انصراف
           </Button>
-          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting}>
+          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting || !answersReady}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
         </div>
+        </>}
       </ModalBody>
       <Modal isOpen={confirmationOpen} toggle={() => !submitting && setConfirmationOpen(false)} centered>
         <ModalHeader toggle={() => !submitting && setConfirmationOpen(false)}>نتیجه تماس</ModalHeader>
@@ -396,8 +435,7 @@ const FormDetail = () => {
   const [updatingShiftIds, setUpdatingShiftIds] = useState({});
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [lastVoipCallId, setLastVoipCallId] = useState(null);
+  const [answerCallContext, setAnswerCallContext] = useState(null);
   const [callTrackingWarningOpen, setCallTrackingWarningOpen] = useState(false);
   const [queuedCall, setQueuedCall] = useState(null);
   const queuedTraceRequest = useRef(null);
@@ -516,9 +554,10 @@ const FormDetail = () => {
       const result = await makeCall({ supportFormId: Number(formId), studentId: id });
       if (isQueuedCallResponse(result)) {
         const queued = normalizeQueuedCall(result);
+        const context = createAnswerCallContext({ formId, studentId: id, voipCallId: queued.voipCallId, student, isNewCall: true });
+        if (!context) throw new Error("voipCallId is required");
         setQueuedCall(queued);
-        setLastVoipCallId(queued.voipCallId);
-        setSelectedStudent(student);
+        setAnswerCallContext(context);
         toast.success("درخواست تماس در صف قرار گرفت");
         queuedTraceRequest.current?.abort();
         const controller = new AbortController();
@@ -528,7 +567,9 @@ const FormDetail = () => {
             if (controller.signal.aborted) return;
             fetchStudents(meta.page, search, callStatus, workShiftId, sort);
             fetchStats();
-            if (trace?.status === "completed" && queued.voipCallId) setDrawerOpen(true);
+            if (trace?.status === "completed") {
+              setDrawerOpen(true);
+            }
           })
           .catch(() => {});
         return;
@@ -538,8 +579,9 @@ const FormDetail = () => {
         return;
       }
       toast.success("تماس برقرار شد");
-      setLastVoipCallId(result?.voipCallId ?? null);
-      setSelectedStudent(student);
+      const context = createAnswerCallContext({ formId, studentId: id, voipCallId: result?.voipCallId, student, isNewCall: true });
+      if (!context) throw new Error("voipCallId is required");
+      setAnswerCallContext(context);
       setDrawerOpen(true);
       fetchStudents(meta.page, search, callStatus, workShiftId, sort);
       fetchStats();
@@ -550,17 +592,40 @@ const FormDetail = () => {
     }
   };
 
-  const handleViewAnswers = (student) => {
-    setSelectedStudent(student);
-    setLastVoipCallId(null);
-    setDrawerOpen(true);
+  const handleViewAnswers = async (student) => {
+    try {
+      const targetStudentId = student.studentId ?? student.id;
+      const currentContext = answerCallContext?.formId === Number(formId) && answerCallContext?.studentId === Number(targetStudentId)
+        ? answerCallContext
+        : null;
+      const explicitCallId = student?.lastVoipCallId;
+      const callId = currentContext?.voipCallId || explicitCallId || (await getStudentCallLogs({
+        formId: Number(formId),
+        studentId: targetStudentId,
+        page: 1,
+        limit: 1,
+      })).items?.[0]?.voipCallId;
+      if (!callId) {
+        toast.error("تماس معتبر پیدا نشد");
+        return;
+      }
+      const context = currentContext || createAnswerCallContext({ formId, studentId: targetStudentId, voipCallId: callId, student });
+      if (!context) {
+        toast.error("تماس معتبر پیدا نشد");
+        return;
+      }
+      setAnswerCallContext(context);
+      setDrawerOpen(true);
+    } catch {
+      // handled by httpClient
+    }
   };
 
   const handleAnswerSubmitted = (result) => {
     const returnedStatus = Number(result?.status);
-    if ([0, 1, 2].includes(returnedStatus) && selectedStudent) {
+    if ([0, 1, 2].includes(returnedStatus) && answerCallContext?.student) {
       setData((current) => current
-        .map((student) => student.studentId === selectedStudent.studentId
+        .map((student) => student.studentId === answerCallContext.studentId
           ? { ...student, status: returnedStatus, hasAnswers: true }
           : student)
         .filter((student) => callStatus === "" || String(student.status) === callStatus));
@@ -904,9 +969,9 @@ const FormDetail = () => {
       <AnswerDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        student={selectedStudent}
+        student={answerCallContext?.student}
         form={form}
-        voipCallId={lastVoipCallId}
+        callContext={answerCallContext}
         onSubmitted={handleAnswerSubmitted}
       />
       <CallTrackingWarningModal

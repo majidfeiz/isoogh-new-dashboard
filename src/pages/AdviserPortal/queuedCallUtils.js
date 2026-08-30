@@ -3,10 +3,10 @@ export const isQueuedCallResponse = (result) =>
 
 export const normalizeQueuedCall = (result = {}) => ({
   callGroupId: null,
-  queueJobId: result.queueJobId ?? null,
-  traceId: result.traceId ?? null,
-  correlationId: result.correlationId ?? null,
-  voipCallId: result.voipCallId ?? null,
+  queueJobId: result.queueJobId ?? result.queue_job_id ?? null,
+  traceId: result.traceId ?? result.trace_id ?? null,
+  correlationId: result.correlationId ?? result.correlation_id ?? null,
+  voipCallId: result.voipCallId ?? result.voip_call_id ?? null,
   progress: Number(result.progress ?? 30),
   status: "queued",
 });

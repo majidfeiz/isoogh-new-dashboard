@@ -43,7 +43,7 @@ import {
   setDefaultContact,
   deleteStudentContact,
 } from "../../services/adviserPortalService.jsx";
-import { buildAnswerPayload, getAnswerSubmitMessage, getUnansweredQuestions } from "./answerFormUtils.js";
+import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -79,19 +79,44 @@ const hasValidCallGroupId = (value) => {
 
 // ─── Answer Drawer ────────────────────────────────────────────────────────────
 
-const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, form, voipCallId, onSubmitted }) => {
+const AnswerDrawer = ({ open, onClose, studentName, studentPhone, form, callContext, onSubmitted }) => {
+  const { studentId, voipCallId } = callContext || {};
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [submittingAction, setSubmittingAction] = useState(null);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [answersLoading, setAnswersLoading] = useState(false);
+  const [answersReady, setAnswersReady] = useState(false);
+  const [answerError, setAnswerError] = useState("");
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    if (open) {
-      setAnswers({});
-      setConfirmationOpen(false);
+    let cancelled = false;
+    setAnswers({});
+    setAnswersReady(false);
+    setConfirmationOpen(false);
+    setAnswerError("");
+    setAnswersLoading(false);
+    if (!open) return undefined;
+    if (!voipCallId) {
+      setAnswerError("تماس معتبر پیدا نشد");
+      return undefined;
     }
-  }, [open, studentId]);
+    setAnswersLoading(true);
+    getStudentAnswers(callContext.formId, studentId, voipCallId)
+      .then((sessions) => {
+        if (cancelled) return;
+        const session = getSessionForVoipCall(sessions, voipCallId);
+        setAnswers(hydrateAnswers(form?.questions || [], session));
+        setAnswersReady(true);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setAnswerError(getAnswerRequestError(error));
+      })
+      .finally(() => { if (!cancelled) setAnswersLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, studentId, callContext?.formId, form?.questions, voipCallId]);
 
   const setAnswer = (qId, value) => setAnswers((p) => ({ ...p, [qId]: value }));
   const toggleCheckbox = (qId, optId) =>
@@ -109,20 +134,25 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
     submittingRef.current = true;
     setSubmittingAction(callSuccessful ? "success" : "incomplete");
     setSubmitting(true);
+    setAnswerError("");
     try {
       const result = await submitAnswers({
-        formId: form.id,
+        formId: callContext.formId,
         studentId,
         answers: buildAnswerPayload(questions, answers),
         voipCallId,
         callSuccessful,
       });
+      if (Number(result?.voipCallId) !== Number(voipCallId)) throw new Error("شناسه تماس پاسخ ذخیره‌شده با تماس انتخاب‌شده مطابقت ندارد");
+      const refreshedSessions = await getStudentAnswers(callContext.formId, studentId, voipCallId);
+      getSessionForVoipCall(refreshedSessions, voipCallId);
       toast.success(getAnswerSubmitMessage(result));
       setConfirmationOpen(false);
       onSubmitted?.(result);
       onClose();
-    } catch {
-      // handled by httpClient
+    } catch (error) {
+      setAnswerError(getAnswerRequestError(error));
+      setConfirmationOpen(false);
     } finally {
       submittingRef.current = false;
       setSubmittingAction(null);
@@ -143,6 +173,9 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
         </div>
       </ModalHeader>
       <ModalBody className="p-4">
+        {answerError ? <Alert color="danger">{answerError}</Alert> : null}
+        {answersLoading ? <div className="text-center py-5"><Spinner color="primary" /><div className="text-muted mt-2">در حال دریافت پاسخنامه تماس...</div></div> : null}
+        {!answersLoading && <>
         <div className="vstack gap-4">
           {(form?.questions || []).map((q, idx) => (
             <FormGroup key={q.id} className="mb-0">
@@ -194,11 +227,12 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, studentId, for
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
           <Button color="light" onClick={onClose} disabled={submitting}>انصراف</Button>
-          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting}>
+          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting || !answersReady}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
         </div>
+        </>}
       </ModalBody>
       <Modal isOpen={confirmationOpen} toggle={() => !submitting && setConfirmationOpen(false)} centered>
         <ModalHeader toggle={() => !submitting && setConfirmationOpen(false)}>نتیجه تماس</ModalHeader>
@@ -274,7 +308,7 @@ const StudentInfoTab = ({ profile, loading }) => {
 
 // ─── Tab 2: Call Logs ─────────────────────────────────────────────────────────
 
-const CallLogsTab = ({ formId, studentId, refreshKey }) => {
+const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
   const [loading, setLoading] = useState(false);
@@ -340,9 +374,9 @@ const CallLogsTab = ({ formId, studentId, refreshKey }) => {
                   </td>
                   <td className="text-muted small">{log.toPhone || "—"}</td>
                   <td className="text-center">
-                    {log.hasAnswers
-                      ? <i className="bx bx-check-circle text-success font-size-18" title="پاسخنامه دارد" />
-                      : <i className="bx bx-x-circle text-danger font-size-18" title="بدون پاسخنامه" />}
+                    <Button color={log.hasAnswers ? "success" : "primary"} outline size="sm" disabled={!log.voipCallId} onClick={() => onOpenAnswers(log.voipCallId)}>
+                      <i className={`bx ${log.hasAnswers ? "bx-edit" : "bx-plus"}`} />
+                    </Button>
                   </td>
                 </tr>
               );
@@ -387,7 +421,7 @@ const AnswersTab = ({ formId, studentId, refreshKey, onFillAnswers }) => {
           </div>
         </div>
         <h6 className="text-muted mb-3">هیچ پاسخنامه‌ای ثبت نشده است</h6>
-        <Button color="primary" onClick={onFillAnswers}>
+        <Button color="primary" onClick={() => onFillAnswers()}>
           <i className="bx bx-edit me-2" />
           پر کردن پاسخنامه
         </Button>
@@ -399,7 +433,7 @@ const AnswersTab = ({ formId, studentId, refreshKey, onFillAnswers }) => {
   return (
     <div className="vstack gap-2">
       {sessions.map((session, idx) => (
-        <div key={idx} className="border rounded overflow-hidden">
+        <div key={session.voipCallId ?? idx} className="border rounded overflow-hidden">
           <div
             className="d-flex align-items-center justify-content-between px-3 py-3 bg-light"
             style={{ cursor: "pointer" }}
@@ -413,6 +447,7 @@ const AnswersTab = ({ formId, studentId, refreshKey, onFillAnswers }) => {
                 جلسه {idx + 1} — {formatJalali(session.sessionDate, true)}
               </span>
               <Badge color="primary" pill className="px-2">{session.answers?.length || 0} پاسخ</Badge>
+              {session.voipCallId ? <Button size="sm" color="primary" outline onClick={(event) => { event.stopPropagation(); onFillAnswers(session.voipCallId); }}>ویرایش</Button> : null}
             </div>
             <i className={`bx bx-chevron-${open[idx] ? "up" : "down"} font-size-18 text-muted`} />
           </div>
@@ -749,7 +784,7 @@ const StudentProfile = () => {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [lastVoipCallId, setLastVoipCallId] = useState(null);
+  const [answerCallContext, setAnswerCallContext] = useState(null);
   const [callTrackingWarningOpen, setCallTrackingWarningOpen] = useState(false);
   const [queuedCall, setQueuedCall] = useState(null);
   const queuedTraceRequest = useRef(null);
@@ -774,6 +809,11 @@ const StudentProfile = () => {
 
   useEffect(() => () => queuedTraceRequest.current?.abort(), []);
 
+  useEffect(() => {
+    setAnswerCallContext(null);
+    setDrawerOpen(false);
+  }, [formId, studentId]);
+
   const handleCall = async () => {
     if (cooldown.current || calling) return;
     cooldown.current = true;
@@ -783,8 +823,10 @@ const StudentProfile = () => {
       const result = await makeCall({ supportFormId: Number(formId), studentId: Number(studentId) });
       if (isQueuedCallResponse(result)) {
         const queued = normalizeQueuedCall(result);
+        const context = createAnswerCallContext({ formId, studentId, voipCallId: queued.voipCallId, isNewCall: true });
+        if (!context) throw new Error("voipCallId is required");
         setQueuedCall(queued);
-        setLastVoipCallId(queued.voipCallId);
+        setAnswerCallContext(context);
         toast.success("درخواست تماس در صف قرار گرفت");
         queuedTraceRequest.current?.abort();
         const controller = new AbortController();
@@ -794,7 +836,9 @@ const StudentProfile = () => {
             if (controller.signal.aborted) return;
             fetchProfile();
             setRefreshKey((key) => key + 1);
-            if (trace?.status === "completed" && queued.voipCallId) setDrawerOpen(true);
+            if (trace?.status === "completed") {
+              setDrawerOpen(true);
+            }
           })
           .catch(() => {});
         return;
@@ -804,7 +848,9 @@ const StudentProfile = () => {
         return;
       }
       toast.success("تماس برقرار شد");
-      setLastVoipCallId(result?.voipCallId ?? null);
+      const context = createAnswerCallContext({ formId, studentId, voipCallId: result?.voipCallId, isNewCall: true });
+      if (!context) throw new Error("voipCallId is required");
+      setAnswerCallContext(context);
       setDrawerOpen(true);
     } catch {
       cooldown.current = false;
@@ -818,9 +864,34 @@ const StudentProfile = () => {
     setRefreshKey((k) => k + 1);
   };
 
-  const handleFillAnswers = () => {
-    setLastVoipCallId(null);
-    setDrawerOpen(true);
+  const handleFillAnswers = async (selectedVoipCallId = null) => {
+    try {
+      const requestedCallId = ["number", "string"].includes(typeof selectedVoipCallId) && Number(selectedVoipCallId) > 0
+        ? Number(selectedVoipCallId)
+        : null;
+      const currentContext = !requestedCallId && answerCallContext?.formId === Number(formId) && answerCallContext?.studentId === Number(studentId)
+        ? answerCallContext
+        : null;
+      const callId = requestedCallId || currentContext?.voipCallId || profile?.lastVoipCallId || (await getStudentCallLogs({
+        formId: Number(formId),
+        studentId: Number(studentId),
+        page: 1,
+        limit: 1,
+      })).items?.[0]?.voipCallId;
+      if (!callId) {
+        toast.error("تماس معتبر پیدا نشد");
+        return;
+      }
+      const context = currentContext || createAnswerCallContext({ formId, studentId, voipCallId: callId });
+      if (!context) {
+        toast.error("تماس معتبر پیدا نشد");
+        return;
+      }
+      setAnswerCallContext(context);
+      setDrawerOpen(true);
+    } catch {
+      // handled by httpClient
+    }
   };
 
   const breadcrumbTitle = profile?.supportFormTitle || `فرم ${formId}`;
@@ -887,7 +958,7 @@ const StudentProfile = () => {
                 <Button
                   color="warning"
                   size="sm"
-                  onClick={handleFillAnswers}
+                  onClick={() => handleFillAnswers()}
                   disabled={profileLoading}
                   className="d-flex align-items-center gap-1"
                 >
@@ -948,7 +1019,7 @@ const StudentProfile = () => {
               </TabPane>
               <TabPane tabId="calls">
                 {activeTab === "calls" && (
-                  <CallLogsTab formId={formId} studentId={studentId} refreshKey={refreshKey} />
+                    <CallLogsTab formId={formId} studentId={studentId} refreshKey={refreshKey} onOpenAnswers={handleFillAnswers} />
                 )}
               </TabPane>
               <TabPane tabId="answers">
@@ -982,9 +1053,8 @@ const StudentProfile = () => {
         onClose={() => setDrawerOpen(false)}
         studentName={profile?.name}
         studentPhone={profile?.phone}
-        studentId={Number(studentId)}
         form={form}
-        voipCallId={lastVoipCallId}
+        callContext={answerCallContext}
         onSubmitted={handleAnswerSubmitted}
       />
       <CallTrackingWarningModal
