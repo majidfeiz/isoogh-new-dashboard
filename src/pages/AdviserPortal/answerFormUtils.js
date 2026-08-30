@@ -3,6 +3,31 @@ const toValidId = (value) => {
   return Number.isInteger(id) && id > 0 ? id : null;
 };
 
+export const getFlowVoipCallId = ({ currentVoipCallId, currentStudentId, targetStudentId, currentFormId, targetFormId }) => {
+  const callId = toValidId(currentVoipCallId);
+  if (!callId) return null;
+  if (toValidId(currentStudentId) !== toValidId(targetStudentId)) return null;
+  if (toValidId(currentFormId) !== toValidId(targetFormId)) return null;
+  return callId;
+};
+
+export const createAnswerCallContext = ({ formId, studentId, voipCallId, student = null, isNewCall = false }) => {
+  const normalizedFormId = toValidId(formId);
+  const normalizedStudentId = toValidId(studentId);
+  const normalizedVoipCallId = toValidId(voipCallId);
+  if (!normalizedFormId || !normalizedStudentId || !normalizedVoipCallId) return null;
+  return {
+    formId: normalizedFormId,
+    studentId: normalizedStudentId,
+    voipCallId: normalizedVoipCallId,
+    student,
+    isNewCall: Boolean(isNewCall),
+  };
+};
+
+const getQuestionOptionIds = (question = {}) =>
+  new Set((question.options || []).map((option) => toValidId(option?.id)).filter(Boolean));
+
 export const isMultiChoiceQuestion = (question = {}) =>
   question.type === 2 || Boolean(question.multiChoice);
 
@@ -20,18 +45,65 @@ export const hasQuestionAnswer = (question, value) => {
 export const getUnansweredQuestions = (questions = [], answers = {}) =>
   questions.filter((question) => !hasQuestionAnswer(question, answers[question.id]));
 
-export const buildAnswerPayload = (questions = [], answers = {}) =>
-  questions.flatMap((question) => {
+export const buildAnswerPayload = (questions = [], answers = {}) => {
+  const seen = new Set();
+  return questions.flatMap((question) => {
+    const questionId = toValidId(question.id);
+    if (!questionId || seen.has(questionId)) return [];
+    seen.add(questionId);
     const value = answers[question.id];
-    if (!hasQuestionAnswer(question, value)) return [];
+    if (!hasQuestionAnswer(question, value)) return [{ questionId }];
     if (isTextQuestion(question)) {
-      return [{ questionId: question.id, answer: value.trim() }];
+      return [{ questionId, answer: value.trim() }];
     }
+    const optionIds = getQuestionOptionIds(question);
     if (isMultiChoiceQuestion(question)) {
-      return [{ questionId: question.id, answerId: value.map(toValidId).filter((id) => id !== null) }];
+      const selectedIds = [...new Set(value.map(toValidId).filter((id) => id !== null && optionIds.has(id)))];
+      return selectedIds.length ? [{ questionId, answerId: selectedIds }] : [{ questionId }];
     }
-    return [{ questionId: question.id, answerId: toValidId(value) }];
+    const optionId = toValidId(value);
+    return optionIds.has(optionId) ? [{ questionId, answerId: optionId }] : [{ questionId }];
   });
+};
+
+export const hydrateAnswers = (questions = [], session = null) => {
+  const questionById = new Map(questions.map((question) => [toValidId(question.id), question]));
+  return (session?.answers || []).reduce((result, row) => {
+    const questionId = toValidId(row?.questionId ?? row?.question_id);
+    const question = questionById.get(questionId);
+    if (!question || Object.prototype.hasOwnProperty.call(result, questionId)) return result;
+    if (isTextQuestion(question)) {
+      result[questionId] = row?.answerText ?? row?.answer_text ?? row?.answer ?? "";
+    } else if (isMultiChoiceQuestion(question)) {
+      const values = row?.answerIds ?? row?.answer_ids ?? row?.answerId ?? row?.answer_id ?? [];
+      result[questionId] = (Array.isArray(values) ? values : [values]).map(toValidId).filter(Boolean);
+    } else {
+      result[questionId] = toValidId(row?.answerId ?? row?.answer_id) ?? "";
+    }
+    return result;
+  }, {});
+};
+
+export const getSessionForVoipCall = (sessions = [], voipCallId) => {
+  const expectedId = toValidId(voipCallId);
+  if (!expectedId || !Array.isArray(sessions) || sessions.length === 0) return null;
+  const session = sessions.find((item) => toValidId(item?.voipCallId ?? item?.voip_call_id) === expectedId);
+  if (!session) throw new Error("پاسخنامه دریافت‌شده متعلق به تماس انتخاب‌شده نیست");
+  return session;
+};
+
+export const getAnswerRequestError = (error) => {
+  const body = error?.response?.data;
+  const message = body?.message ?? body?.data?.message ?? body?.errors?.[0]?.message ?? body?.errors?.[0];
+  if (error?.response?.status === 404) return "تماس معتبر پیدا نشد";
+  if (error?.response?.status === 403) return "این دانش‌آموز در این فرم به شما تخصیص داده نشده است";
+  if (Array.isArray(message)) return message.filter(Boolean).join("، ");
+  if (typeof message === "string" && message) return message;
+  if (error?.response?.status === 400) return "اطلاعات پاسخنامه معتبر نیست";
+  if (!error?.response && error?.message === "voipCallId is required") return "تماس معتبر پیدا نشد";
+  if (!error?.response && typeof error?.message === "string" && error.message) return error.message;
+  return "دریافت یا ذخیره پاسخنامه انجام نشد";
+};
 
 export const getAnswerSubmitMessage = ({ status, isComplete } = {}) => {
   if (Number(status) === 1 && isComplete === false) return "تماس با تأیید مشاور موفق ثبت شد";
