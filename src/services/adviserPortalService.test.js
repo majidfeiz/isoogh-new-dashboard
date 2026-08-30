@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
+import { getAdviserFormStudents, getStudentAnswers, getStudentCallLogs, makeCall, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -34,30 +34,59 @@ test("sends an incomplete form adviser override as boolean true and reads the se
       answers: [{ questionId: 10, answer: "پاسخ" }],
       callSuccessful: true,
       voipCallId: 12345,
-    }
+    },
+    { silent: true }
   )
   expect(typeof apiPost.mock.calls[0][1].callSuccessful).toBe("boolean")
   expect(result).toEqual({ count: 1, isComplete: false, status: 1 })
 })
 
-test("allows submitting answers without a current VoIP call id", async () => {
-  apiPost.mockResolvedValue({ data: { data: { count: 1, isComplete: true, status: 1 } } })
-
-  await submitAnswers({
+test("rejects submitting answers without a current VoIP call id", async () => {
+  await expect(submitAnswers({
     formId: 14,
     studentId: 255046,
     voipCallId: null,
     callSuccessful: true,
     answers: [{ questionId: 10, answer: "پاسخ" }],
-  })
+  })).rejects.toThrow("voipCallId is required")
+  expect(apiPost).not.toHaveBeenCalled()
+})
 
-  expect(apiPost).toHaveBeenCalledWith(
+test("loads exactly the answer session for the requested VoIP call", async () => {
+  apiGet.mockResolvedValue({ data: { data: [{ voipCallId: 3780529, answers: [] }] } })
+  await expect(getStudentAnswers(14, 255046, 3780529)).resolves.toEqual([{ voipCallId: 3780529, answers: [] }])
+  expect(apiGet).toHaveBeenCalledWith(
     "http://127.0.0.1:8040/adviser-portal/support-forms/14/students/255046/answers",
-    {
-      answers: [{ questionId: 10, answer: "پاسخ" }],
-      callSuccessful: true,
-    }
+    { params: { voipCallId: 3780529 }, silent: true }
   )
+})
+
+test("normalizes the new VoIP call id from snake-case call responses", async () => {
+  apiPost.mockResolvedValue({ data: { data: { voip_call_id: 456, call_group_id: "group-1" } } })
+  await expect(makeCall({ supportFormId: 14, studentId: 20 })).resolves.toEqual(expect.objectContaining({
+    voipCallId: 456,
+    callGroupId: "group-1",
+  }))
+})
+
+test("uses the call-log row id as voipCallId for historical questionnaires", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [{ id: 3521346, hasAnswers: false }], meta: {} } } })
+  await expect(getStudentCallLogs({ formId: 14, studentId: 20 })).resolves.toEqual(expect.objectContaining({
+    items: [expect.objectContaining({ id: 3521346, voipCallId: 3521346 })],
+  }))
+})
+
+test("deduplicates answer sessions only by voipCallId", async () => {
+  apiGet.mockResolvedValue({ data: { data: [
+    { voipCallId: 10, answers: [{ id: 1 }] },
+    { voipCallId: 10, answers: [{ id: 2 }] },
+    { voipCallId: 11, answers: [] },
+    { answers: [{ id: 3 }] },
+  ] } })
+  await expect(getStudentAnswers(14, 255046)).resolves.toEqual([
+    { voipCallId: 10, answers: [{ id: 1 }] },
+    { voipCallId: 11, answers: [] },
+  ])
 })
 
 test("normalizes zero and populated call counts and preserves pagination", async () => {

@@ -84,6 +84,7 @@ const normalizeStudent = (item = {}) => ({
   workShiftId: item?.workShiftId ?? item?.work_shift_id ?? null,
   workShift: item?.workShift ?? item?.work_shift ?? null,
   answerSessions: item?.answer_sessions ?? item?.answerSessions ?? [],
+  lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
 });
 
 const normalizeWorkShift = (item = {}) => ({
@@ -120,10 +121,12 @@ const normalizeStudentProfile = (item = {}) => ({
   hasAnswers: item?.hasAnswers ?? item?.has_answers ?? false,
   supportFormId: item?.supportFormId ?? item?.support_form_id ?? null,
   supportFormTitle: item?.supportFormTitle ?? item?.support_form_title ?? "",
+  lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
 });
 
 const normalizeStudentCallLog = (item = {}) => ({
   id: item?.id ?? null,
+  voipCallId: item?.voipCallId ?? item?.voip_call_id ?? item?.id ?? null,
   callGroupId: item?.callGroupId ?? item?.call_group_id ?? "",
   toPhone: item?.toPhone ?? item?.to_phone ?? "",
   disposition: item?.disposition ?? "",
@@ -350,16 +353,27 @@ export async function makeCall({ supportFormId, studentId, priority }) {
     studentId,
     ...(normalizedPriority != null ? { priority: normalizedPriority } : {}),
   });
-  return res?.data?.data || res?.data || {};
+  const data = res?.data?.data || res?.data || {};
+  return {
+    ...data,
+    voipCallId: data?.voipCallId ?? data?.voip_call_id ?? data?.call?.voipCallId ?? data?.call?.voip_call_id ?? null,
+    callGroupId: data?.callGroupId ?? data?.call_group_id ?? null,
+    queueJobId: data?.queueJobId ?? data?.queue_job_id ?? null,
+    traceId: data?.traceId ?? data?.trace_id ?? null,
+  };
 }
 
 export async function submitAnswers({ formId, studentId, answers, voipCallId, callSuccessful }) {
+  const normalizedVoipCallId = Number(voipCallId);
+  if (!Number.isInteger(normalizedVoipCallId) || normalizedVoipCallId <= 0) {
+    throw new Error("voipCallId is required");
+  }
   const url = getApiUrl(API_ROUTES.adviserPortal.submitAnswers(formId, studentId));
   const res = await apiPost(url, {
     answers,
     callSuccessful,
-    ...(voipCallId !== null && voipCallId !== undefined ? { voipCallId } : {}),
-  });
+    voipCallId: normalizedVoipCallId,
+  }, { silent: true });
   return res?.data?.data || res?.data || {};
 }
 
@@ -418,10 +432,21 @@ export async function getStudentCallLogs({
   return { items, pagination: normalizePagination(data.meta, page, limit, items) };
 }
 
-export async function getStudentAnswers(formId, studentId) {
+export async function getStudentAnswers(formId, studentId, voipCallId) {
   const url = getApiUrl(API_ROUTES.adviserPortal.studentAnswers(formId, studentId));
-  const res = await apiGet(url);
-  return res?.data?.data || res?.data || [];
+  const normalizedVoipCallId = voipCallId == null ? null : Number(voipCallId);
+  const res = normalizedVoipCallId
+    ? await apiGet(url, { params: { voipCallId: normalizedVoipCallId }, silent: true })
+    : await apiGet(url);
+  const sessions = res?.data?.data || res?.data || [];
+  if (!Array.isArray(sessions)) return [];
+  const unique = new Map();
+  sessions.forEach((session) => {
+    const callId = Number(session?.voipCallId ?? session?.voip_call_id);
+    if (!Number.isInteger(callId) || callId <= 0 || unique.has(callId)) return;
+    unique.set(callId, { ...session, voipCallId: callId });
+  });
+  return [...unique.values()];
 }
 
 // ─── Contacts (Phone Book) ────────────────────────────────────────────────────

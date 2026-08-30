@@ -10,6 +10,15 @@ test("never mistakes a generic response id for the current VoIP call id", () => 
   expect(normalizeQueuedCall({ id: 99, status: "queued" }).voipCallId).toBeNull();
 });
 
+test("normalizes snake-case queued call identifiers", () => {
+  expect(normalizeQueuedCall({ queue_job_id: 9, trace_id: 14, voip_call_id: 88, correlation_id: "c-2" })).toEqual(expect.objectContaining({
+    queueJobId: 9,
+    traceId: 14,
+    voipCallId: 88,
+    correlationId: "c-2",
+  }));
+});
+
 test("polls trace through send and CDR phases until backend reports a final state", async () => {
   const getTrace = jest.fn().mockResolvedValueOnce({ status: "in_progress" }).mockResolvedValueOnce({ status: "waiting_for_cdr" }).mockResolvedValueOnce({ status: "completed" });
   const result = await pollQueuedCallTrace({ traceId: 14, getTrace, intervalMs: 0 });
