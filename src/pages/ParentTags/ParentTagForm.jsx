@@ -1,5 +1,6 @@
 // src/pages/ParentTags/ParentTagForm.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Select from "react-select";
 import {
   Card,
   CardBody,
@@ -14,7 +15,6 @@ import {
   Input,
   Alert,
   FormFeedback,
-  Spinner,
 } from "reactstrap";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -27,6 +27,15 @@ import {
 } from "../../services/parentTagService.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 
+const PARENT_TAGS_PAGE_SIZE = 50;
+
+const mergeParentTags = (current, incoming) => {
+  const tagsById = new Map();
+  [...(current || []), ...(incoming || [])].forEach((tag) => {
+    if (tag?.id != null) tagsById.set(String(tag.id), tag);
+  });
+  return Array.from(tagsById.values());
+};
 
 const ParentTagForm = () => {
   const { id } = useParams();
@@ -46,6 +55,12 @@ const ParentTagForm = () => {
   const [parents, setParents] = useState([]);
   const [schools, setSchools] = useState([]);
   const [loadingParents, setLoadingParents] = useState(false);
+  const [parentSearch, setParentSearch] = useState("");
+  const [debouncedParentSearch, setDebouncedParentSearch] = useState("");
+  const [parentMeta, setParentMeta] = useState({ page: 1, lastPage: 1 });
+  const [parentLoadError, setParentLoadError] = useState(false);
+  const [selectedParent, setSelectedParent] = useState(null);
+  const parentRequestRef = useRef(0);
 
   const schoolOptions = useMemo(
       () =>
@@ -56,32 +71,45 @@ const ParentTagForm = () => {
       [schools]
     );
 
-  const fetchParents = useCallback(async () => {
+  const fetchParents = useCallback(async (page = 1, search = "", append = false) => {
+    const requestId = ++parentRequestRef.current;
     setLoadingParents(true);
+    setParentLoadError(false);
     try {
-        const [schoolsRes] = await Promise.all([
-          getSchools({ page: 1, limit: 200 }),
-        ]);
       const res = await getParentTags({
-        page: 1,
-        limit: 200,
+        page,
+        limit: PARENT_TAGS_PAGE_SIZE,
+        search,
         sortBy: "name",
         sortOrder: "ASC",
       });
-      setParents(res.items || []);
-      setSchools(schoolsRes.items || []);
-
+      if (requestId !== parentRequestRef.current) return;
+      setParents((current) => append ? mergeParentTags(current, res.items) : (res.items || []));
+      setParentMeta(res.pagination || { page, lastPage: 1 });
     } catch (e) {
+      if (requestId !== parentRequestRef.current) return;
       console.error("خطا در دریافت لیست والد‌ها", e);
-      setParents([]);
+      setParentLoadError(true);
+      if (!append) setParents([]);
     } finally {
-      setLoadingParents(false);
+      if (requestId === parentRequestRef.current) setLoadingParents(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchParents();
-  }, [fetchParents]);
+    getSchools({ page: 1, limit: 200 })
+      .then((res) => setSchools(res.items || []))
+      .catch((e) => console.error("خطا در دریافت لیست مجموعه‌ها", e));
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => setDebouncedParentSearch(parentSearch.trim()), 350);
+    return () => clearTimeout(timeoutId);
+  }, [parentSearch]);
+
+  useEffect(() => {
+    fetchParents(1, debouncedParentSearch, false);
+  }, [debouncedParentSearch, fetchParents]);
 
   useEffect(() => {
     if (!isEdit) return;
@@ -98,6 +126,17 @@ const ParentTagForm = () => {
           data?.parent_tag?.id ??
           data?.parentTag?.id ??
           "";
+
+        const parent = data?.parent ?? data?.parent_tag ?? data?.parentTag ?? null;
+        setSelectedParent(
+          parentId
+            ? {
+                ...(parent && typeof parent === "object" ? parent : {}),
+                id: parentId,
+                name: parent?.name || `تگ ${parentId}`,
+              }
+            : null
+        );
 
         setForm({
           name: data?.name || "",
@@ -122,6 +161,14 @@ const ParentTagForm = () => {
       (p) => String(p.id) !== String(id) && p.id !== Number(id)
     );
   }, [parents, isEdit, id]);
+
+  const selectedParentOption = useMemo(() => {
+    if (!form.parent_id) return null;
+    return (
+      selectableParents.find((parent) => String(parent.id) === String(form.parent_id)) ||
+      selectedParent
+    );
+  }, [form.parent_id, selectableParents, selectedParent]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -184,7 +231,6 @@ const ParentTagForm = () => {
       <FormFeedback className="d-block">{errors[field][0]}</FormFeedback>
     ) : null;
 
-    console.log(form)
   return (
     <div className="page-content">
       <Container fluid>
@@ -250,24 +296,46 @@ const ParentTagForm = () => {
                     <Col md="4">
                       <FormGroup>
                         <Label for="parent_id">تگ والد (اختیاری)</Label>
-                        <div className="d-flex align-items-center gap-2">
-                          <Input
-                            id="parent_id"
-                            name="parent_id"
-                            type="select"
-                            value={form.parent_id ?? ""}
-                            onChange={handleChange}
-                            invalid={!!errors.parent_id}
+                        <Select
+                          id="parent_id"
+                          inputId="parent_id"
+                          isRtl
+                          isClearable
+                          value={selectedParentOption}
+                          options={selectableParents}
+                          getOptionValue={(option) => String(option.id)}
+                          getOptionLabel={(option) => option.name || `تگ ${option.id}`}
+                          onChange={(option) => {
+                            setSelectedParent(option || null);
+                            setForm((prev) => ({ ...prev, parent_id: option?.id ?? "" }));
+                          }}
+                          onInputChange={(value, action) => {
+                            if (action.action === "input-change") setParentSearch(value);
+                          }}
+                          onMenuScrollToBottom={() => {
+                            if (!loadingParents && parentMeta.page < parentMeta.lastPage) {
+                              fetchParents(parentMeta.page + 1, debouncedParentSearch, true);
+                            }
+                          }}
+                          isLoading={loadingParents}
+                          placeholder="انتخاب یا جست‌وجوی تگ والد"
+                          loadingMessage={() => "در حال دریافت تگ‌ها..."}
+                          noOptionsMessage={() =>
+                            parentLoadError ? "دریافت تگ‌ها ناموفق بود" : "تگی یافت نشد"
+                          }
+                          classNamePrefix="react-select"
+                        />
+                        {parentLoadError && (
+                          <Button
+                            type="button"
+                            color="link"
+                            size="sm"
+                            className="p-0 mt-1"
+                            onClick={() => fetchParents(1, debouncedParentSearch, false)}
                           >
-                            <option value="">بدون والد</option>
-                            {(selectableParents || []).map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name || `تگ ${p.id}`}
-                              </option>
-                            ))}
-                          </Input>
-                          {loadingParents && <Spinner size="sm" color="primary" />}
-                        </div>
+                            تلاش مجدد
+                          </Button>
+                        )}
                         {renderError("parent_id")}
                       </FormGroup>
                     </Col>
