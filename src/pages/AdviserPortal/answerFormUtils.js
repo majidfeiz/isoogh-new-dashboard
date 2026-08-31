@@ -28,6 +28,69 @@ export const createAnswerCallContext = ({ formId, studentId, voipCallId, student
 const getQuestionOptionIds = (question = {}) =>
   new Set((question.options || []).map((option) => toValidId(option?.id)).filter(Boolean));
 
+const getRawChoiceValues = (row = {}) => {
+  const value = row?.answerIds ?? row?.answer_ids ?? row?.answerId ?? row?.answer_id ?? row?.answer;
+  return Array.isArray(value) ? value : value == null ? [] : [value];
+};
+
+const getChoiceId = (value) =>
+  toValidId(typeof value === "object" && value !== null
+    ? value.id ?? value.answerId ?? value.answer_id ?? value.value
+    : value);
+
+const normalizeChoiceLabel = (value) => String(value ?? "")
+  .replace(/\u064a/g, "\u06cc")
+  .replace(/\u0643/g, "\u06a9")
+  .replace(/[\u06f0-\u06f9]/g, (digit) => String(digit.charCodeAt(0) - 0x06f0))
+  .replace(/[\u0660-\u0669]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+  .replace(/\s+/g, " ")
+  .trim();
+
+const getChoiceIds = (question = {}, row = {}) => {
+  const values = getRawChoiceValues(row);
+  const optionIds = getQuestionOptionIds(question);
+  const ids = values.map(getChoiceId).filter((id) => id && optionIds.has(id));
+  if (ids.length) return ids;
+
+  const optionByLabel = new Map((question.options || []).map((option) => [
+    normalizeChoiceLabel(option?.label),
+    toValidId(option?.id),
+  ]));
+  const textValues = [
+    ...values.map((value) => typeof value === "object" && value !== null
+      ? value.label ?? value.text ?? value.answer ?? value.title
+      : value),
+    row?.answerText,
+    row?.answer_text,
+  ].flat().filter((value) => value != null && String(value).trim());
+
+  return [...new Set(textValues.flatMap((value) => {
+    const normalized = normalizeChoiceLabel(value);
+    const exactId = optionByLabel.get(normalized);
+    if (exactId) return [exactId];
+    return normalized.split(/[\u060c,|]/).map((part) => optionByLabel.get(normalizeChoiceLabel(part))).filter(Boolean);
+  }))];
+};
+
+export const getAnswerDisplayText = (question = {}, row = {}) => {
+  const explicitText = row?.answerText ?? row?.answer_text;
+  if (typeof explicitText === "string" && explicitText.trim()) return explicitText.trim();
+  if (isTextQuestion(question)) {
+    return typeof row?.answer === "string" && row.answer.trim() ? row.answer.trim() : "—";
+  }
+
+  const optionById = new Map((question.options || []).map((option) => [toValidId(option?.id), option]));
+  const labels = getRawChoiceValues(row).map((value) => {
+    const embeddedLabel = typeof value === "object" && value !== null
+      ? value.label ?? value.text ?? value.answer ?? value.title
+      : null;
+    if (embeddedLabel != null && String(embeddedLabel).trim()) return String(embeddedLabel).trim();
+    const option = optionById.get(getChoiceId(value));
+    return option?.label == null ? null : String(option.label).trim();
+  }).filter(Boolean);
+  return labels.length ? labels.join("، ") : "—";
+};
+
 export const isMultiChoiceQuestion = (question = {}) =>
   question.type === 2 || Boolean(question.multiChoice);
 
@@ -75,10 +138,9 @@ export const hydrateAnswers = (questions = [], session = null) => {
     if (isTextQuestion(question)) {
       result[questionId] = row?.answerText ?? row?.answer_text ?? row?.answer ?? "";
     } else if (isMultiChoiceQuestion(question)) {
-      const values = row?.answerIds ?? row?.answer_ids ?? row?.answerId ?? row?.answer_id ?? [];
-      result[questionId] = (Array.isArray(values) ? values : [values]).map(toValidId).filter(Boolean);
+      result[questionId] = getChoiceIds(question, row);
     } else {
-      result[questionId] = toValidId(row?.answerId ?? row?.answer_id) ?? "";
+      result[questionId] = getChoiceIds(question, row)[0] ?? "";
     }
     return result;
   }, {});
