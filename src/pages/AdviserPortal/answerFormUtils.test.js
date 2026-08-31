@@ -56,6 +56,29 @@ test("hydrates choice ids from answer and resolves their labels for display", ()
   expect(getAnswerDisplayText(labeledQuestions[0], { answerId: null })).toBe("—");
 });
 
+test("hydrates selected options from their returned text when choice ids are null", () => {
+  const labeledQuestions = [
+    { ...questions[1], options: [{ id: 51, label: "انجام شد" }, { id: 52, label: "انجام نشد" }] },
+    { ...questions[2], options: [{ id: 61, label: "گزینه اول" }, { id: 62, label: "گزینه دوم" }] },
+  ];
+
+  expect(hydrateAnswers(labeledQuestions, { answers: [
+    { questionId: 11, answerId: null, answerText: " انجام شد " },
+    { questionId: 12, answerIds: null, answerText: "گزینه اول، گزینه دوم" },
+  ] })).toEqual({ 11: 51, 12: [61, 62] });
+});
+
+test("treats a numeric answer as an option label when it is not an option id", () => {
+  const numericQuestion = { id: 11, type: 1, options: [
+    { id: 501, label: "1" },
+    { id: 502, label: "۲" },
+  ] };
+
+  expect(hydrateAnswers([numericQuestion], { answers: [
+    { questionId: 11, answerId: null, answer: "2" },
+  ] })).toEqual({ 11: 502 });
+});
+
 test("selects a session only by its exact voipCallId", () => {
   const sessions = [{ voipCallId: 900, answers: [] }, { voipCallId: 901, answers: [] }];
   expect(getSessionForVoipCall(sessions, 901)).toBe(sessions[1]);
