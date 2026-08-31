@@ -1,4 +1,4 @@
-import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getFlowVoipCallId, getSessionForVoipCall, getUnansweredQuestions, hasQuestionAnswer, hydrateAnswers } from "./answerFormUtils.js";
+import { buildAnswerPayload, createAnswerCallContext, getAnswerDisplayText, getAnswerRequestError, getAnswerSubmitMessage, getFlowVoipCallId, getSessionForVoipCall, getUnansweredQuestions, hasQuestionAnswer, hydrateAnswers } from "./answerFormUtils.js";
 
 const questions = [
   { id: 10, type: 0 },
@@ -38,6 +38,22 @@ test("hydrates text, single and multi-choice values from one VoIP session", () =
     { questionId: 11, answerId: 51 },
     { questionId: 12, answerIds: [61, 62] },
   ] })).toEqual({ 10: "متن قبلی", 11: 51, 12: [61, 62] });
+});
+
+test("hydrates choice ids from answer and resolves their labels for display", () => {
+  const labeledQuestions = [
+    { ...questions[1], options: [{ id: "51", label: "بله" }] },
+    { ...questions[2], options: [{ id: "61", label: "الف" }, { id: 62, label: "ب" }] },
+  ];
+  const session = { answers: [
+    { questionId: 11, answer: "51" },
+    { questionId: 12, answer: [{ id: 61 }, { answerId: "62" }] },
+  ] };
+
+  expect(hydrateAnswers(labeledQuestions, session)).toEqual({ 11: 51, 12: [61, 62] });
+  expect(getAnswerDisplayText(labeledQuestions[0], session.answers[0])).toBe("بله");
+  expect(getAnswerDisplayText(labeledQuestions[1], session.answers[1])).toBe("الف، ب");
+  expect(getAnswerDisplayText(labeledQuestions[0], { answerId: null })).toBe("—");
 });
 
 test("selects a session only by its exact voipCallId", () => {

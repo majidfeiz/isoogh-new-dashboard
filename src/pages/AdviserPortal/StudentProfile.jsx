@@ -43,7 +43,7 @@ import {
   setDefaultContact,
   deleteStudentContact,
 } from "../../services/adviserPortalService.jsx";
-import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
+import { buildAnswerPayload, createAnswerCallContext, getAnswerDisplayText, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -195,10 +195,10 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, form, callCont
                       role="button"
                       tabIndex={0}
                       style={{ cursor: "pointer" }}
-                      onClick={() => setAnswer(q.id, opt.id)}
-                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setAnswer(q.id, opt.id); } }}
+                      onClick={() => setAnswer(q.id, Number(opt.id))}
+                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setAnswer(q.id, Number(opt.id)); } }}
                     >
-                      <input className="form-check-input" type="radio" name={`q-${q.id}`} id={`opt-${q.id}-${opt.id}`} value={opt.id} checked={answers[q.id] === opt.id} readOnly />
+                      <input className="form-check-input" type="radio" name={`q-${q.id}`} id={`opt-${q.id}-${opt.id}`} value={opt.id} checked={Number(answers[q.id]) === Number(opt.id)} readOnly />
                       <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`} style={{ pointerEvents: "none" }}>{opt.label}</label>
                     </div>
                   ))}
@@ -213,10 +213,10 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, form, callCont
                       role="button"
                       tabIndex={0}
                       style={{ cursor: "pointer" }}
-                      onClick={() => toggleCheckbox(q.id, opt.id)}
-                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCheckbox(q.id, opt.id); } }}
+                      onClick={() => toggleCheckbox(q.id, Number(opt.id))}
+                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCheckbox(q.id, Number(opt.id)); } }}
                     >
-                      <input className="form-check-input" type="checkbox" id={`opt-${q.id}-${opt.id}`} checked={(answers[q.id] || []).includes(opt.id)} readOnly />
+                      <input className="form-check-input" type="checkbox" id={`opt-${q.id}-${opt.id}`} checked={(answers[q.id] || []).some((id) => Number(id) === Number(opt.id))} readOnly />
                       <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`} style={{ pointerEvents: "none" }}>{opt.label}</label>
                     </div>
                   ))}
@@ -395,7 +395,7 @@ const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
 
 // ─── Tab 3: Answers ───────────────────────────────────────────────────────────
 
-const AnswersTab = ({ formId, studentId, refreshKey, onFillAnswers }) => {
+const AnswersTab = ({ formId, studentId, form, refreshKey, onFillAnswers }) => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState({});
@@ -456,17 +456,20 @@ const AnswersTab = ({ formId, studentId, refreshKey, onFillAnswers }) => {
               {(session.answers || []).length === 0 ? (
                 <p className="text-muted small mb-0">پاسخی ثبت نشده</p>
               ) : (
-                (session.answers || []).map((a, ai) => (
+                (session.answers || []).map((a, ai) => {
+                  const question = (form?.questions || []).find((item) => Number(item.id) === Number(a.questionId ?? a.question_id)) || {};
+                  return (
                   <div key={a.id} className={`py-2 d-flex gap-3 ${ai < session.answers.length - 1 ? "border-bottom" : ""}`}>
                     <div className="flex-shrink-0 text-muted" style={{ minWidth: 22 }}>
                       <span className="badge bg-secondary bg-opacity-10 text-secondary rounded-circle" style={{ width: 22, height: 22, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>{ai + 1}</span>
                     </div>
                     <div className="flex-grow-1">
                       <div className="text-muted" style={{ fontSize: 12 }}>{a.questionTitle}</div>
-                      <div className="fw-semibold" style={{ fontSize: 14 }}>{a.answerText ?? a.answer ?? "—"}</div>
+                      <div className="fw-semibold" style={{ fontSize: 14 }}>{getAnswerDisplayText(question, a)}</div>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           )}
@@ -1027,6 +1030,7 @@ const StudentProfile = () => {
                   <AnswersTab
                     formId={formId}
                     studentId={studentId}
+                    form={form}
                     refreshKey={refreshKey}
                     onFillAnswers={handleFillAnswers}
                   />
