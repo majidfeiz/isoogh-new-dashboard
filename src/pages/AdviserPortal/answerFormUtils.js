@@ -28,6 +28,35 @@ export const createAnswerCallContext = ({ formId, studentId, voipCallId, student
 const getQuestionOptionIds = (question = {}) =>
   new Set((question.options || []).map((option) => toValidId(option?.id)).filter(Boolean));
 
+const getRawChoiceValues = (row = {}) => {
+  const value = row?.answerIds ?? row?.answer_ids ?? row?.answerId ?? row?.answer_id ?? row?.answer;
+  return Array.isArray(value) ? value : value == null ? [] : [value];
+};
+
+const getChoiceId = (value) =>
+  toValidId(typeof value === "object" && value !== null
+    ? value.id ?? value.answerId ?? value.answer_id ?? value.value
+    : value);
+
+export const getAnswerDisplayText = (question = {}, row = {}) => {
+  const explicitText = row?.answerText ?? row?.answer_text;
+  if (typeof explicitText === "string" && explicitText.trim()) return explicitText.trim();
+  if (isTextQuestion(question)) {
+    return typeof row?.answer === "string" && row.answer.trim() ? row.answer.trim() : "—";
+  }
+
+  const optionById = new Map((question.options || []).map((option) => [toValidId(option?.id), option]));
+  const labels = getRawChoiceValues(row).map((value) => {
+    const embeddedLabel = typeof value === "object" && value !== null
+      ? value.label ?? value.text ?? value.answer ?? value.title
+      : null;
+    if (embeddedLabel != null && String(embeddedLabel).trim()) return String(embeddedLabel).trim();
+    const option = optionById.get(getChoiceId(value));
+    return option?.label == null ? null : String(option.label).trim();
+  }).filter(Boolean);
+  return labels.length ? labels.join("، ") : "—";
+};
+
 export const isMultiChoiceQuestion = (question = {}) =>
   question.type === 2 || Boolean(question.multiChoice);
 
@@ -75,10 +104,9 @@ export const hydrateAnswers = (questions = [], session = null) => {
     if (isTextQuestion(question)) {
       result[questionId] = row?.answerText ?? row?.answer_text ?? row?.answer ?? "";
     } else if (isMultiChoiceQuestion(question)) {
-      const values = row?.answerIds ?? row?.answer_ids ?? row?.answerId ?? row?.answer_id ?? [];
-      result[questionId] = (Array.isArray(values) ? values : [values]).map(toValidId).filter(Boolean);
+      result[questionId] = getRawChoiceValues(row).map(getChoiceId).filter(Boolean);
     } else {
-      result[questionId] = toValidId(row?.answerId ?? row?.answer_id) ?? "";
+      result[questionId] = getChoiceId(getRawChoiceValues(row)[0]) ?? "";
     }
     return result;
   }, {});
