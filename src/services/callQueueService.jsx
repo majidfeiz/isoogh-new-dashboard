@@ -3,18 +3,25 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
 const unwrap = (response) => response?.data?.data ?? response?.data ?? {};
 
-export async function getCallQueue({ schoolId, status = "", page = 1, limit = 15, signal } = {}) {
-  if (!schoolId) throw new Error("schoolId is required");
+const buildScopeParams = ({ schoolId, allSchools } = {}) => {
+  if (schoolId && allSchools === true) throw new Error("schoolId and allSchools are mutually exclusive");
+  if (schoolId) return { schoolId: Number(schoolId) };
+  if (allSchools === true) return { allSchools: true };
+  return {};
+};
+
+export async function getCallQueue({ schoolId, allSchools = false, status = "", page = 1, limit = 20, signal } = {}) {
   const response = await apiGet(getApiUrl(API_ROUTES.voip.callQueue), {
     signal,
     silent: true,
-    params: { schoolId, status: status || undefined, page, limit },
+    params: { ...buildScopeParams({ schoolId, allSchools }), status: status || undefined, page, limit },
   });
   const data = unwrap(response);
   const items = Array.isArray(data.items) ? data.items : Array.isArray(data.data) ? data.data : [];
   const meta = data.meta || data.pagination || {};
   return {
     items,
+    scope: data.scope || { mode: schoolId ? "school" : allSchools === true ? "all" : "managed", schoolId: schoolId ? Number(schoolId) : null },
     pagination: {
       page: meta.page ?? page,
       limit: meta.limit ?? limit,
@@ -24,12 +31,11 @@ export async function getCallQueue({ schoolId, status = "", page = 1, limit = 15
   };
 }
 
-export async function getCallQueueStats({ schoolId, signal } = {}) {
-  if (!schoolId) throw new Error("schoolId is required");
+export async function getCallQueueStats({ schoolId, allSchools = false, signal } = {}) {
   const response = await apiGet(getApiUrl(API_ROUTES.voip.callQueueStats), {
     signal,
     silent: true,
-    params: { schoolId },
+    params: buildScopeParams({ schoolId, allSchools }),
   });
   return unwrap(response);
 }
