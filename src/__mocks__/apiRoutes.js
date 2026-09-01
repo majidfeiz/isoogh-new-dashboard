@@ -11,6 +11,7 @@ export const API_ROUTES = {
     callQueueStats: "/voip/call-queue/stats",
     retryCallQueueJob: (id) => `/voip/call-queue/${id}/retry`,
     cancelCallQueueJob: (id) => `/voip/call-queue/${id}/cancel`,
+    callTraces: "/voip/call-traces",
     callTrace: (id) => `/voip/call-traces/${id}`,
   },
   students: {
