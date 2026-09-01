@@ -245,16 +245,42 @@ export async function getCallTraces({
       to: to || undefined,
     },
   });
-  const data = unwrapData(response);
-  const items = Array.isArray(data?.items) ? data.items : [];
-  const meta = data?.meta || {};
+  const payload = response?.data ?? {};
+  const data = payload?.data ?? payload;
+  const allItems = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.items)
+      ? data.items
+      : Array.isArray(data?.data)
+        ? data.data
+        : [];
+  const meta = data?.meta || data?.pagination || payload?.meta || payload?.pagination || {};
+  const normalizedPage = Number(meta.page ?? meta.currentPage ?? page) || page;
+  const normalizedLimit = Number(meta.limit ?? meta.perPage ?? meta.per_page ?? limit) || limit;
+
+  // Compatibility guard for older API deployments that return the complete collection.
+  // It prevents thousands of table rows from freezing the browser, but the backend must
+  // still paginate to avoid transferring and parsing the complete dataset on every page.
+  const isUnpaginatedResponse = allItems.length > normalizedLimit;
+  const effectivePage = isUnpaginatedResponse ? page : normalizedPage;
+  const items = isUnpaginatedResponse
+    ? allItems.slice((effectivePage - 1) * normalizedLimit, effectivePage * normalizedLimit)
+    : allItems;
+  const total = Number(meta.total ?? meta.totalItems ?? (isUnpaginatedResponse ? allItems.length : items.length));
+  const lastPage = Number(
+    meta.lastPage ??
+    meta.totalPages ??
+    meta.last_page ??
+    Math.max(1, Math.ceil(total / normalizedLimit)),
+  );
+
   return {
     items,
     meta: {
-      page: meta.page ?? page,
-      limit: meta.limit ?? limit,
-      total: meta.total ?? items.length,
-      lastPage: meta.lastPage ?? 1,
+      page: effectivePage,
+      limit: normalizedLimit,
+      total,
+      lastPage,
     },
   };
 }
