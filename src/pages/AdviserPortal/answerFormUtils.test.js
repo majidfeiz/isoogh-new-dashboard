@@ -24,6 +24,17 @@ test("builds the API payload only from the current question list", () => {
   ]);
 });
 
+test("serializes one multi-choice selection under answerId and never answerIds", () => {
+  const payload = buildAnswerPayload(questions, { 10: "", 11: 51, 12: ["61"] });
+
+  expect(payload).toEqual([
+    { questionId: 10 },
+    { questionId: 11, answerId: 51 },
+    { questionId: 12, answerId: [61] },
+  ]);
+  expect(payload.some((answer) => Object.prototype.hasOwnProperty.call(answer, "answerIds"))).toBe(false);
+});
+
 test("sends a unique full snapshot including unanswered questions", () => {
   expect(buildAnswerPayload([...questions, questions[0]], { 10: "", 11: 999, 12: [] })).toEqual([
     { questionId: 10 },
@@ -38,6 +49,12 @@ test("hydrates text, single and multi-choice values from one VoIP session", () =
     { questionId: 11, answerId: 51 },
     { questionId: 12, answerIds: [61, 62] },
   ] })).toEqual({ 10: "متن قبلی", 11: 51, 12: [61, 62] });
+});
+
+test("hydrates a legacy multi-choice answerId as a one-item numeric array", () => {
+  expect(hydrateAnswers(questions, { answers: [
+    { questionId: 12, answerId: "61" },
+  ] })).toEqual({ 12: [61] });
 });
 
 test("hydrates choice ids from answer and resolves their labels for display", () => {
