@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents, getStudentAnswers, getStudentCallLogs, makeCall, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
+import { getAdviserFormStudents, getAdviserSupportFormDetail, getStudentAnswers, getStudentCallLogs, makeCall, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -153,6 +153,31 @@ test("falls back to legacy callCount and never returns undefined or NaN counts",
       expect(Number.isNaN(item[key])).toBe(false)
     }
   }
+})
+
+test("normalizes support-form question and option ids at the API boundary", async () => {
+  apiGet.mockResolvedValue({
+    data: {
+      data: {
+        id: "3069",
+        questions: [{
+          id: "7168",
+          type: "2",
+          multiChoice: true,
+          options: [{ id: "123", answer: "گزینه اول" }],
+        }],
+      },
+    },
+  })
+
+  const result = await getAdviserSupportFormDetail(3069)
+
+  expect(result.id).toBe(3069)
+  expect(result.questions[0]).toEqual(expect.objectContaining({
+    id: 7168,
+    type: 2,
+    options: [expect.objectContaining({ id: 123 })],
+  }))
 })
 
 test("sends server-side work shift sorting with filters, pagination and abort signal", async () => {

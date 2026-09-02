@@ -83,6 +83,7 @@ export const API_ROUTES = {
   },
   adviserPortal: {
     schoolSupportForms: (schoolId) => `/adviser-portal/schools/${schoolId}/support-forms`,
+    supportFormDetail: (formId) => `/adviser-portal/support-forms/${formId}`,
     supportFormStudents: (formId) => `/adviser-portal/support-forms/${formId}/students`,
     submitAnswers: (formId, studentId) =>
       `/adviser-portal/support-forms/${formId}/students/${studentId}/answers`,
