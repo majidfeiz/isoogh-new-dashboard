@@ -92,7 +92,7 @@ export const getAnswerDisplayText = (question = {}, row = {}) => {
 };
 
 export const isMultiChoiceQuestion = (question = {}) =>
-  question.type === 2 || Boolean(question.multiChoice);
+  Boolean(question.multiChoice);
 
 export const isTextQuestion = (question = {}) =>
   question.type === 0 || question.type === 3;

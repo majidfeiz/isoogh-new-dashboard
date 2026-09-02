@@ -35,6 +35,14 @@ test("serializes one multi-choice selection under answerId and never answerIds",
   expect(payload.some((answer) => Object.prototype.hasOwnProperty.call(answer, "answerIds"))).toBe(false);
 });
 
+test("serializes a type-2 single-choice value as a numeric answerId", () => {
+  const question = { id: 7168, type: 2, multiChoice: false, options: [{ id: 123 }, { id: 124 }] };
+
+  expect(buildAnswerPayload([question], { 7168: 124 })).toEqual([
+    { questionId: 7168, answerId: 124 },
+  ]);
+});
+
 test("sends a unique full snapshot including unanswered questions", () => {
   expect(buildAnswerPayload([...questions, questions[0]], { 10: "", 11: 999, 12: [] })).toEqual([
     { questionId: 10 },

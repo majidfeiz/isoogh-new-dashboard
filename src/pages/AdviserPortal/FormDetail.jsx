@@ -43,7 +43,7 @@ import {
   readAdviserStudentQuery,
   updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
-import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
+import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers, isMultiChoiceQuestion } from "./answerFormUtils.js";
 
 const formatJalali = (value, withTime = false) => {
   if (!value) return "—";
@@ -244,7 +244,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                 />
               )}
 
-              {q.type === 1 && (
+              {(q.type === 1 || q.type === 2) && !isMultiChoiceQuestion(q) && (
                 <div className="vstack gap-2 mt-1">
                   {q.options.map((opt) => (
                     <div
@@ -277,7 +277,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                 </div>
               )}
 
-              {q.type === 2 && (
+              {(q.type === 1 || q.type === 2) && isMultiChoiceQuestion(q) && (
                 <div className="vstack gap-2 mt-1">
                   {q.options.map((opt) => (
                     <div
