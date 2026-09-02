@@ -23,7 +23,7 @@ const form = {
   questions: [
     { id: 1, type: 0, text: "متنی", options: [] },
     { id: 2, type: 1, text: "تکی", options: [{ id: 21, label: "اول" }] },
-    { id: 3, type: 2, text: "چندتایی", options: [{ id: 31, label: "الف" }, { id: 32, label: "ب" }] },
+    { id: 3, type: 2, multiChoice: true, text: "چندتایی", options: [{ id: 31, label: "الف" }, { id: 32, label: "ب" }] },
     { id: 4, type: 0, text: "خالی", options: [] },
   ],
 };
@@ -60,6 +60,31 @@ test("hydrates and edits the session selected by voipCallId then refetches it", 
     ],
   })));
   expect(getStudentAnswers).toHaveBeenLastCalledWith(10, 20, 700);
+});
+
+test("submits a type-1 multi-choice selection as an answerId array", async () => {
+  const multiChoiceForm = {
+    id: 10,
+    questions: [{
+      id: 7168,
+      type: 1,
+      multiChoice: true,
+      text: "تعداد تماس گرفته شده",
+      options: [{ id: 123, label: "1" }, { id: 124, label: "2" }],
+    }],
+  };
+  getStudentAnswers.mockResolvedValueOnce([]).mockResolvedValueOnce([{ voipCallId: 3805790, answers: [] }]);
+  submitAnswers.mockResolvedValue({ voipCallId: 3805790, count: 1, isComplete: true, status: 1 });
+  render(<AnswerDrawer open student={student} form={multiChoiceForm} callContext={context(3805790)} onClose={jest.fn()} />);
+
+  await waitFor(() => expect(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole("checkbox", { name: "2" }));
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+
+  await waitFor(() => expect(submitAnswers).toHaveBeenCalledWith(expect.objectContaining({
+    voipCallId: 3805790,
+    answers: [{ questionId: 7168, answerId: [124] }],
+  })));
 });
 
 test("submits one full empty snapshot for a new call and blocks double submit", async () => {
