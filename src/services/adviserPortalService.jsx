@@ -1,6 +1,11 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
+const normalizeId = (value) => {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+
 // ─── Normalizers ────────────────────────────────────────────────────────────
 
 const normalizeSchool = (item = {}) => ({
@@ -15,7 +20,7 @@ const normalizeSchool = (item = {}) => ({
 });
 
 const normalizeSupportForm = (item = {}) => ({
-  id: item?.id ?? null,
+  id: normalizeId(item?.id),
   title: item?.title ?? "",
   callDuration: item?.call_duration ?? item?.callDuration ?? 0,
   startAt: item?.start_at ?? item?.startAt ?? null,
@@ -29,15 +34,15 @@ const normalizeSupportForm = (item = {}) => ({
 });
 
 const normalizeQuestion = (q = {}) => ({
-  id: q?.id ?? null,
+  id: normalizeId(q?.id),
   text: q?.text ?? q?.title ?? q?.question ?? "",
-  type: q?.type ?? 0,
+  type: Number(q?.type ?? 0),
   multiChoice: q?.multi_choice ?? q?.multiChoice ?? false,
   required: q?.required ?? q?.is_required ?? false,
   options: (q?.options ?? []).map((o) =>
     typeof o === "string"
       ? { id: o, label: o, isCorrect: false }
-      : { id: o?.id ?? o?.value, label: o?.answer ?? o?.label ?? o?.text ?? o?.value ?? "", isCorrect: o?.is_correct ?? o?.isCorrect ?? false }
+      : { id: normalizeId(o?.id ?? o?.value), label: o?.answer ?? o?.label ?? o?.text ?? o?.value ?? "", isCorrect: o?.is_correct ?? o?.isCorrect ?? false }
   ),
   order: q?.order ?? q?.sort_order ?? 0,
 });
