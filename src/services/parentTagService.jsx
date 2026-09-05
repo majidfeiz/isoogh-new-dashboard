@@ -50,6 +50,41 @@ export async function getParentTags({
   };
 }
 
+const ALL_TAGS_PAGE_LIMIT = 200;
+
+async function getAllTagPages(fetchPage, options = {}) {
+  const filters = Object.fromEntries(
+    Object.entries(options).filter(([key]) => key !== "page" && key !== "limit")
+  );
+  const firstPage = await fetchPage({
+    ...filters,
+    page: 1,
+    limit: ALL_TAGS_PAGE_LIMIT,
+  });
+  const lastPage = Math.max(1, Number(firstPage.pagination?.lastPage) || 1);
+
+  if (lastPage === 1) return firstPage.items || [];
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: lastPage - 1 }, (_, index) =>
+      fetchPage({
+        ...filters,
+        page: index + 2,
+        limit: ALL_TAGS_PAGE_LIMIT,
+      })
+    )
+  );
+
+  return [
+    ...(firstPage.items || []),
+    ...remainingPages.flatMap((result) => result.items || []),
+  ];
+}
+
+export function getAllParentTags(options = {}) {
+  return getAllTagPages(getParentTags, options);
+}
+
 export async function getParentTag(id) {
   const url = getApiUrl(API_ROUTES.parentTags.detail(id));
   const res = await apiGet(url);
@@ -182,6 +217,13 @@ export async function getParentTagValues(id, { page = 1, limit = 200, search = "
           : 1),
     },
   };
+}
+
+export function getAllParentTagValues(id, options = {}) {
+  return getAllTagPages(
+    (pageOptions) => getParentTagValues(id, pageOptions),
+    options
+  );
 }
 
 export async function exportParentTags(params = {}) {
