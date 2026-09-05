@@ -31,6 +31,7 @@ export const API_ROUTES = {
   parentTags: {
     studentTags: (studentId) => `/parent-tags/students/${studentId}`,
     list: "/parent-tags",
+    values: (id) => `/parent-tags/${id}/values`,
     import: "/parent-tags/import",
     importStatus: (logId) => `/parent-tags/imports/${logId}`,
   },
