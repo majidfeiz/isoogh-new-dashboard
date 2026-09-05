@@ -55,7 +55,10 @@ import {
   getSupportFormInterruptedCalls,
   copySupportForm,
 } from "../../services/supportFormService.jsx";
-import { getParentTags, getParentTagValues } from "../../services/parentTagService.jsx";
+import {
+  getAllParentTags,
+  getAllParentTagValues,
+} from "../../services/parentTagService.jsx";
 import { getGrades } from "../../services/gradeService.jsx";
 
 const TAB = {
@@ -1087,15 +1090,23 @@ const StudentsTab = ({ formId }) => {
     setTagAlert(null);
     setSelectedParentTag("");
     setSelectedTagValue("");
+    setParentTags([]);
+    setTagValues([]);
     setTagLoading(true);
-    getParentTags({ page: 1, limit: 50 }).then((r) => setParentTags(r.items || [])).catch(() => {}).finally(() => setTagLoading(false));
+    getAllParentTags()
+      .then(setParentTags)
+      .catch(() => setTagAlert({ type: "danger", message: "خطا در دریافت تگ‌ها." }))
+      .finally(() => setTagLoading(false));
   };
 
   const loadTagValues = (parentId) => {
     setTagValues([]);
     if (!parentId) return;
     setTagLoading(true);
-    getParentTagValues(parentId, { page: 1, limit: 50 }).then((r) => setTagValues(r.items || [])).catch(() => {}).finally(() => setTagLoading(false));
+    getAllParentTagValues(parentId)
+      .then(setTagValues)
+      .catch(() => setTagAlert({ type: "danger", message: "خطا در دریافت زیرتگ‌ها." }))
+      .finally(() => setTagLoading(false));
   };
 
   const studentsColumns = useMemo(
@@ -1320,9 +1331,10 @@ const StudentsTab = ({ formId }) => {
               <Input
                 type="select"
                 value={selectedParentTag}
+                disabled={tagLoading}
                 onChange={(e) => { setSelectedParentTag(e.target.value); setSelectedTagValue(""); loadTagValues(e.target.value); }}
               >
-                <option value="">انتخاب سرتگ</option>
+                <option value="">{tagLoading && !selectedParentTag ? "در حال دریافت تگ‌ها..." : "انتخاب سرتگ"}</option>
                 {parentTags.map((t) => (
                   <option key={t.id} value={t.id}>{t.name || t.title || `تگ ${t.id}`}</option>
                 ))}
