@@ -2,7 +2,8 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
-export const normalizeSupportFormActive = (value) => value === true || value === 1 || value === "1";
+export const normalizeSupportFormActive = (value) => Number(value) === 1;
+export const normalizeSupportFormActiveValue = (value) => (normalizeSupportFormActive(value) ? 1 : 0);
 
 export async function getSupportForms({
   page = 1,
@@ -30,7 +31,7 @@ export async function getSupportForms({
   const data = payload?.data || {};
   const items = (data.items || data.data || []).map((item) => ({
     ...item,
-    is_active: normalizeSupportFormActive(item?.is_active),
+    is_active: normalizeSupportFormActiveValue(item?.is_active),
   }));
   const pagination = data.meta || data.pagination || payload?.meta || {};
 
@@ -80,7 +81,7 @@ export async function getSupportFormAdvisers(id, params = {}) {
   const data = payload?.data ?? payload ?? {};
   const items = (data.items || data.data || []).map((item) => ({
     ...item,
-    is_active: normalizeSupportFormActive(item?.is_active),
+    is_active: normalizeSupportFormActiveValue(item?.is_active),
   }));
   const pagination = data.meta || data.pagination || {};
 
@@ -233,13 +234,13 @@ export async function deleteSupportFormQuestion(id, qId) {
 }
 
 export async function toggleSupportFormAdviserActive(id, adviserId, isActive) {
-  if (typeof isActive !== "boolean") {
-    throw new TypeError("isActive must be a boolean");
+  if (isActive !== 0 && isActive !== 1) {
+    throw new TypeError("isActive must be numeric 0 or 1");
   }
   const url = getApiUrl(API_ROUTES.supportForms.toggleAdviserActive(id, adviserId));
   const res = await apiPost(url, { is_active: isActive });
   const connection = res?.data?.data ?? res?.data ?? {};
-  return { ...connection, is_active: normalizeSupportFormActive(connection?.is_active) };
+  return { ...connection, is_active: normalizeSupportFormActiveValue(connection?.is_active) };
 }
 
 export async function bulkAttachSupportFormAdvisers(id, adviserIds) {
