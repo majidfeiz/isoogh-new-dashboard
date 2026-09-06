@@ -18,7 +18,7 @@ import {
   Spinner,
   Table,
 } from "reactstrap";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import moment from "moment-jalaali";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
@@ -417,6 +417,7 @@ const StatsBar = ({ stats, loading }) => {
 const FormDetail = () => {
   const { formId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [form, setForm] = useState(null);
@@ -443,18 +444,30 @@ const FormDetail = () => {
   const callCooldown = useRef({});
   const shiftRequestVersions = useRef({});
   const studentsRequest = useRef(null);
+  const accessDeniedHandled = useRef(false);
   const [callingIds, setCallingIds] = useState({});
 
   document.title = `فرم تماس | داشبورد آیسوق`;
 
   const fetchForm = useCallback(async () => {
+    setForm(null);
     try {
       const f = await getAdviserSupportFormDetail(formId);
       setForm(f);
-    } catch {
+    } catch (error) {
       setForm(null);
+      if (error?.response?.status === 403 && !accessDeniedHandled.current) {
+        accessDeniedHandled.current = true;
+        setData([]);
+        setStats(null);
+        toast.error("این فرم برای شما فعال نیست");
+        const schoolId = location.state?.schoolId;
+        navigate(schoolId ? `/adviser-calls/schools/${schoolId}/planned-calls` : "/adviser-calls", { replace: true });
+      }
     }
-  }, [formId]);
+  }, [formId, location.state?.schoolId, navigate]);
+
+  useEffect(() => { accessDeniedHandled.current = false; }, [formId]);
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
@@ -921,7 +934,8 @@ const FormDetail = () => {
                               size="sm"
                               onClick={() =>
                                 navigate(
-                                  `/adviser-calls/forms/${formId}/students/${student.studentId}`
+                                  `/adviser-calls/forms/${formId}/students/${student.studentId}`,
+                                  { state: { schoolId: location.state?.schoolId ?? form?.schoolId } }
                                 )
                               }
                               title="مشاهده پروفایل دانش‌آموز"

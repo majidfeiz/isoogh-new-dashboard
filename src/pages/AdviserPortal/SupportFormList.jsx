@@ -23,6 +23,7 @@ import {
 } from "../../services/adviserPortalService.jsx";
 import { getGrades } from "../../services/gradeService.jsx";
 import { parseAdviserSupportFormQuery, serializeAdviserSupportFormQuery } from "./supportFormListQuery.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 
 const formatJalali = (value) => {
   if (!value) return "—";
@@ -44,6 +45,7 @@ const formatDuration = (seconds) => {
 const SupportFormList = () => {
   const { schoolId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryString = searchParams.toString();
   const query = useMemo(
@@ -110,7 +112,7 @@ const SupportFormList = () => {
         setLoading(false);
       }
     },
-    [schoolId]
+    [schoolId, user?.id]
   );
 
   useEffect(() => {
@@ -120,6 +122,12 @@ const SupportFormList = () => {
   useEffect(() => {
     fetchData(query);
   }, [fetchData, query.page, query.search, query.sortOrder, query.gradeId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const refresh = () => fetchData(query);
+    window.addEventListener("adviser-support-form-active-changed", refresh);
+    return () => window.removeEventListener("adviser-support-form-active-changed", refresh);
+  }, [fetchData, query]);
 
   const updateQuery = (changes) => {
     setSearchParams(serializeAdviserSupportFormQuery({ ...query, ...changes }));
@@ -225,7 +233,7 @@ const SupportFormList = () => {
                   <Card
                     className="h-100 shadow-sm border-0"
                     style={{ cursor: "pointer", transition: "transform 0.15s" }}
-                    onClick={() => navigate(`/adviser-calls/forms/${form.id}`)}
+                    onClick={() => navigate(`/adviser-calls/forms/${form.id}`, { state: { schoolId: Number(schoolId) } })}
                     onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
                     onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
                   >

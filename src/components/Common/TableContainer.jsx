@@ -190,7 +190,7 @@ const TableContainer = ({
         </Col>}
       </Row>
 
-      <div className={divClassName ? divClassName : "table-responsive"}>
+      <div className={`${divClassName || "table-responsive"} table-sticky-header-container`}>
         <Table hover className={tableClass} bordered={isBordered}>
           <thead className={theadClass}>
             {getHeaderGroups().map(headerGroup => (
