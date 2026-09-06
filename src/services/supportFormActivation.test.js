@@ -2,6 +2,7 @@ import { apiPost } from "../helpers/httpClient.jsx"
 import {
   normalizeSupportFormActive,
   normalizeSupportFormActiveValue,
+  normalizeSupportFormAdviserConnections,
   toggleSupportFormAdviserActive,
 } from "./supportFormService.jsx"
 
@@ -40,6 +41,18 @@ test("posts numeric is_active and preserves the normalized server response", asy
     "http://127.0.0.1:8040/support-forms/14/9/active",
     { is_active: 0 }
   )
+})
+
+test("deduplicates legacy adviser-form connections with inactive status taking priority", () => {
+  const items = normalizeSupportFormAdviserConnections([
+    { id: 1, adviser_id: 9, support_form_id: 14, is_active: 1 },
+    { id: 2, adviser_id: 9, support_form_id: 14, is_active: "0" },
+    { id: 3, adviser_id: 10, support_form_id: 14, is_active: "1" },
+  ], 14)
+
+  expect(items).toHaveLength(2)
+  expect(items.find((item) => item.adviser_id === 9)?.is_active).toBe(0)
+  expect(items.find((item) => item.adviser_id === 10)?.is_active).toBe(1)
 })
 
 test("rejects boolean and string payloads before making a request", async () => {
