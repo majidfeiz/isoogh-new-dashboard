@@ -2,6 +2,8 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
+export const normalizeSupportFormActive = (value) => value === true || value === 1 || value === "1";
+
 export async function getSupportForms({
   page = 1,
   limit = 10,
@@ -26,7 +28,10 @@ export async function getSupportForms({
 
   const payload = response?.data;
   const data = payload?.data || {};
-  const items = data.items || data.data || [];
+  const items = (data.items || data.data || []).map((item) => ({
+    ...item,
+    is_active: normalizeSupportFormActive(item?.is_active),
+  }));
   const pagination = data.meta || data.pagination || payload?.meta || {};
 
   return {
@@ -73,7 +78,10 @@ export async function getSupportFormAdvisers(id, params = {}) {
   const response = await apiGet(url, { params });
   const payload = response?.data;
   const data = payload?.data ?? payload ?? {};
-  const items = data.items || data.data || [];
+  const items = (data.items || data.data || []).map((item) => ({
+    ...item,
+    is_active: normalizeSupportFormActive(item?.is_active),
+  }));
   const pagination = data.meta || data.pagination || {};
 
   return {
@@ -225,9 +233,13 @@ export async function deleteSupportFormQuestion(id, qId) {
 }
 
 export async function toggleSupportFormAdviserActive(id, adviserId, isActive) {
+  if (typeof isActive !== "boolean") {
+    throw new TypeError("isActive must be a boolean");
+  }
   const url = getApiUrl(API_ROUTES.supportForms.toggleAdviserActive(id, adviserId));
   const res = await apiPost(url, { is_active: isActive });
-  return res.data;
+  const connection = res?.data?.data ?? res?.data ?? {};
+  return { ...connection, is_active: normalizeSupportFormActive(connection?.is_active) };
 }
 
 export async function bulkAttachSupportFormAdvisers(id, adviserIds) {

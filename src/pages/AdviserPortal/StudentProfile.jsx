@@ -21,7 +21,7 @@ import {
   TabPane,
   Table,
 } from "reactstrap";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import moment from "moment-jalaali";
 import { getVoipCallDateDisplay } from "../../helpers/voipTime.js";
@@ -777,6 +777,7 @@ const StatCard = ({ label, value, icon, color, pulse }) => (
 const StudentProfile = () => {
   const { formId, studentId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(true);
@@ -793,22 +794,44 @@ const StudentProfile = () => {
   const queuedTraceRequest = useRef(null);
   const [calling, setCalling] = useState(false);
   const cooldown = useRef(false);
+  const accessDeniedHandled = useRef(false);
 
   document.title = "پروفایل دانش‌آموز | داشبورد آیسوق";
 
   const fetchProfile = useCallback(() => {
     setProfileLoading(true);
+    setProfile(null);
     return getStudentProfile(formId, studentId)
       .then(setProfile)
-      .catch(() => setProfile(null))
+      .catch((error) => {
+        setProfile(null);
+        if (error?.response?.status === 403 && !accessDeniedHandled.current) {
+          accessDeniedHandled.current = true;
+          setForm(null);
+          toast.error("این فرم برای شما فعال نیست");
+          const schoolId = location.state?.schoolId;
+          navigate(schoolId ? `/adviser-calls/schools/${schoolId}/planned-calls` : "/adviser-calls", { replace: true });
+        }
+      })
       .finally(() => setProfileLoading(false));
-  }, [formId, studentId]);
+  }, [formId, studentId, location.state?.schoolId, navigate]);
 
   useEffect(() => {
     fetchProfile();
-    getAdviserSupportFormDetail(formId).then(setForm).catch(() => {});
+    getAdviserSupportFormDetail(formId).then(setForm).catch((error) => {
+      if (error?.response?.status === 403 && !accessDeniedHandled.current) {
+        accessDeniedHandled.current = true;
+        setProfile(null);
+        setForm(null);
+        toast.error("این فرم برای شما فعال نیست");
+        const schoolId = location.state?.schoolId;
+        navigate(schoolId ? `/adviser-calls/schools/${schoolId}/planned-calls` : "/adviser-calls", { replace: true });
+      }
+    });
     getContactSubjects().then((d) => setSubjects(Array.isArray(d) ? d : [])).catch(() => {});
   }, [formId, studentId, fetchProfile]);
+
+  useEffect(() => { accessDeniedHandled.current = false; }, [formId, studentId]);
 
   useEffect(() => () => queuedTraceRequest.current?.abort(), []);
 
