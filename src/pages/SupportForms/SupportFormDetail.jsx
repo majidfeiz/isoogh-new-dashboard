@@ -44,6 +44,7 @@ import {
   toggleSupportFormAdviserActive,
   detachSupportFormAdviser,
   normalizeSupportFormActive,
+  normalizeSupportFormActiveValue,
   getSupportFormAdviserStudents,
   getSupportFormAdviserStudentCandidates,
   attachSupportFormAdviserStudents,
@@ -622,8 +623,8 @@ const AdvisersTab = ({ formId }) => {
   const handleToggleActive = async (row) => {
     const adviserId = row?.adviser_id || row?.adviser?.id;
     if (!adviserId || pendingToggleIds.current.has(String(adviserId))) return;
-    const previousValue = normalizeSupportFormActive(row?.is_active);
-    const nextValue = !previousValue;
+    const previousValue = normalizeSupportFormActiveValue(row?.is_active);
+    const nextValue = previousValue === 1 ? 0 : 1;
     pendingToggleIds.current.add(String(adviserId));
     setToggleLoadingIds((current) => ({ ...current, [adviserId]: true }));
     setActionLoading(adviserId);
