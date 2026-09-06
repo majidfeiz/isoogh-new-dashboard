@@ -349,6 +349,7 @@ export const API_ROUTES = {
     stats: "/dashboard/stats",
     widgets: "/dashboard/widgets",
     my: "/dashboard/my",
+    myLayout: "/dashboard/my/layout",
     myWidgets: "/dashboard/my/widgets",
     myWidget: (id) => `/dashboard/my/widgets/${id}`,
     myReset: "/dashboard/my/reset",

@@ -27,8 +27,8 @@ import WidgetConfigModal from "./WidgetConfigModal.jsx";
 import {
   getMyDashboard,
   getDefaultDashboard,
+  saveDashboardLayout,
   addWidgetToDashboard,
-  updateDashboardWidget,
   removeDashboardWidget,
   resetDashboard,
   getDashboardStats,
@@ -140,14 +140,33 @@ const WidgetRenderer = ({
   statsData,
   chartDataMap,
   recentDataMap,
+  onRetry,
 }) => {
   const { widget, userConfig, isVisible, id } = userWidget;
   const key = widget?.key;
   const statsRequestKey = getWidgetRequestKey("stats", "", userConfig);
   const chartRequestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], userConfig);
   const recentRequestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], userConfig);
+  const requestValue = STATS_ENDPOINT_KEYS.has(key)
+    ? statsData[statsRequestKey]
+    : CHART_KEY_TO_TYPE[key]
+      ? chartDataMap[chartRequestKey]
+      : RECENT_KEY_TO_TYPE[key]
+        ? recentDataMap[recentRequestKey]
+        : null;
 
   const renderContent = () => {
+    if (requestValue?.__dashboardError) {
+      return (
+        <Card className="h-100 mb-0">
+          <CardBody className="d-flex flex-column align-items-center justify-content-center text-center">
+            <i className="bx bx-error-circle text-danger font-size-24 mb-2" />
+            <span className="text-muted font-size-12 mb-2">دریافت اطلاعات این کارت ناموفق بود</span>
+            <Button color="primary" outline size="sm" onClick={onRetry}>تلاش دوباره</Button>
+          </CardBody>
+        </Card>
+      );
+    }
     if (STATS_KEYS.has(key))
       return <StatsWidget widgetKey={key} widgetName={widget?.name} stats={statsData[statsRequestKey]} />;
 
@@ -307,13 +326,20 @@ const DashboardPage = () => {
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [initializingPersonal, setInitializingPersonal] = useState(false);
-  const patchQueue = useRef({});
+  const activeBreakpointRef = useRef("lg");
+  const loadGenerationRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const pendingSnapshotRef = useRef(null);
+
+  const userIdentity = String(user?.id ?? user?.userId ?? "anonymous");
 
   // ── Load dashboard ────────────────────────
   const loadDashboard = useCallback(async () => {
+    const generation = ++loadGenerationRef.current;
     setLoading(true);
     try {
       const myData = await getMyDashboard();
+      if (generation !== loadGenerationRef.current) return;
       let widgets;
       let defaultView = false;
 
@@ -321,6 +347,7 @@ const DashboardPage = () => {
         widgets = myData;
       } else {
         const def = await getDefaultDashboard();
+        if (generation !== loadGenerationRef.current) return;
         const rawWidgets = def?.widgets ?? [];
         widgets = rawWidgets.map((w, idx) => {
           const ww = w.defaultW || 3;
@@ -355,13 +382,14 @@ const DashboardPage = () => {
       ])).values()];
 
       const [statsResults, chartResults, recentResults] = await Promise.all([
-        Promise.all(statsRangeGroups.map((range) => getDashboardStats(range).catch(() => null))),
-        Promise.all(chartWidgets.map((w) => getDashboardChart(CHART_KEY_TO_TYPE[w.widget.key], getWidgetDateRange(w.userConfig)).catch(() => null))),
+        Promise.all(statsRangeGroups.map((range) => getDashboardStats(range).catch(() => ({ __dashboardError: true })))),
+        Promise.all(chartWidgets.map((w) => getDashboardChart(CHART_KEY_TO_TYPE[w.widget.key], getWidgetDateRange(w.userConfig)).catch(() => ({ __dashboardError: true })))),
         Promise.all(tableWidgets.map((w) => {
           const limit = w.userConfig?.limit ?? w.widget?.configSchema?.find((f) => f.key === "limit")?.default ?? 5;
-          return getDashboardRecent(RECENT_KEY_TO_TYPE[w.widget.key], limit, getWidgetDateRange(w.userConfig)).catch(() => null);
+          return getDashboardRecent(RECENT_KEY_TO_TYPE[w.widget.key], limit, getWidgetDateRange(w.userConfig)).catch(() => ({ __dashboardError: true }));
         })),
       ]);
+      if (generation !== loadGenerationRef.current) return;
 
       const newStats = {};
       statsRangeGroups.forEach((range, i) => {
@@ -384,13 +412,24 @@ const DashboardPage = () => {
     } catch {
       toast.error("خطا در بارگذاری داشبورد");
     } finally {
-      setLoading(false);
+      if (generation === loadGenerationRef.current) setLoading(false);
     }
-  }, []);
+  }, [userIdentity]);
 
   useEffect(() => { myWidgetsRef.current = myWidgets; }, [myWidgets]);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
+
+  useEffect(() => () => {
+    loadGenerationRef.current += 1;
+    pendingSnapshotRef.current = null;
+  }, [userIdentity]);
+
+  useEffect(() => {
+    setStatsData({});
+    setChartDataMap({});
+    setRecentDataMap({});
+  }, [userIdentity]);
 
   // Auto-refresh stats every 2 minutes (SA widgets read from the same stats endpoint)
   useEffect(() => {
@@ -437,45 +476,98 @@ const DashboardPage = () => {
 
   // ── Build grid layouts ────────────────────
   const buildLayouts = (widgets) => {
-    const items = widgets.map((w) => ({
-      i: String(w.id),
-      x: w.posX ?? 0,
-      y: w.posY ?? 0,
-      w: w.w ?? 3,
-      h: w.h ?? 2,
-      minW: 2,
-      minH: 1,
-    }));
+    const cols = { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 };
+    const forBreakpoint = (breakpoint) => {
+      let nextY = 0;
+      return widgets.map((widget) => {
+        const saved = widget.userConfig?.responsiveLayouts?.[breakpoint];
+        const width = Math.min(saved?.w ?? widget.w ?? 3, cols[breakpoint]);
+        const height = saved?.h ?? widget.h ?? 2;
+        const item = saved
+          ? { x: Math.min(saved.posX ?? 0, cols[breakpoint] - width), y: saved.posY ?? 0, w: width, h: height }
+          : breakpoint === "lg"
+            ? { x: Math.min(widget.posX ?? 0, cols.lg - width), y: widget.posY ?? 0, w: width, h: height }
+            : { x: 0, y: nextY, w: width, h: height };
+        nextY = Math.max(nextY, item.y + item.h);
+        return { i: String(widget.widgetId ?? widget.widget?.id), ...item, minW: 1, minH: 1 };
+      });
+    };
     return {
-      lg: items,
-      md: items.map((i) => ({ ...i, w: Math.min(i.w, 6), x: i.x > 5 ? i.x - 6 : i.x })),
-      sm: items.map((i) => ({ ...i, w: Math.min(i.w, 4), x: 0 })),
-      xs: items.map((i) => ({ ...i, w: 4, x: 0 })),
+      lg: forBreakpoint("lg"), md: forBreakpoint("md"), sm: forBreakpoint("sm"),
+      xs: forBreakpoint("xs"), xxs: forBreakpoint("xxs"),
     };
   };
+
+  const toLayoutPayload = useCallback((widgets) => widgets.map((w, index) => ({
+    widgetId: Number(w.widgetId ?? w.widget?.id),
+    posX: w.posX ?? 0,
+    posY: w.posY ?? 0,
+    w: w.w ?? 3,
+    h: w.h ?? 2,
+    sortOrder: w.sortOrder ?? index,
+    isVisible: w.isVisible !== false,
+    userConfig: w.userConfig ?? {},
+  })), []);
+
+  const flushLayoutSave = useCallback(async () => {
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
+    while (pendingSnapshotRef.current) {
+      const snapshot = pendingSnapshotRef.current;
+      pendingSnapshotRef.current = null;
+      try {
+        let saved;
+        try {
+          saved = await saveDashboardLayout(snapshot);
+        } catch (error) {
+          if (error?.response?.status !== 409) throw error;
+          await getMyDashboard();
+          saved = await saveDashboardLayout(pendingSnapshotRef.current ?? snapshot);
+          pendingSnapshotRef.current = null;
+        }
+        if (Array.isArray(saved) && saved.length > 0) {
+          setMyWidgets((current) => current.map((local) => {
+            const server = saved.find((item) => Number(item.widgetId ?? item.widget?.id) === Number(local.widgetId ?? local.widget?.id));
+            return server ? { ...server, ...local, id: server.id, widget: server.widget ?? local.widget } : local;
+          }));
+        }
+        toast.success("چیدمان ذخیره شد", { toastId: "dashboard-layout-saved" });
+      } catch (error) {
+        if (error?.response?.status !== 400 && error?.response?.status !== 403) {
+          toast.error("ذخیره چیدمان انجام نشد؛ دوباره تلاش کنید", { toastId: "dashboard-layout-error" });
+        }
+      }
+    }
+    saveInFlightRef.current = false;
+  }, []);
+
+  const queueLayoutSave = useCallback((widgets) => {
+    pendingSnapshotRef.current = toLayoutPayload(widgets);
+    void flushLayoutSave();
+  }, [flushLayoutSave, toLayoutPayload]);
 
   // ── Handlers ─────────────────────────────
   const handleLayoutChange = useCallback(
     (currentLayout) => {
       if (!isEditMode || isDefaultView) return;
-      currentLayout.forEach((item) => {
-        const widget = myWidgets.find((w) => String(w.id) === item.i);
-        if (!widget || String(widget.id).startsWith("default-")) return;
-        if (widget.posX !== item.x || widget.posY !== item.y || widget.w !== item.w || widget.h !== item.h) {
-          if (patchQueue.current[item.i]) clearTimeout(patchQueue.current[item.i]);
-          patchQueue.current[item.i] = setTimeout(() => {
-            updateDashboardWidget(widget.id, { posX: item.x, posY: item.y, w: item.w, h: item.h })
-              .catch(() => toast.error("خطا در ذخیره موقعیت ویجت"));
-          }, 600);
-          setMyWidgets((prev) =>
-            prev.map((w) =>
-              String(w.id) === item.i ? { ...w, posX: item.x, posY: item.y, w: item.w, h: item.h } : w
-            )
-          );
-        }
+      const breakpoint = activeBreakpointRef.current;
+      const byWidgetId = new Map(currentLayout.map((item, index) => [item.i, { ...item, sortOrder: index }]));
+      const next = myWidgets.map((widget) => {
+        const item = byWidgetId.get(String(widget.widgetId ?? widget.widget?.id));
+        if (!item) return widget;
+        const responsiveLayouts = { ...(widget.userConfig?.responsiveLayouts ?? {}), [breakpoint]: {
+          posX: item.x, posY: item.y, w: item.w, h: item.h,
+        } };
+        return {
+          ...widget,
+          ...(breakpoint === "lg" ? { posX: item.x, posY: item.y, w: item.w, h: item.h, sortOrder: item.sortOrder } : {}),
+          userConfig: { ...(widget.userConfig ?? {}), responsiveLayouts },
+        };
       });
+      setMyWidgets(next);
+      queueLayoutSave(next);
     },
-    [isEditMode, isDefaultView, myWidgets]
+    [isEditMode, isDefaultView, myWidgets, queueLayoutSave]
   );
 
   // Called by toolbar delete button — just opens confirmation modal
@@ -532,7 +624,8 @@ const DashboardPage = () => {
   const handleToggleVisible = useCallback(
     async (id, currentVisible) => {
       const newVal = !currentVisible;
-      setMyWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, isVisible: newVal } : w)));
+      const nextWidgets = myWidgets.map((w) => (w.id === id ? { ...w, isVisible: newVal } : w));
+      setMyWidgets(nextWidgets);
 
       // If widget is being shown and has no data yet, fetch it now
       if (newVal) {
@@ -558,24 +651,17 @@ const DashboardPage = () => {
         }
       }
 
-      // Default view: no DB call needed
-      if (isDefaultView || String(id).startsWith("default-")) return;
-      try {
-        await updateDashboardWidget(id, { isVisible: newVal });
-      } catch {
-        setMyWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, isVisible: currentVisible } : w)));
-        toast.error("خطا در تغییر نمایش ویجت");
-      }
+      if (!isDefaultView) queueLayoutSave(nextWidgets);
     },
-    [isDefaultView, myWidgets, chartDataMap, recentDataMap]
+    [isDefaultView, myWidgets, chartDataMap, recentDataMap, statsData, queueLayoutSave]
   );
 
   const handleSaveConfig = useCallback(
     async (id, newConfig) => {
-      await updateDashboardWidget(id, { userConfig: newConfig });
       const widget = myWidgets.find((w) => w.id === id);
-      setMyWidgets((prev) => prev.map((w) => (w.id === id ? { ...w, userConfig: newConfig } : w)));
-      toast.success("تنظیمات ذخیره شد");
+      const nextWidgets = myWidgets.map((w) => (w.id === id ? { ...w, userConfig: { ...(w.userConfig ?? {}), ...newConfig } } : w));
+      setMyWidgets(nextWidgets);
+      queueLayoutSave(nextWidgets);
       const key = widget?.widget?.key;
       const range = getWidgetDateRange(newConfig);
       if (key && RECENT_KEY_TO_TYPE[key]) {
@@ -596,7 +682,7 @@ const DashboardPage = () => {
           .catch(() => {});
       }
     },
-    [myWidgets]
+    [myWidgets, queueLayoutSave]
   );
 
   const handleAddWidget = useCallback(
@@ -655,8 +741,7 @@ const DashboardPage = () => {
   }, []);
 
   // ── Enter edit mode ───────────────────────
-  // If in default view, first POST all default widgets to create real entry.id values,
-  // then reload so PATCH/DELETE calls have valid IDs.
+  // The first customization is one atomic snapshot, including every default widget.
   const handleEnterEditMode = useCallback(async () => {
     if (!isDefaultView) {
       setIsEditMode(true);
@@ -665,21 +750,7 @@ const DashboardPage = () => {
 
     setInitializingPersonal(true);
     try {
-      await Promise.all(
-        myWidgets.map((w, idx) =>
-          addWidgetToDashboard({
-            widgetId: w.widgetId ?? w.widget?.id,
-            posX: w.posX ?? 0,
-            posY: w.posY ?? 0,
-            w: w.w ?? 3,
-            h: w.h ?? 2,
-            sortOrder: idx,
-          }).catch((err) => {
-            // 409 means widget already has an entry — ignore
-            if (err?.response?.status !== 409) throw err;
-          })
-        )
-      );
+      await saveDashboardLayout(toLayoutPayload(myWidgets));
       // Reload to get real entry.id for every widget
       await loadDashboard();
       setIsEditMode(true);
@@ -688,7 +759,7 @@ const DashboardPage = () => {
     } finally {
       setInitializingPersonal(false);
     }
-  }, [isDefaultView, myWidgets, loadDashboard]);
+  }, [isDefaultView, myWidgets, loadDashboard, toLayoutPayload]);
 
   const existingWidgetIds = myWidgets.map((w) => w.widgetId).filter(Boolean);
   const visibleWidgets = isEditMode ? myWidgets : myWidgets.filter((w) => w.isVisible !== false);
@@ -696,8 +767,8 @@ const DashboardPage = () => {
 
   // ── Common grid props ─────────────────────
   const gridProps = {
-    breakpoints: { lg: 1200, md: 996, sm: 768, xs: 480 },
-    cols: { lg: 12, md: 12, sm: 6, xs: 4 },
+    breakpoints: { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 },
+    cols: { lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 },
     rowHeight: 72,
     margin: [14, 14],
     containerPadding: [0, 0],
@@ -777,7 +848,7 @@ const DashboardPage = () => {
               <ResponsiveGridLayout
                 {...gridProps}
                 width={gridWidth}
-                layouts={{ lg: SKELETONS, md: SKELETONS, sm: SKELETONS, xs: SKELETONS }}
+                layouts={{ lg: SKELETONS, md: SKELETONS, sm: SKELETONS, xs: SKELETONS, xxs: SKELETONS }}
                 isDraggable={false}
                 isResizable={false}
               >
@@ -822,11 +893,13 @@ const DashboardPage = () => {
                   layouts={layouts}
                   isDraggable={isEditMode && !isDefaultView}
                   isResizable={isEditMode && !isDefaultView}
-                  onLayoutChange={handleLayoutChange}
+                  onBreakpointChange={(breakpoint) => { activeBreakpointRef.current = breakpoint; }}
+                  onDragStop={handleLayoutChange}
+                  onResizeStop={handleLayoutChange}
                 >
                   {visibleWidgets.map((userWidget) => (
                     <div
-                      key={String(userWidget.id)}
+                      key={String(userWidget.widgetId ?? userWidget.widget?.id)}
                       style={{
                         direction: "rtl",
                         borderRadius: 8,
@@ -845,6 +918,7 @@ const DashboardPage = () => {
                         statsData={statsData}
                         chartDataMap={chartDataMap}
                         recentDataMap={recentDataMap}
+                        onRetry={loadDashboard}
                       />
                     </div>
                   ))}

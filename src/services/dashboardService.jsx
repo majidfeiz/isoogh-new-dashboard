@@ -1,6 +1,6 @@
 // src/services/dashboardService.jsx
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../helpers/httpClient.jsx";
-import { getApiUrl } from "../helpers/apiRoutes.jsx";
+import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
 const BASE = "/dashboard";
 
@@ -20,6 +20,12 @@ export const getMyDashboard = async () => {
   const res = await apiGet(getApiUrl(`${BASE}/my`));
   const raw = res.data?.data ?? res.data;
   return Array.isArray(raw) ? raw : [];
+};
+
+export const saveDashboardLayout = async (widgets) => {
+  const res = await apiPut(getApiUrl(API_ROUTES.dashboard.myLayout), { widgets });
+  const raw = res.data?.data ?? res.data;
+  return Array.isArray(raw) ? raw : (raw?.widgets ?? []);
 };
 
 export const addWidgetToDashboard = async (body) => {
