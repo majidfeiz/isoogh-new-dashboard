@@ -55,8 +55,24 @@ test("deduplicates legacy adviser-form connections with inactive status taking p
   expect(items.find((item) => item.adviser_id === 10)?.is_active).toBe(1)
 })
 
-test("rejects boolean and string payloads before making a request", async () => {
-  await expect(toggleSupportFormAdviserActive(14, 9, false)).rejects.toThrow("numeric 0 or 1")
-  await expect(toggleSupportFormAdviserActive(14, 9, "0")).rejects.toThrow("numeric 0 or 1")
+test("accepts real booleans but serializes them as numeric TINYINT values", async () => {
+  apiPost.mockResolvedValue({ data: { data: { is_active: 1 } } })
+
+  await toggleSupportFormAdviserActive(14, 9, true)
+  expect(apiPost).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/support-forms/14/9/active",
+    { is_active: 1 }
+  )
+
+  apiPost.mockResolvedValue({ data: { data: { is_active: 0 } } })
+  await toggleSupportFormAdviserActive(14, 9, false)
+  expect(apiPost).toHaveBeenLastCalledWith(
+    "http://127.0.0.1:8040/support-forms/14/9/active",
+    { is_active: 0 }
+  )
+})
+
+test("rejects string payloads before making a request", async () => {
+  await expect(toggleSupportFormAdviserActive(14, 9, "0")).rejects.toThrow("boolean or numeric 0 or 1")
   expect(apiPost).not.toHaveBeenCalled()
 })
