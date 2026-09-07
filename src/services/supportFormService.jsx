@@ -251,11 +251,11 @@ export async function deleteSupportFormQuestion(id, qId) {
 }
 
 export async function toggleSupportFormAdviserActive(id, adviserId, isActive) {
-  if (isActive !== 0 && isActive !== 1) {
-    throw new TypeError("isActive must be numeric 0 or 1");
+  if (typeof isActive !== "boolean" && isActive !== 0 && isActive !== 1) {
+    throw new TypeError("isActive must be boolean or numeric 0 or 1");
   }
   const url = getApiUrl(API_ROUTES.supportForms.toggleAdviserActive(id, adviserId));
-  const res = await apiPost(url, { is_active: isActive });
+  const res = await apiPost(url, { is_active: isActive === true || isActive === 1 ? 1 : 0 });
   const connection = res?.data?.data ?? res?.data ?? {};
   return { ...connection, is_active: normalizeSupportFormActiveValue(connection?.is_active) };
 }
