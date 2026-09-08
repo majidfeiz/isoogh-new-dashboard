@@ -30,6 +30,7 @@ const normalizeSupportForm = (item = {}) => ({
   stats: item?.stats ?? null,
   gradeId: item?.grade_id ?? item?.gradeId ?? item?.grade?.id ?? null,
   grade: item?.grade ?? null,
+  schoolId: item?.school_id ?? item?.schoolId ?? item?.school?.id ?? null,
   questions: (item?.questions ?? []).map(normalizeQuestion),
 });
 

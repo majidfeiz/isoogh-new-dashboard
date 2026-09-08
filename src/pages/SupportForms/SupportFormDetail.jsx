@@ -1,5 +1,5 @@
 // src/pages/SupportForms/SupportFormDetail.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import classnames from "classnames";
 import {
@@ -43,6 +43,8 @@ import {
   upsertSupportFormAdviser,
   toggleSupportFormAdviserActive,
   detachSupportFormAdviser,
+  normalizeSupportFormActive,
+  normalizeSupportFormActiveValue,
   getSupportFormAdviserStudents,
   getSupportFormAdviserStudentCandidates,
   attachSupportFormAdviserStudents,
@@ -590,6 +592,8 @@ const AdvisersTab = ({ formId }) => {
   const [attachResults, setAttachResults] = useState([]);
   const [attachLoading, setAttachLoading] = useState(false);
   const [allGrades, setAllGrades] = useState([]);
+  const pendingToggleIds = useRef(new Set());
+  const [toggleLoadingIds, setToggleLoadingIds] = useState({});
 
   useEffect(() => {
     getGrades({ page: 1, limit: 200 })
@@ -618,14 +622,33 @@ const AdvisersTab = ({ formId }) => {
 
   const handleToggleActive = async (row) => {
     const adviserId = row?.adviser_id || row?.adviser?.id;
-    if (!adviserId) return;
+    if (!adviserId || pendingToggleIds.current.has(String(adviserId))) return;
+    const previousValue = normalizeSupportFormActiveValue(row?.is_active);
+    const nextValue = previousValue === 1 ? 0 : 1;
+    pendingToggleIds.current.add(String(adviserId));
+    setToggleLoadingIds((current) => ({ ...current, [adviserId]: true }));
     setActionLoading(adviserId);
+    setData((current) => current.map((item) =>
+      (item?.adviser_id || item?.adviser?.id) === adviserId ? { ...item, is_active: nextValue } : item
+    ));
     try {
-      await toggleSupportFormAdviserActive(formId, adviserId, !row.is_active);
-      await fetchData(meta.page);
+      const updated = await toggleSupportFormAdviserActive(formId, adviserId, nextValue);
+      setData((current) => current.map((item) =>
+        (item?.adviser_id || item?.adviser?.id) === adviserId
+          ? { ...item, ...updated, is_active: updated.is_active }
+          : item
+      ));
+      window.dispatchEvent(new CustomEvent("adviser-support-form-active-changed", {
+        detail: { supportFormId: Number(formId), adviserId: Number(adviserId), isActive: updated.is_active },
+      }));
     } catch {
+      setData((current) => current.map((item) =>
+        (item?.adviser_id || item?.adviser?.id) === adviserId ? { ...item, is_active: previousValue } : item
+      ));
       setAlert({ type: "danger", message: "خطا در تغییر وضعیت مشاور." });
     } finally {
+      pendingToggleIds.current.delete(String(adviserId));
+      setToggleLoadingIds((current) => ({ ...current, [adviserId]: false }));
       setActionLoading(null);
     }
   };
@@ -698,8 +721,8 @@ const AdvisersTab = ({ formId }) => {
         header: "وضعیت",
         enableSorting: false,
         cell: ({ row }) => (
-          <Badge color={row.original?.is_active ? "success" : "secondary"}>
-            {row.original?.is_active ? "فعال" : "غیرفعال"}
+          <Badge color={normalizeSupportFormActive(row.original?.is_active) ? "success" : "secondary"}>
+            {normalizeSupportFormActive(row.original?.is_active) ? "فعال" : "غیرفعال"}
           </Badge>
         ),
       },
@@ -713,11 +736,11 @@ const AdvisersTab = ({ formId }) => {
             <div className="d-flex gap-1">
               <Button
                 size="sm"
-                color={row.original?.is_active ? "danger" : "success"}
-                disabled={actionLoading === adviserId}
+                color={normalizeSupportFormActive(row.original?.is_active) ? "danger" : "success"}
+                disabled={Boolean(toggleLoadingIds[adviserId])}
                 onClick={() => handleToggleActive(row.original)}
               >
-                {row.original?.is_active ? "غیرفعال" : "فعال"}
+                {normalizeSupportFormActive(row.original?.is_active) ? "غیرفعال" : "فعال"}
               </Button>
               <Button
                 size="sm"
@@ -732,7 +755,7 @@ const AdvisersTab = ({ formId }) => {
         },
       },
     ],
-    [actionLoading]
+    [actionLoading, toggleLoadingIds]
   );
 
   const candidateColumns = useMemo(

@@ -115,8 +115,9 @@ const STATS_CONFIG = {
   sa_online_today: {
     icon: "bx-circle",
     bgClass: "bg-success",
-    label: "آنلاین امروز",
-    getValue: (s) => s?.superAdviser?.onlineToday,
+    label: "فعالیت تماس امروز من",
+    adviserLabel: "فعالیت تماس امروز من",
+    getValue: (s) => s?.adviser?.onlineToday ?? s?.superAdviser?.onlineToday,
     suffix: (val) =>
       val > 0 ? (
         <span
@@ -128,32 +129,37 @@ const STATS_CONFIG = {
   sa_total_calls_today: {
     icon: "bx-phone",
     bgClass: "bg-primary",
-    label: "تماس امروز",
-    getValue: (s) => s?.superAdviser?.totalCallsToday,
+    label: "تماس‌های من",
+    adviserLabel: "تماس‌های من",
+    getValue: (s) => s?.adviser?.totalCallsToday ?? s?.superAdviser?.totalCallsToday,
   },
   sa_successful_calls_today: {
     icon: "bx-phone-call",
     bgClass: "bg-success",
     label: "تماس موفق امروز",
-    getValue: (s) => s?.superAdviser?.successfulCallsToday,
+    adviserLabel: "تماس‌های موفق من",
+    getValue: (s) => s?.adviser?.successfulCallsToday ?? s?.superAdviser?.successfulCallsToday,
   },
   sa_students_total: {
     icon: "bx-user-circle",
     bgClass: "bg-info",
-    label: "دانش‌آموزان زیرمجموعه",
+    label: "دانش‌آموزان من",
+    adviserLabel: "دانش‌آموزان من",
     getValue: (s) => s?.students?.total,
   },
   sa_support_forms_count: {
     icon: "bx-file",
     bgClass: "bg-warning",
     label: "فرم‌های تماس",
-    getValue: (s) => s?.supportForms?.total,
+    adviserLabel: "فرم‌های فعال من",
+    getValue: (s) => s?.supportForms?.active,
   },
   sa_monthly_duration: {
     icon: "bx-time-five",
     bgClass: "bg-info",
-    label: "مدت تماس این ماه",
-    getValue: (s) => s?.superAdviser?.monthlyDurationSeconds,
+    label: "مدت تماس من در این ماه",
+    adviserLabel: "مدت تماس من در این ماه",
+    getValue: (s) => s?.adviser?.monthlyDurationSeconds ?? s?.superAdviser?.monthlyDurationSeconds,
     format: formatHMS,
     unit: "ساعت:دقیقه:ثانیه",
   },
@@ -167,13 +173,14 @@ const StatsWidget = ({ widgetKey, widgetName, stats }) => {
   const displayVal = cfg.format ? cfg.format(rawVal) : (rawVal !== null && rawVal !== undefined ? Number(rawVal).toLocaleString("fa-IR") : null);
   const bgClass = cfg.dynamicColor ? cfg.dynamicColor(rawVal) : cfg.bgClass;
   const loading = stats === null || stats === undefined;
+  const label = stats?.adviser && cfg.adviserLabel ? cfg.adviserLabel : (widgetName || cfg.label);
 
   return (
     <Card className="mini-stats-wid h-100 mb-0">
       <CardBody>
         <div className="d-flex align-items-center">
           <div className="flex-grow-1">
-            <p className="text-muted fw-medium mb-1 font-size-13">{widgetName || cfg.label}</p>
+            <p className="text-muted fw-medium mb-1 font-size-13">{label}</p>
             {loading ? (
               <div className="placeholder-glow">
                 <span className="placeholder col-5 bg-secondary rounded" style={{ height: 28 }} />

@@ -96,6 +96,9 @@ export const API_ROUTES = {
       `/adviser-portal/support-forms/${formId}/students/${studentId}/work-shift`,
     stats: "/adviser-portal/stats",
   },
+  supportForms: {
+    toggleAdviserActive: (formId, adviserId) => `/support-forms/${formId}/${adviserId}/active`,
+  },
   advisers: {
     list: "/advisers",
     superStatus: (adviserId) => `/advisers/${adviserId}/super-status`,

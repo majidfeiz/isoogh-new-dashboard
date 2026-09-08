@@ -2,6 +2,29 @@
 import { apiGet, apiPost, apiPut, apiDelete } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
+export const normalizeSupportFormActive = (value) => Number(value) === 1;
+export const normalizeSupportFormActiveValue = (value) => (normalizeSupportFormActive(value) ? 1 : 0);
+
+export const normalizeSupportFormAdviserConnections = (items = [], supportFormId) => {
+  const connections = new Map();
+
+  items.forEach((item, index) => {
+    const adviserId = item?.adviser_id ?? item?.adviser?.id;
+    const formId = item?.support_form_id ?? item?.supportFormId ?? supportFormId;
+    const key = adviserId != null && formId != null
+      ? `${formId}:${adviserId}`
+      : `row:${item?.id ?? index}`;
+    const normalizedActive = normalizeSupportFormActiveValue(item?.is_active);
+    const existing = connections.get(key);
+
+    connections.set(key, existing
+      ? { ...existing, ...item, is_active: Math.min(existing.is_active, normalizedActive) }
+      : { ...item, is_active: normalizedActive });
+  });
+
+  return [...connections.values()];
+};
+
 export async function getSupportForms({
   page = 1,
   limit = 10,
@@ -26,7 +49,10 @@ export async function getSupportForms({
 
   const payload = response?.data;
   const data = payload?.data || {};
-  const items = data.items || data.data || [];
+  const items = (data.items || data.data || []).map((item) => ({
+    ...item,
+    is_active: normalizeSupportFormActiveValue(item?.is_active),
+  }));
   const pagination = data.meta || data.pagination || payload?.meta || {};
 
   return {
@@ -73,7 +99,7 @@ export async function getSupportFormAdvisers(id, params = {}) {
   const response = await apiGet(url, { params });
   const payload = response?.data;
   const data = payload?.data ?? payload ?? {};
-  const items = data.items || data.data || [];
+  const items = normalizeSupportFormAdviserConnections(data.items || data.data || [], id);
   const pagination = data.meta || data.pagination || {};
 
   return {
@@ -225,9 +251,13 @@ export async function deleteSupportFormQuestion(id, qId) {
 }
 
 export async function toggleSupportFormAdviserActive(id, adviserId, isActive) {
+  if (typeof isActive !== "boolean" && isActive !== 0 && isActive !== 1) {
+    throw new TypeError("isActive must be boolean or numeric 0 or 1");
+  }
   const url = getApiUrl(API_ROUTES.supportForms.toggleAdviserActive(id, adviserId));
-  const res = await apiPost(url, { is_active: isActive });
-  return res.data;
+  const res = await apiPost(url, { is_active: isActive === true || isActive === 1 ? 1 : 0 });
+  const connection = res?.data?.data ?? res?.data ?? {};
+  return { ...connection, is_active: normalizeSupportFormActiveValue(connection?.is_active) };
 }
 
 export async function bulkAttachSupportFormAdvisers(id, adviserIds) {

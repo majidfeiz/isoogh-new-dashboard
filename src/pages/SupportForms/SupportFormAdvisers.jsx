@@ -28,6 +28,8 @@ import {
   upsertSupportFormAdviser,
   toggleSupportFormAdviserActive,
   detachSupportFormAdviser,
+  normalizeSupportFormActive,
+  normalizeSupportFormActiveValue,
 } from "../../services/supportFormService.jsx";
 
 const SupportFormAdvisers = () => {
@@ -59,6 +61,8 @@ const SupportFormAdvisers = () => {
   const [actionLoading, setActionLoading] = useState(null);
   const [deleteModal, setDeleteModal] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
+  const pendingToggleIds = React.useRef(new Set());
+  const [toggleLoadingIds, setToggleLoadingIds] = useState({});
 
   const fetchTitle = useCallback(async () => {
     try {
@@ -136,15 +140,34 @@ const SupportFormAdvisers = () => {
 
   const handleToggleActive = async (row) => {
     const adviserId = row?.adviser_id || row?.adviser?.id;
-    if (!adviserId) return;
+    if (!adviserId || pendingToggleIds.current.has(String(adviserId))) return;
+    const previousValue = normalizeSupportFormActiveValue(row?.is_active);
+    const nextValue = previousValue === 1 ? 0 : 1;
+    pendingToggleIds.current.add(String(adviserId));
+    setToggleLoadingIds((current) => ({ ...current, [adviserId]: true }));
     setActionLoading(adviserId);
+    setData((current) => current.map((item) =>
+      (item?.adviser_id || item?.adviser?.id) === adviserId ? { ...item, is_active: nextValue } : item
+    ));
     try {
-      await toggleSupportFormAdviserActive(id, adviserId, !row?.is_active);
-      await fetchData(meta.page, filters, sort);
+      const updated = await toggleSupportFormAdviserActive(id, adviserId, nextValue);
+      setData((current) => current.map((item) =>
+        (item?.adviser_id || item?.adviser?.id) === adviserId
+          ? { ...item, ...updated, is_active: updated.is_active }
+          : item
+      ));
+      window.dispatchEvent(new CustomEvent("adviser-support-form-active-changed", {
+        detail: { supportFormId: Number(id), adviserId: Number(adviserId), isActive: updated.is_active },
+      }));
     } catch (e) {
+      setData((current) => current.map((item) =>
+        (item?.adviser_id || item?.adviser?.id) === adviserId ? { ...item, is_active: previousValue } : item
+      ));
       console.error("خطا در بروزرسانی وضعیت مشاور", e);
       setAlert({ type: "danger", message: "خطا در بروزرسانی وضعیت." });
     } finally {
+      pendingToggleIds.current.delete(String(adviserId));
+      setToggleLoadingIds((current) => ({ ...current, [adviserId]: false }));
       setActionLoading(null);
     }
   };
@@ -275,7 +298,7 @@ const SupportFormAdvisers = () => {
         cell: ({ row }) => {
           const adviserId =
             row.original?.adviser_id || row.original?.adviser?.id || row.original?.id;
-          const isActive = row.original?.is_active;
+          const isActive = normalizeSupportFormActive(row.original?.is_active);
           const isAttached = attachedIds.has(String(adviserId));
           return (
             <Button
@@ -348,7 +371,7 @@ const SupportFormAdvisers = () => {
         header: "وضعیت",
         accessorKey: "is_active",
         enableSorting: true,
-        cell: ({ row }) => (row.original?.is_active ? "فعال" : "غیرفعال"),
+        cell: ({ row }) => (normalizeSupportFormActive(row.original?.is_active) ? "فعال" : "غیرفعال"),
       },
       {
         id: "actions",
@@ -371,14 +394,14 @@ const SupportFormAdvisers = () => {
                 دانش‌آموزان
               </Button>
               <Button
-                color={row.original?.is_active ? "danger" : "success"}
+                color={normalizeSupportFormActive(row.original?.is_active) ? "danger" : "success"}
                 size="sm"
-                disabled={actionLoading === adviserId}
+                disabled={Boolean(toggleLoadingIds[adviserId])}
                 onClick={() => handleToggleActive(row.original)}
               >
-                {actionLoading === adviserId
+                {toggleLoadingIds[adviserId]
                   ? "در حال ثبت..."
-                  : row.original?.is_active
+                  : normalizeSupportFormActive(row.original?.is_active)
                   ? "غیرفعال‌سازی"
                   : "فعال‌سازی"}
               </Button>
@@ -395,7 +418,7 @@ const SupportFormAdvisers = () => {
         },
       },
     ],
-    [actionLoading, id, navigate]
+    [actionLoading, id, navigate, toggleLoadingIds]
   );
 
   const handleSortingChange = useCallback(
