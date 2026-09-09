@@ -174,6 +174,7 @@ export const API_ROUTES = {
     import: "/parent-tags/import",
     importStatus: (logId) => `/parent-tags/imports/${logId}`,
     users: (id) => `/parent-tags/${id}/users`,
+    studentCandidates: (id) => `/parent-tags/${id}/student-candidates`,
     detachUser: (id, userId) => `/parent-tags/${id}/users/${userId}`,
     exportUsers: (id) => `/parent-tags/${id}/users/export`,
     values: (id) => `/parent-tags/${id}/values`,
@@ -212,6 +213,7 @@ export const API_ROUTES = {
   },
   supportForms: {
     list: "/support-forms",
+    tagOptions: "/support-forms/tag-options",
     create: "/support-forms",
     detail: (id) => `/support-forms/${id}`,
     update: (id) => `/support-forms/${id}`,

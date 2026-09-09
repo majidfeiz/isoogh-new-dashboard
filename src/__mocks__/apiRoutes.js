@@ -33,6 +33,7 @@ export const API_ROUTES = {
     list: "/parent-tags",
     values: (id) => `/parent-tags/${id}/values`,
     users: (id) => `/parent-tags/${id}/users`,
+    studentCandidates: (id) => `/parent-tags/${id}/student-candidates`,
     detachUser: (id, userId) => `/parent-tags/${id}/users/${userId}`,
     deleteValue: (id, userId) => `/parent-tags/${id}/values/${userId}`,
     valueImportTemplate: (id) => `/parent-tags/${id}/value-import-template/download`,
@@ -106,6 +107,7 @@ export const API_ROUTES = {
     stats: "/adviser-portal/stats",
   },
   supportForms: {
+    tagOptions: "/support-forms/tag-options",
     toggleAdviserActive: (formId, adviserId) => `/support-forms/${formId}/${adviserId}/active`,
   },
   advisers: {

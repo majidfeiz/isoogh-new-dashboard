@@ -1,13 +1,14 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, CardBody, CardHeader, Col, Container, Form, Input, Label, Row, Spinner, Table } from "reactstrap";
 import { useNavigate, useParams } from "react-router-dom";
+import Select from "react-select";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
-import { attachUserToParentTag, deleteParentTagValue, detachUserFromParentTag, downloadParentTagValueTemplate, getParentTag, getParentTagUsers, importParentTagValues, saveParentTagValue } from "../../services/parentTagService.jsx";
+import { attachUserToParentTag, deleteParentTagValue, detachUserFromParentTag, downloadParentTagValueTemplate, getParentTag, getParentTagStudentCandidates, getParentTagUsers, importParentTagValues, saveParentTagValue } from "../../services/parentTagService.jsx";
 
 const userIdOf = (row) => row?.user_id ?? row?.user?.id ?? null;
 const valueOf = (row) => row?.value?.value ?? row?.value ?? "";
@@ -41,7 +42,14 @@ const ParentTagUsers = () => {
   const [loading, setLoading] = useState(false);
   const [drafts, setDrafts] = useState({});
   const [rowBusy, setRowBusy] = useState(null);
-  const [attach, setAttach] = useState({ userId: "", value: "" });
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const [debouncedCandidateSearch, setDebouncedCandidateSearch] = useState("");
+  const [candidateOptions, setCandidateOptions] = useState([]);
+  const [candidateMeta, setCandidateMeta] = useState({ page: 1, lastPage: 1 });
+  const [candidateLoading, setCandidateLoading] = useState(false);
+  const [attachValue, setAttachValue] = useState("");
+  const candidateRequest = useRef(0);
   const [attaching, setAttaching] = useState(false);
   const [notice, setNotice] = useState(null);
   const [exporting, setExporting] = useState(false);
@@ -69,11 +77,50 @@ const ParentTagUsers = () => {
     finally { setRowBusy(null); }
   }, [refresh]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedCandidateSearch(candidateSearch.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [candidateSearch]);
+
+  const loadCandidates = useCallback(async (page = 1, search = debouncedCandidateSearch, append = false) => {
+    const requestId = ++candidateRequest.current;
+    if (!schoolId || search.length < 2) {
+      setCandidateOptions([]);
+      setCandidateMeta({ page: 1, lastPage: 1 });
+      return;
+    }
+    setCandidateLoading(true);
+    try {
+      const response = await getParentTagStudentCandidates(id, { schoolId, search, page, limit: 20 });
+      if (requestId !== candidateRequest.current) return;
+      setCandidateOptions((current) => {
+        const map = new Map((append ? current : []).map((item) => [item.userId, item]));
+        (response.items || []).forEach((item) => map.set(item.userId, item));
+        return Array.from(map.values());
+      });
+      setCandidateMeta(response.pagination || { page, lastPage: 1 });
+    } catch (error) {
+      if (requestId !== candidateRequest.current) return;
+      setCandidateOptions([]);
+      setNotice({ color: "danger", text: errorText(error, "جستجوی دانش‌آموز ناموفق بود.") });
+    } finally {
+      if (requestId === candidateRequest.current) setCandidateLoading(false);
+    }
+  }, [debouncedCandidateSearch, id, schoolId]);
+
+  useEffect(() => {
+    loadCandidates(1, debouncedCandidateSearch, false);
+  }, [debouncedCandidateSearch, loadCandidates]);
+
   const handleAttach = async (event) => {
     event.preventDefault();
-    if (!attach.userId) return setNotice({ color: "danger", text: "شناسه کاربر الزامی است." });
+    if (!selectedCandidate) return setNotice({ color: "danger", text: "انتخاب دانش‌آموز الزامی است." });
     setAttaching(true);
-    try { await attachUserToParentTag(id, { ...attach, schoolId }); setAttach({ userId: "", value: "" }); setNotice({ color: "success", text: "کاربر متصل شد." }); await fetchRows(1, filters, sort); }
+    try {
+      await attachUserToParentTag(id, { userId: selectedCandidate.userId, value: attachValue, schoolId });
+      setSelectedCandidate(null); setAttachValue(""); setCandidateSearch(""); setCandidateOptions([]);
+      setNotice({ color: "success", text: "دانش‌آموز متصل شد." }); await fetchRows(1, filters, sort);
+    }
     catch (error) { setNotice({ color: "danger", text: errorText(error, "اتصال کاربر ناموفق بود.") }); }
     finally { setAttaching(false); }
   };
@@ -119,7 +166,47 @@ const ParentTagUsers = () => {
     <CardHeader className="d-flex justify-content-between align-items-center flex-wrap gap-2"><div><h4 className="card-title mb-1">کاربران / مقدار «{tag?.name || "..."}»</h4><span className="text-muted">مجموعه: {tag?.school?.name || schoolId || "..."}</span></div><div className="d-flex gap-2"><Button color="success" outline onClick={handleExport} disabled={!schoolId || exporting}>{exporting ? "در حال دانلود..." : "خروجی CSV"}</Button><Button color="secondary" onClick={() => navigate(-1)}>بازگشت</Button></div></CardHeader>
     <CardBody>{notice && <Alert color={notice.color}>{notice.text}</Alert>}
       <Form className="mb-4" onSubmit={(event) => { event.preventDefault(); fetchRows(1, filters, sort); }}><Row className="g-2 align-items-end"><Col md="6"><Label>جستجو</Label><Input value={filters.search} onChange={(e) => setFilters((old) => ({ ...old, search: e.target.value }))} placeholder="نام، نام کاربری، کد ملی، موبایل، نام تگ یا مقدار" /></Col><Col md="3"><Label>وضعیت مقدار</Label><Input type="select" value={filters.hasValue} onChange={(e) => setFilters((old) => ({ ...old, hasValue: e.target.value }))}><option value="">همه</option><option value="true">دارای مقدار</option><option value="false">بدون مقدار</option></Input></Col><Col md="3" className="d-flex gap-2"><Button color="primary" type="submit" disabled={loading}>جستجو</Button><Button type="button" color="light" onClick={() => { const clean = { search: "", hasValue: "false" }; setFilters(clean); fetchRows(1, clean, sort); }}>پاک‌کردن</Button></Col></Row></Form>
-      {hasPermission("parent-tag-users.create") && <Form onSubmit={handleAttach} className="border rounded p-3 mb-4"><h5>اتصال انفرادی کاربر</h5><Row className="g-2 align-items-end"><Col md="4"><Label>شناسه کاربر</Label><Input type="number" value={attach.userId} onChange={(e) => setAttach((old) => ({ ...old, userId: e.target.value }))} /></Col><Col md="5"><Label>مقدار اختیاری</Label><Input value={attach.value} onChange={(e) => setAttach((old) => ({ ...old, value: e.target.value }))} /></Col><Col md="3"><Button color="primary" type="submit" disabled={attaching}>{attaching ? "در حال اتصال..." : "اتصال کاربر"}</Button></Col></Row></Form>}
+      {hasPermission("parent-tag-users.create") && <Form onSubmit={handleAttach} className="border rounded p-3 mb-4">
+        <h5>اتصال انفرادی دانش‌آموز</h5>
+        <Row className="g-2 align-items-end">
+          <Col md="6">
+            <Label>دانش‌آموز</Label>
+            <Select
+              isClearable
+              classNamePrefix="react-select"
+              placeholder="حداقل دو کاراکتر از نام کاربری یا کد ملی..."
+              noOptionsMessage={() => candidateSearch.trim().length < 2 ? "حداقل دو کاراکتر وارد کنید" : candidateLoading ? "در حال جستجو..." : "دانش‌آموزی یافت نشد"}
+              options={candidateOptions}
+              value={selectedCandidate}
+              inputValue={candidateSearch}
+              isLoading={candidateLoading}
+              getOptionValue={(candidate) => String(candidate.userId)}
+              getOptionLabel={(candidate) => candidate.name || candidate.username || candidate.ssn || "دانش‌آموز"}
+              isOptionDisabled={(candidate) => candidate.alreadyAssigned}
+              formatOptionLabel={(candidate) => <div>
+                <div className="d-flex align-items-center gap-2">
+                  <span className="fw-semibold">{candidate.name || "بدون نام"}</span>
+                  {candidate.alreadyAssigned && <span className="badge bg-secondary">قبلاً متصل شده</span>}
+                </div>
+                <small className="text-muted d-block">
+                  نام کاربری: {candidate.username || "-"} | کد ملی: {candidate.ssn || "-"} | کد دانش‌آموز: {candidate.studentCode || "-"}
+                </small>
+              </div>}
+              onInputChange={(value, action) => {
+                if (action.action === "input-change") setCandidateSearch(value);
+              }}
+              onChange={setSelectedCandidate}
+              onMenuScrollToBottom={() => {
+                if (!candidateLoading && candidateMeta.page < candidateMeta.lastPage) {
+                  loadCandidates(candidateMeta.page + 1, debouncedCandidateSearch, true);
+                }
+              }}
+            />
+          </Col>
+          <Col md="4"><Label>مقدار اختیاری</Label><Input value={attachValue} onChange={(event) => setAttachValue(event.target.value)} /></Col>
+          <Col md="2"><Button color="primary" type="submit" disabled={attaching || !selectedCandidate || selectedCandidate.alreadyAssigned}>{attaching ? "در حال اتصال..." : "اتصال دانش‌آموز"}</Button></Col>
+        </Row>
+      </Form>}
       <Row className="g-3 mb-4">{[{ kind: "upsert", title: "ثبت / ویرایش گروهی مقدار", permission: "parent-tag-values.upsert", isDelete: false }, { kind: "delete", title: "حذف گروهی مقدار", permission: "parent-tag-values.delete", isDelete: true }].filter((item) => hasPermission(item.permission)).map((item) => <Col lg="6" key={item.kind}><div className="border rounded p-3 h-100"><h5>{item.title}</h5><div className="d-flex gap-2 flex-wrap"><Button type="button" color="info" outline onClick={() => downloadTemplate(item.isDelete)}>دانلود نمونه XLSX</Button><Input type="file" accept=".xlsx" onChange={(e) => setFiles((old) => ({ ...old, [item.kind]: e.target.files?.[0] || null }))} style={{ maxWidth: 300 }} /><Button type="button" color={item.isDelete ? "danger" : "success"} disabled={importing === item.kind} onClick={() => submitImport(item.kind)}>{importing === item.kind ? "در حال پردازش..." : "ارسال فایل"}</Button></div></div></Col>)}</Row>
       {result && <Alert color={result.failed ? "warning" : "success"}><h5>نتیجه پردازش فایل</h5><div className="d-flex gap-4"><span>کل: {result.total ?? 0}</span><span>موفق: {result.successful ?? 0}</span><span>ناموفق: {result.failed ?? 0}</span></div>{result.errors?.length > 0 && <Table responsive bordered size="sm" className="mt-3 mb-0"><thead><tr><th>ردیف</th><th>نام کاربری</th><th>علت</th></tr></thead><tbody>{result.errors.map((error, index) => <tr key={`${error.rowNumber}-${index}`}><td>{error.rowNumber}</td><td>{error.username || "-"}</td><td>{error.reason}</td></tr>)}</tbody></Table>}</Alert>}
       <TableContainer columns={columns} data={rows} isGlobalFilter={false} isPagination={false} isLoading={loading} manualSorting sortingState={sorting} onSortingChange={changeSorting} tableClass="table-bordered table-nowrap dt-responsive nowrap w-100 dataTable no-footer dtr-inline" /><Paginations perPageData={meta.limit} data={rows} totalRecords={meta.total} currentPage={meta.page} setCurrentPage={(page) => fetchRows(page, filters, sort)} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" />

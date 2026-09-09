@@ -5,6 +5,7 @@ import {
   detachUserFromParentTag,
   downloadParentTagValueTemplate,
   getParentTagUsers,
+  getParentTagStudentCandidates,
   importParentTagValues,
   saveParentTagValue,
 } from "./parentTagService.jsx";
@@ -28,10 +29,23 @@ test("upsert, delete, attach and detach use user id and school scope", async () 
   await attachUserToParentTag(9, { userId: 13, value: "78", schoolId: 94 });
   await deleteParentTagValue(9, 12, 94);
   await detachUserFromParentTag(9, 13, 94);
-  expect(apiPost).toHaveBeenNthCalledWith(1, "http://127.0.0.1:8040/parent-tags/9/values", { user_id: 12, value: "پیگیری", schoolId: 94 });
-  expect(apiPost).toHaveBeenNthCalledWith(2, "http://127.0.0.1:8040/parent-tags/9/users", { user_id: 13, value: "78", schoolId: 94 });
+  expect(apiPost).toHaveBeenNthCalledWith(1, "http://127.0.0.1:8040/parent-tags/9/values", { user_id: 12, value: "پیگیری" }, { params: { schoolId: 94 } });
+  expect(apiPost).toHaveBeenNthCalledWith(2, "http://127.0.0.1:8040/parent-tags/9/users", { user_id: 13, value: "78" }, { params: { schoolId: 94 } });
   expect(apiDelete).toHaveBeenNthCalledWith(1, "http://127.0.0.1:8040/parent-tags/9/values/12", { params: { schoolId: 94 } });
   expect(apiDelete).toHaveBeenNthCalledWith(2, "http://127.0.0.1:8040/parent-tags/9/users/13", { params: { schoolId: 94 } });
+});
+
+test("student autocomplete sends school, search and pagination and normalizes assigned rows", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [{ userId: 12, studentId: 34, name: "علی", username: "ali", ssn: "001", studentCode: "S1", alreadyAssigned: 1 }], meta: { page: 2, limit: 20, total: 21, lastPage: 2 } } } });
+  const result = await getParentTagStudentCandidates(9, { schoolId: 94, search: "ali", page: 2, limit: 20 });
+  expect(result.items[0]).toMatchObject({ userId: 12, studentId: 34, alreadyAssigned: true });
+  expect(apiGet).toHaveBeenCalledWith("http://127.0.0.1:8040/parent-tags/9/student-candidates", { params: { schoolId: 94, search: "ali", page: 2, limit: 20 } });
+});
+
+test("attach omits an empty optional value", async () => {
+  apiPost.mockResolvedValue({ data: {} });
+  await attachUserToParentTag(9, { userId: 12, value: "   ", schoolId: 94 });
+  expect(apiPost).toHaveBeenCalledWith("http://127.0.0.1:8040/parent-tags/9/users", { user_id: 12 }, { params: { schoolId: 94 } });
 });
 
 test.each([

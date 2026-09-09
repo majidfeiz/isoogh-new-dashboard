@@ -226,6 +226,20 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
           </div>
         )}
 
+        {student?.tagValues?.length > 0 && (
+          <div className="border rounded p-3 mb-4">
+            <h6 className="mb-3"><i className="bx bx-info-circle me-1" />اطلاعات تکمیلی دانش‌آموز</h6>
+            <div className="d-flex flex-wrap gap-2">
+              {student.tagValues.map((item) => (
+                <span className="bg-light rounded px-3 py-2" key={item.tagId}>
+                  <span className="text-muted small">{item.title}: </span>
+                  <span className="fw-semibold">{item.value}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="vstack gap-4">
           {(form?.questions || []).map((q, idx) => (
             <FormGroup key={q.id} className="mb-0">
@@ -863,7 +877,21 @@ const FormDetail = () => {
                         <td className="text-muted small">
                           {(meta.page - 1) * meta.limit + idx + 1}
                         </td>
-                        <td className="fw-semibold">{student.name || "—"}</td>
+                        <td className="fw-semibold">
+                          {student.name || "—"}
+                          {student.tagValues?.length > 0 && (
+                            <div className="border-top mt-2 pt-2">
+                              <div className="text-muted small mb-1">اطلاعات تکمیلی دانش‌آموز</div>
+                              <div className="d-flex flex-wrap gap-1">
+                                {student.tagValues.map((item) => (
+                                  <span className="badge bg-light text-dark fw-normal" key={item.tagId}>
+                                    {item.title}: {item.value}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <span className="text-muted small">{student.phone || "—"}</span>
                         </td>
