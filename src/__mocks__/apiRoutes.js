@@ -32,6 +32,13 @@ export const API_ROUTES = {
     studentTags: (studentId) => `/parent-tags/students/${studentId}`,
     list: "/parent-tags",
     values: (id) => `/parent-tags/${id}/values`,
+    users: (id) => `/parent-tags/${id}/users`,
+    detachUser: (id, userId) => `/parent-tags/${id}/users/${userId}`,
+    deleteValue: (id, userId) => `/parent-tags/${id}/values/${userId}`,
+    valueImportTemplate: (id) => `/parent-tags/${id}/value-import-template/download`,
+    valueDeleteTemplate: (id) => `/parent-tags/${id}/value-delete-template/download`,
+    importValues: (id) => `/parent-tags/${id}/values/import`,
+    deleteImportValues: (id) => `/parent-tags/${id}/values/delete-import`,
     import: "/parent-tags/import",
     importStatus: (logId) => `/parent-tags/imports/${logId}`,
   },
@@ -92,6 +99,8 @@ export const API_ROUTES = {
       `/adviser-portal/support-forms/${formId}/students/${studentId}/answers`,
     studentCallLogs: (formId, studentId) =>
       `/adviser-portal/support-forms/${formId}/students/${studentId}/call-logs`,
+    studentProfile: (formId, studentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${studentId}/profile`,
     studentWorkShift: (formId, studentId) =>
       `/adviser-portal/support-forms/${formId}/students/${studentId}/work-shift`,
     stats: "/adviser-portal/stats",

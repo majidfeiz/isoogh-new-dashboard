@@ -121,11 +121,6 @@ const buildQuestionHint = (data = {}) => ({
   question_id: data.question_id ?? "",
 });
 
-const buildParentTagShowLimit = (data = {}) => ({
-  parent_tag_id: data.parent_tag_id ?? "",
-  tag_id: data.tag_id ?? "",
-});
-
 const buildParentTagQuestionAnswer = (data = {}) => ({
   parent_tag_question_answer_id: data.parent_tag_question_answer_id ?? data.parent_tag_id ?? "",
 });
@@ -158,7 +153,7 @@ const SupportFormForm = () => {
   const [problems, setProblems] = useState([buildProblem()]);
   const [priorities, setPriorities] = useState([buildPriority()]);
   const [questionHints, setQuestionHints] = useState([]);
-  const [parentTagShowLimit, setParentTagShowLimit] = useState([]);
+  const [tagValueIds, setTagValueIds] = useState([]);
   const [parentTagQuestionAnswer, setParentTagQuestionAnswer] = useState([]);
   const [errors, setErrors] = useState({});
   const [questionErrors, setQuestionErrors] = useState([]);
@@ -167,7 +162,6 @@ const SupportFormForm = () => {
     problems: [],
     priorities: [],
     questionHints: [],
-    parentTagShowLimit: [],
     parentTagQuestionAnswer: [],
   });
   const [alert, setAlert] = useState(null);
@@ -183,16 +177,14 @@ const SupportFormForm = () => {
 
   const fetchOptions = useCallback(async () => {
     try {
-      const [schoolsRes, gradesRes, supportFormsRes, parentTagsRes] = await Promise.all([
+      const [schoolsRes, gradesRes, supportFormsRes] = await Promise.all([
         getSchools({ page: 1, limit: 200 }),
         getGrades({ page: 1, limit: 200 }),
         getSupportForms({ page: 1, limit: 200 }),
-        getParentTags({ page: 1, limit: 200 }),
       ]);
       setSchools(schoolsRes.items || []);
       setGrades(gradesRes.items || []);
       setSupportForms(supportFormsRes.items || []);
-      setParentTags(parentTagsRes.items || []);
     } catch (e) {
       console.error("خطا در دریافت مجموعه‌ها/پایه‌ها", e);
     }
@@ -218,9 +210,6 @@ const SupportFormForm = () => {
         const parsedQuestionHints = parseJsonField(formData?.question_hint).map(
           buildQuestionHint
         );
-        const parsedParentTagShowLimit = parseJsonField(
-          formData?.parent_tag_show_limit
-        ).map(buildParentTagShowLimit);
         const parsedParentTagQuestionAnswer = parseJsonField(
           formData?.parent_tag_question_answer
         ).map(buildParentTagQuestionAnswer);
@@ -249,7 +238,7 @@ const SupportFormForm = () => {
         setProblems(parsedProblems.length ? parsedProblems : [buildProblem()]);
         setPriorities(parsedPriorities.length ? parsedPriorities : [buildPriority()]);
         setQuestionHints(parsedQuestionHints);
-        setParentTagShowLimit(parsedParentTagShowLimit);
+        setTagValueIds((formData?.tag_value_ids || []).map(Number).filter(Number.isInteger));
         setParentTagQuestionAnswer(parsedParentTagQuestionAnswer);
       } catch (e) {
         console.error(e);
@@ -263,6 +252,10 @@ const SupportFormForm = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    if (name === "school_id" && String(value) !== String(form.school_id)) {
+      setTagValueIds([]);
+      setParentTagValues({});
+    }
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -315,15 +308,22 @@ const SupportFormForm = () => {
   }, [questionHints, loadSupportFormQuestions]);
 
   useEffect(() => {
-    const parentIds = new Set(
-      (parentTagShowLimit || [])
-        .map((item) => item.parent_tag_id)
-        .filter((value) => !!value)
-    );
-    parentIds.forEach((parentTagId) => {
-      loadParentTagValues(parentTagId);
-    });
-  }, [parentTagShowLimit, loadParentTagValues]);
+    if (!form.school_id) {
+      setParentTags([]);
+      setParentTagValues({});
+      return;
+    }
+    let active = true;
+    getParentTags({ page: 1, limit: 200, schoolId: form.school_id, rootOnly: 1 })
+      .then((response) => {
+        if (!active) return;
+        const items = response.items || [];
+        setParentTags(items);
+        items.forEach((item) => loadParentTagValues(item.id));
+      })
+      .catch(() => active && setParentTags([]));
+    return () => { active = false; };
+  }, [form.school_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleQuestionChange = (index, field, value) => {
     setQuestions((prev) =>
@@ -340,6 +340,14 @@ const SupportFormForm = () => {
         );
         return { ...q, options };
       })
+    );
+  };
+
+  const toggleTagValue = (tagId) => {
+    setTagValueIds((current) =>
+      current.includes(tagId)
+        ? current.filter((value) => value !== tagId)
+        : [...current, tagId]
     );
   };
 
@@ -361,7 +369,6 @@ const SupportFormForm = () => {
   const handleProblemChange = updateListItem(setProblems);
   const handlePriorityChange = updateListItem(setPriorities);
   const handleQuestionHintChange = updateListItem(setQuestionHints);
-  const handleParentTagShowLimitChange = updateListItem(setParentTagShowLimit);
   const handleParentTagQuestionAnswerChange = updateListItem(
     setParentTagQuestionAnswer
   );
@@ -565,9 +572,6 @@ const SupportFormForm = () => {
       const cleanedQuestionHints = questionHints
         .map((item) => buildQuestionHint(item))
         .filter((item) => item.support_form_id && item.question_id);
-      const cleanedParentTagShowLimit = parentTagShowLimit
-        .map((item) => buildParentTagShowLimit(item))
-        .filter((item) => item.parent_tag_id && item.tag_id);
       const cleanedParentTagQuestionAnswer = parentTagQuestionAnswer
         .map((item) => buildParentTagQuestionAnswer(item))
         .filter((item) => item.parent_tag_question_answer_id);
@@ -593,7 +597,7 @@ const SupportFormForm = () => {
         ),
         question_hint: JSON.stringify(cleanedQuestionHints),
         next_support_form_id: toNumberOrNull(form.next_support_form_id),
-        parent_tag_show_limit: JSON.stringify(cleanedParentTagShowLimit),
+        tag_value_ids: tagValueIds.map(Number),
         parent_tag_question_answer: JSON.stringify(cleanedParentTagQuestionAnswer),
         questions: questions.map((q) => ({
           ...(q.id ? { id: q.id } : {}),
@@ -671,6 +675,25 @@ const SupportFormForm = () => {
       })),
     [parentTags]
   );
+
+  const selectableTagValueIds = useMemo(
+    () => Array.from(new Set(
+      Object.values(parentTagValues)
+        .flatMap((items) => items || [])
+        .map((item) => Number(item.id))
+        .filter(Number.isInteger)
+    )),
+    [parentTagValues]
+  );
+  const allTagValuesSelected = selectableTagValueIds.length > 0 &&
+    selectableTagValueIds.every((tagId) => tagValueIds.includes(tagId));
+
+  const toggleAllTagValues = () => {
+    setTagValueIds((current) => allTagValuesSelected
+      ? current.filter((tagId) => !selectableTagValueIds.includes(tagId))
+      : Array.from(new Set([...current, ...selectableTagValueIds]))
+    );
+  };
 
   const renderError = (field) =>
     errors[field] ? (
@@ -1142,92 +1165,79 @@ const SupportFormForm = () => {
                             </Col>
 
                             <Col md="12" className="mt-4">
-                              <div className="d-flex align-items-center justify-content-between mb-2">
-                                <Label className="mb-0">نمایش تگ والد</Label>
-                                <Button
-                                  type="button"
-                                  color="light"
-                                  size="sm"
-                                  onClick={addListItem(
-                                    setParentTagShowLimit,
-                                    buildParentTagShowLimit
-                                  )}
+                              <Label className="mb-2">اطلاعات تکمیلی قابل نمایش برای مشاور</Label>
+                              {!form.school_id && <p className="text-muted">ابتدا مجموعه فرم را انتخاب کنید.</p>}
+                              {form.school_id && parentTags.length === 0 && <p className="text-muted">تگی برای این مجموعه یافت نشد.</p>}
+                              {selectableTagValueIds.length > 0 && (
+                                <div
+                                  className={`form-check d-flex align-items-center gap-2 rounded border px-3 py-2 mb-3 support-form-question-check${allTagValuesSelected ? " border-primary bg-soft-primary" : ""}`}
+                                  role="checkbox"
+                                  aria-checked={allTagValuesSelected}
+                                  tabIndex={0}
+                                  style={{ cursor: "pointer" }}
+                                  onClick={toggleAllTagValues}
+                                  onKeyDown={(event) => {
+                                    if (event.key === " " || event.key === "Enter") {
+                                      event.preventDefault();
+                                      toggleAllTagValues();
+                                    }
+                                  }}
                                 >
-                                  افزودن تگ
-                                </Button>
-                              </div>
-                              {parentTagShowLimit.length === 0 && (
-                                <p className="text-muted mb-0">
-                                  اگر نیاز دارید تگ والد نمایش داده شود، اضافه کنید.
-                                </p>
+                                  <input
+                                    type="checkbox"
+                                    className="form-check-input mt-0 flex-shrink-0"
+                                    checked={allTagValuesSelected}
+                                    readOnly
+                                    tabIndex={-1}
+                                    aria-hidden="true"
+                                    style={{ pointerEvents: "none" }}
+                                  />
+                                  <span className="form-check-label fw-semibold flex-grow-1 mb-0" style={{ pointerEvents: "none" }}>
+                                    انتخاب همه
+                                  </span>
+                                </div>
                               )}
-                              {parentTagShowLimit.map((item, idx) => (
-                                <Row key={`tagshow-${idx}`} className="g-2 align-items-end mb-2">
-                                  <Col md="5">
-                                    <FormGroup>
-                                      <Label>سرتگ</Label>
-                                      <Input
-                                        type="select"
-                                        value={item.parent_tag_id}
-                                        onChange={(e) => {
-                                          const nextValue = e.target.value;
-                                          handleParentTagShowLimitChange(
-                                            idx,
-                                            "parent_tag_id",
-                                            nextValue
-                                          );
-                                          handleParentTagShowLimitChange(idx, "tag_id", "");
-                                          loadParentTagValues(nextValue);
-                                        }}
-                                      >
-                                        <option value="">انتخاب سرتگ</option>
-                                        {parentTagOptions.map((opt) => (
-                                          <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                          </option>
-                                        ))}
-                                      </Input>
-                                    </FormGroup>
+                              <Row className="g-3">
+                                {parentTags.map((parent) => (
+                                  <Col lg="4" md="6" key={parent.id}>
+                                    <div className="border rounded p-3 h-100">
+                                      <div className="fw-semibold mb-2">{parent.name || parent.title}</div>
+                                      {(parentTagValues[parent.id] || []).map((child) => {
+                                        const childId = Number(child.id);
+                                        const checked = tagValueIds.includes(childId);
+                                        return <div
+                                          key={child.id}
+                                          className={`form-check d-flex align-items-center gap-2 rounded px-2 py-2 mb-1 support-form-question-check${checked ? " bg-soft-primary" : ""}`}
+                                          role="checkbox"
+                                          aria-checked={checked}
+                                          tabIndex={0}
+                                          style={{ cursor: "pointer" }}
+                                          onClick={() => toggleTagValue(childId)}
+                                          onKeyDown={(event) => {
+                                            if (event.key === " " || event.key === "Enter") {
+                                              event.preventDefault();
+                                              toggleTagValue(childId);
+                                            }
+                                          }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            className="form-check-input mt-0 flex-shrink-0"
+                                            checked={checked}
+                                            readOnly
+                                            tabIndex={-1}
+                                            aria-hidden="true"
+                                            style={{ pointerEvents: "none" }}
+                                          />
+                                          <span className="form-check-label flex-grow-1 mb-0" style={{ pointerEvents: "none" }}>
+                                            {child.name || child.title || child.value || `تگ ${child.id}`}
+                                          </span>
+                                        </div>;
+                                      })}
+                                    </div>
                                   </Col>
-                                  <Col md="5">
-                                    <FormGroup>
-                                      <Label>تگ</Label>
-                                      <Input
-                                        type="select"
-                                        value={item.tag_id}
-                                        onChange={(e) =>
-                                          handleParentTagShowLimitChange(
-                                            idx,
-                                            "tag_id",
-                                            e.target.value
-                                          )
-                                        }
-                                        disabled={!item.parent_tag_id}
-                                      >
-                                        <option value="">انتخاب تگ</option>
-                                        {(parentTagValues[item.parent_tag_id] || []).map(
-                                          (tag) => (
-                                            <option key={tag.id} value={tag.id}>
-                                              {tag.value || tag.name || `تگ ${tag.id}`}
-                                            </option>
-                                          )
-                                        )}
-                                      </Input>
-                                    </FormGroup>
-                                  </Col>
-                                  <Col md="2" className="d-flex">
-                                    <Button
-                                      type="button"
-                                      color="danger"
-                                      outline
-                                      className="mt-4"
-                                      onClick={removeListItem(setParentTagShowLimit, idx)}
-                                    >
-                                      حذف
-                                    </Button>
-                                  </Col>
-                                </Row>
-                              ))}
+                                ))}
+                              </Row>
                             </Col>
 
                             <Col md="12" className="mt-4">

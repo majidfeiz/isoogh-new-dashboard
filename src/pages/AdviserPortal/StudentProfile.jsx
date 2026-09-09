@@ -298,11 +298,28 @@ const StudentInfoTab = ({ profile, loading }) => {
   ].filter(Boolean);
 
   return (
-    <Row className="g-3">
-      {fields.map((f) => (
-        <InfoCard key={f.label} {...f} />
-      ))}
-    </Row>
+    <>
+      <Row className="g-3">
+        {fields.map((f) => (
+          <InfoCard key={f.label} {...f} />
+        ))}
+      </Row>
+      {profile.tagValues?.length > 0 && (
+        <div className="border rounded p-3 mt-4" data-testid="student-tag-values">
+          <h5 className="mb-3"><i className="bx bx-info-circle me-1" />اطلاعات تکمیلی دانش‌آموز</h5>
+          <Row className="g-3">
+            {profile.tagValues.map((item) => (
+              <Col lg="4" md="6" key={item.tagId}>
+                <div className="bg-light rounded p-3 h-100">
+                  <div className="text-muted small mb-1">{item.title}</div>
+                  <div className="fw-semibold text-break">{item.value}</div>
+                </div>
+              </Col>
+            ))}
+          </Row>
+        </div>
+      )}
+    </>
   );
 };
 
