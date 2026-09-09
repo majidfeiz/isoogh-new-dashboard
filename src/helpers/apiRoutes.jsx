@@ -178,6 +178,10 @@ export const API_ROUTES = {
     exportUsers: (id) => `/parent-tags/${id}/users/export`,
     values: (id) => `/parent-tags/${id}/values`,
     deleteValue: (id, userId) => `/parent-tags/${id}/values/${userId}`,
+    valueImportTemplate: (id) => `/parent-tags/${id}/value-import-template/download`,
+    valueDeleteTemplate: (id) => `/parent-tags/${id}/value-delete-template/download`,
+    importValues: (id) => `/parent-tags/${id}/values/import`,
+    deleteImportValues: (id) => `/parent-tags/${id}/values/delete-import`,
     studentTags: (studentId) => `/parent-tags/students/${studentId}`,
   },
   voip: {

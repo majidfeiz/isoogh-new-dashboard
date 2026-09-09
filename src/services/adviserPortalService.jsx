@@ -62,6 +62,12 @@ const normalizeCallCount = (value, fallback = 0) => {
   return Number.isFinite(count) ? Math.max(0, count) : fallback;
 };
 
+const normalizeTagValues = (values) => (Array.isArray(values) ? values : []).map((item) => ({
+  tagId: normalizeId(item?.tagId ?? item?.tag_id ?? item?.id),
+  title: item?.title ?? item?.name ?? "",
+  value: item?.value == null ? "" : String(item.value),
+}));
+
 /** @returns {AdviserFormStudent & Record<string, *>} */
 const normalizeStudent = (item = {}) => ({
   ...(() => {
@@ -91,6 +97,7 @@ const normalizeStudent = (item = {}) => ({
   workShift: item?.workShift ?? item?.work_shift ?? null,
   answerSessions: item?.answer_sessions ?? item?.answerSessions ?? [],
   lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
+  tagValues: normalizeTagValues(item?.tagValues ?? item?.tag_values),
 });
 
 const normalizeWorkShift = (item = {}) => ({
@@ -128,6 +135,7 @@ const normalizeStudentProfile = (item = {}) => ({
   supportFormId: item?.supportFormId ?? item?.support_form_id ?? null,
   supportFormTitle: item?.supportFormTitle ?? item?.support_form_title ?? "",
   lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
+  tagValues: normalizeTagValues(item?.tagValues ?? item?.tag_values),
 });
 
 const normalizeStudentCallLog = (item = {}) => ({

@@ -111,7 +111,7 @@ export async function deleteParentTag(id) {
 
 export async function getParentTagUsers(
   id,
-  { page = 1, limit = 10, search = "", userId, schoolId, hasValue } = {}
+  { page = 1, limit = 10, search = "", schoolId, hasValue = false, sortBy = "id", sortOrder = "DESC" } = {}
 ) {
   const url = getApiUrl(API_ROUTES.parentTags.users(id));
   const response = await apiGet(url, {
@@ -119,14 +119,15 @@ export async function getParentTagUsers(
       page,
       limit,
       search: search || undefined,
-      userId: userId || undefined,
-      schoolId: schoolId || undefined,
+      schoolId: schoolId == null || schoolId === "" ? undefined : Number(schoolId),
       hasValue:
         typeof hasValue === "string" && hasValue !== ""
           ? hasValue
           : typeof hasValue === "number"
           ? hasValue
-          : undefined,
+          : hasValue,
+      sortBy,
+      sortOrder,
     },
   });
 
@@ -150,27 +151,27 @@ export async function getParentTagUsers(
   };
 }
 
-export async function attachUserToParentTag(id, userId) {
+export async function attachUserToParentTag(id, { userId, value = "", schoolId }) {
   const url = getApiUrl(API_ROUTES.parentTags.users(id));
-  const res = await apiPost(url, { user_id: userId });
+  const res = await apiPost(url, { user_id: Number(userId), value, schoolId: Number(schoolId) });
   return res.data;
 }
 
-export async function detachUserFromParentTag(id, userId) {
+export async function detachUserFromParentTag(id, userId, schoolId) {
   const url = getApiUrl(API_ROUTES.parentTags.detachUser(id, userId));
-  const res = await apiDelete(url);
+  const res = await apiDelete(url, { params: { schoolId: Number(schoolId) } });
   return res.data;
 }
 
-export async function saveParentTagValue(id, { userId, user_id, value }) {
+export async function saveParentTagValue(id, { userId, user_id, value, schoolId }) {
   const url = getApiUrl(API_ROUTES.parentTags.values(id));
-  const res = await apiPost(url, { user_id: userId ?? user_id, value });
+  const res = await apiPost(url, { user_id: Number(userId ?? user_id), value, schoolId: Number(schoolId) });
   return res.data;
 }
 
-export async function deleteParentTagValue(id, userId) {
+export async function deleteParentTagValue(id, userId, schoolId) {
   const url = getApiUrl(API_ROUTES.parentTags.deleteValue(id, userId));
-  const res = await apiDelete(url);
+  const res = await apiDelete(url, { params: { schoolId: Number(schoolId) } });
   return res.data;
 }
 
@@ -246,6 +247,30 @@ export async function exportParentTagUsers(id, params = {}) {
   });
   const res = await apiGet(url.toString(), { responseType: "blob" });
   return res?.data;
+}
+
+export async function downloadParentTagValueTemplate(id, schoolId, deleteTemplate = false) {
+  const route = deleteTemplate
+    ? API_ROUTES.parentTags.valueDeleteTemplate(id)
+    : API_ROUTES.parentTags.valueImportTemplate(id);
+  const res = await apiGet(getApiUrl(route), {
+    params: { schoolId: Number(schoolId) },
+    responseType: "blob",
+  });
+  return { blob: res?.data, headers: res?.headers || {} };
+}
+
+export async function importParentTagValues(id, { file, schoolId, deleteImport = false }) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("schoolId", String(Number(schoolId)));
+  const route = deleteImport
+    ? API_ROUTES.parentTags.deleteImportValues(id)
+    : API_ROUTES.parentTags.importValues(id);
+  const res = await apiPost(getApiUrl(route), formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return res?.data?.data ?? res?.data;
 }
 
 export async function importParentTagUsers(formData, config = {}) {
