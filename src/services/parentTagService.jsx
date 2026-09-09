@@ -153,8 +153,42 @@ export async function getParentTagUsers(
 
 export async function attachUserToParentTag(id, { userId, value = "", schoolId }) {
   const url = getApiUrl(API_ROUTES.parentTags.users(id));
-  const res = await apiPost(url, { user_id: Number(userId), value, schoolId: Number(schoolId) });
+  const payload = { user_id: Number(userId) };
+  if (String(value).trim()) payload.value = value;
+  const res = await apiPost(url, payload, { params: { schoolId: Number(schoolId) } });
   return res.data;
+}
+
+export async function getParentTagStudentCandidates(
+  id,
+  { schoolId, search, page = 1, limit = 20 } = {}
+) {
+  const url = getApiUrl(API_ROUTES.parentTags.studentCandidates(id));
+  const response = await apiGet(url, {
+    params: { schoolId: Number(schoolId), search, page, limit },
+  });
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  const items = Array.isArray(data) ? data : data.items || data.data || [];
+  const meta = data.meta || data.pagination || {};
+  return {
+    items: items.map((item) => ({
+      userId: Number(item.userId ?? item.user_id),
+      studentId: Number(item.studentId ?? item.student_id),
+      name: item.name ?? null,
+      username: item.username ?? null,
+      ssn: item.ssn ?? null,
+      phone: item.phone ?? null,
+      studentCode: item.studentCode ?? item.student_code ?? null,
+      alreadyAssigned: Number(item.alreadyAssigned ?? item.already_assigned) === 1,
+    })),
+    pagination: {
+      page: meta.page ?? page,
+      limit: meta.limit ?? limit,
+      total: meta.total ?? items.length,
+      lastPage: meta.lastPage ?? (meta.total ? Math.ceil(meta.total / (meta.limit || limit)) : 1),
+    },
+  };
 }
 
 export async function detachUserFromParentTag(id, userId, schoolId) {
@@ -165,7 +199,11 @@ export async function detachUserFromParentTag(id, userId, schoolId) {
 
 export async function saveParentTagValue(id, { userId, user_id, value, schoolId }) {
   const url = getApiUrl(API_ROUTES.parentTags.values(id));
-  const res = await apiPost(url, { user_id: Number(userId ?? user_id), value, schoolId: Number(schoolId) });
+  const res = await apiPost(
+    url,
+    { user_id: Number(userId ?? user_id), value },
+    { params: { schoolId: Number(schoolId) } }
+  );
   return res.data;
 }
 

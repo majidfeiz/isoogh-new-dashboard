@@ -76,6 +76,26 @@ export async function getSupportForm(id) {
   return res?.data?.data || res?.data;
 }
 
+export async function getSupportFormTagOptions({ schoolId, search = "", page = 1, limit = 20 } = {}) {
+  const url = getApiUrl(API_ROUTES.supportForms.tagOptions);
+  const response = await apiGet(url, {
+    params: { schoolId: Number(schoolId), search, page, limit },
+  });
+  const payload = response?.data;
+  const data = payload?.data ?? payload ?? {};
+  const items = Array.isArray(data) ? data : data.items || data.data || [];
+  const meta = data.meta || data.pagination || {};
+  return {
+    items: items.map((item) => ({ id: Number(item.id), name: item.name || `تگ ${item.id}` })),
+    pagination: {
+      page: meta.page ?? page,
+      limit: meta.limit ?? limit,
+      total: meta.total ?? items.length,
+      lastPage: meta.lastPage ?? (meta.total ? Math.ceil(meta.total / (meta.limit || limit)) : 1),
+    },
+  };
+}
+
 export async function createSupportForm(payload) {
   const url = getApiUrl(API_ROUTES.supportForms.create);
   const res = await apiPost(url, payload);

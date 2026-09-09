@@ -1,5 +1,5 @@
 // src/pages/SupportForms/SupportFormForm.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardBody,
@@ -19,6 +19,7 @@ import {
   TabPane,
 } from "reactstrap";
 import classnames from "classnames";
+import Select from "react-select";
 import { useNavigate, useParams } from "react-router-dom";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -30,14 +31,12 @@ import {
   getSupportForm,
   getSupportForms,
   createSupportForm,
+  getSupportFormTagOptions,
   updateSupportForm,
 } from "../../services/supportFormService.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { getGrades } from "../../services/gradeService.jsx";
-import {
-  getParentTags,
-  getParentTagValues,
-} from "../../services/parentTagService.jsx";
+import { getParentTags } from "../../services/parentTagService.jsx";
 
 const makeClientId = () => `cf_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -171,7 +170,12 @@ const SupportFormForm = () => {
   const [supportForms, setSupportForms] = useState([]);
   const [parentTags, setParentTags] = useState([]);
   const [supportFormQuestions, setSupportFormQuestions] = useState({});
-  const [parentTagValues, setParentTagValues] = useState({});
+  const [tagOptions, setTagOptions] = useState([]);
+  const [tagOptionsMeta, setTagOptionsMeta] = useState({ page: 1, lastPage: 1 });
+  const [tagOptionsSearch, setTagOptionsSearch] = useState("");
+  const [debouncedTagOptionsSearch, setDebouncedTagOptionsSearch] = useState("");
+  const [tagOptionsLoading, setTagOptionsLoading] = useState(false);
+  const tagOptionsRequest = useRef(0);
   const [activeTab, setActiveTab] = useState(1);
   const [passedSteps, setPassedSteps] = useState([1]);
 
@@ -254,7 +258,10 @@ const SupportFormForm = () => {
     const { name, value, type, checked } = e.target;
     if (name === "school_id" && String(value) !== String(form.school_id)) {
       setTagValueIds([]);
-      setParentTagValues({});
+      setTagOptions([]);
+      setTagOptionsMeta({ page: 1, lastPage: 1 });
+      setTagOptionsSearch("");
+      setDebouncedTagOptionsSearch("");
     }
     setForm((prev) => ({
       ...prev,
@@ -280,22 +287,6 @@ const SupportFormForm = () => {
     [supportFormQuestions]
   );
 
-  const loadParentTagValues = useCallback(
-    async (parentTagId) => {
-      if (!parentTagId || parentTagValues[parentTagId]) return;
-      try {
-        const res = await getParentTagValues(parentTagId, { page: 1, limit: 200 });
-        setParentTagValues((prev) => ({
-          ...prev,
-          [parentTagId]: res.items || [],
-        }));
-      } catch (e) {
-        console.error("خطا در دریافت مقادیر تگ والد", e);
-      }
-    },
-    [parentTagValues]
-  );
-
   useEffect(() => {
     const formIds = new Set(
       (questionHints || [])
@@ -310,7 +301,6 @@ const SupportFormForm = () => {
   useEffect(() => {
     if (!form.school_id) {
       setParentTags([]);
-      setParentTagValues({});
       return;
     }
     let active = true;
@@ -319,11 +309,54 @@ const SupportFormForm = () => {
         if (!active) return;
         const items = response.items || [];
         setParentTags(items);
-        items.forEach((item) => loadParentTagValues(item.id));
       })
       .catch(() => active && setParentTags([]));
     return () => { active = false; };
   }, [form.school_id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedTagOptionsSearch(tagOptionsSearch.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [tagOptionsSearch]);
+
+  const loadTagOptions = useCallback(async (page = 1, search = "", append = false) => {
+    if (!form.school_id) return;
+    const requestId = ++tagOptionsRequest.current;
+    setTagOptionsLoading(true);
+    try {
+      const response = await getSupportFormTagOptions({
+        schoolId: form.school_id,
+        search,
+        page,
+        limit: 20,
+      });
+      if (requestId !== tagOptionsRequest.current) return;
+      setTagOptions((current) => {
+        const map = new Map((append ? current : []).map((item) => [item.id, item]));
+        (response.items || []).forEach((item) => map.set(item.id, item));
+        return Array.from(map.values());
+      });
+      setTagOptionsMeta(response.pagination || { page, lastPage: 1 });
+    } catch (error) {
+      if (requestId !== tagOptionsRequest.current) return;
+      console.error("خطا در دریافت گزینه‌های تگ فرم تماس", error);
+      if (!append) setTagOptions([]);
+    } finally {
+      if (requestId === tagOptionsRequest.current) setTagOptionsLoading(false);
+    }
+  }, [form.school_id]);
+
+  useEffect(() => {
+    if (form.school_id) loadTagOptions(1, debouncedTagOptionsSearch, false);
+  }, [debouncedTagOptionsSearch, form.school_id, loadTagOptions]);
+
+  useEffect(() => {
+    if (debouncedTagOptionsSearch || tagOptionsLoading || tagOptionsMeta.page >= tagOptionsMeta.lastPage) return;
+    const available = new Set(tagOptions.map((item) => item.id));
+    if (tagValueIds.some((id) => !available.has(id))) {
+      loadTagOptions(tagOptionsMeta.page + 1, "", true);
+    }
+  }, [debouncedTagOptionsSearch, loadTagOptions, tagOptions, tagOptionsLoading, tagOptionsMeta, tagValueIds]);
 
   const handleQuestionChange = (index, field, value) => {
     setQuestions((prev) =>
@@ -340,14 +373,6 @@ const SupportFormForm = () => {
         );
         return { ...q, options };
       })
-    );
-  };
-
-  const toggleTagValue = (tagId) => {
-    setTagValueIds((current) =>
-      current.includes(tagId)
-        ? current.filter((value) => value !== tagId)
-        : [...current, tagId]
     );
   };
 
@@ -676,24 +701,17 @@ const SupportFormForm = () => {
     [parentTags]
   );
 
-  const selectableTagValueIds = useMemo(
-    () => Array.from(new Set(
-      Object.values(parentTagValues)
-        .flatMap((items) => items || [])
-        .map((item) => Number(item.id))
-        .filter(Number.isInteger)
-    )),
-    [parentTagValues]
+  const flatTagOptions = useMemo(
+    () => tagOptions.map((item) => ({ value: item.id, label: item.name })),
+    [tagOptions]
   );
-  const allTagValuesSelected = selectableTagValueIds.length > 0 &&
-    selectableTagValueIds.every((tagId) => tagValueIds.includes(tagId));
-
-  const toggleAllTagValues = () => {
-    setTagValueIds((current) => allTagValuesSelected
-      ? current.filter((tagId) => !selectableTagValueIds.includes(tagId))
-      : Array.from(new Set([...current, ...selectableTagValueIds]))
-    );
-  };
+  const selectedTagOptions = useMemo(
+    () => tagValueIds.map((tagId) => {
+      const option = tagOptions.find((item) => item.id === tagId);
+      return { value: tagId, label: option?.name || `تگ #${tagId}` };
+    }),
+    [tagOptions, tagValueIds]
+  );
 
   const renderError = (field) =>
     errors[field] ? (
@@ -1165,79 +1183,30 @@ const SupportFormForm = () => {
                             </Col>
 
                             <Col md="12" className="mt-4">
-                              <Label className="mb-2">اطلاعات تکمیلی قابل نمایش برای مشاور</Label>
+                              <Label className="mb-2">تگ‌های قابل نمایش برای مشاور</Label>
                               {!form.school_id && <p className="text-muted">ابتدا مجموعه فرم را انتخاب کنید.</p>}
-                              {form.school_id && parentTags.length === 0 && <p className="text-muted">تگی برای این مجموعه یافت نشد.</p>}
-                              {selectableTagValueIds.length > 0 && (
-                                <div
-                                  className={`form-check d-flex align-items-center gap-2 rounded border px-3 py-2 mb-3 support-form-question-check${allTagValuesSelected ? " border-primary bg-soft-primary" : ""}`}
-                                  role="checkbox"
-                                  aria-checked={allTagValuesSelected}
-                                  tabIndex={0}
-                                  style={{ cursor: "pointer" }}
-                                  onClick={toggleAllTagValues}
-                                  onKeyDown={(event) => {
-                                    if (event.key === " " || event.key === "Enter") {
-                                      event.preventDefault();
-                                      toggleAllTagValues();
-                                    }
-                                  }}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="form-check-input mt-0 flex-shrink-0"
-                                    checked={allTagValuesSelected}
-                                    readOnly
-                                    tabIndex={-1}
-                                    aria-hidden="true"
-                                    style={{ pointerEvents: "none" }}
-                                  />
-                                  <span className="form-check-label fw-semibold flex-grow-1 mb-0" style={{ pointerEvents: "none" }}>
-                                    انتخاب همه
-                                  </span>
-                                </div>
-                              )}
-                              <Row className="g-3">
-                                {parentTags.map((parent) => (
-                                  <Col lg="4" md="6" key={parent.id}>
-                                    <div className="border rounded p-3 h-100">
-                                      <div className="fw-semibold mb-2">{parent.name || parent.title}</div>
-                                      {(parentTagValues[parent.id] || []).map((child) => {
-                                        const childId = Number(child.id);
-                                        const checked = tagValueIds.includes(childId);
-                                        return <div
-                                          key={child.id}
-                                          className={`form-check d-flex align-items-center gap-2 rounded px-2 py-2 mb-1 support-form-question-check${checked ? " bg-soft-primary" : ""}`}
-                                          role="checkbox"
-                                          aria-checked={checked}
-                                          tabIndex={0}
-                                          style={{ cursor: "pointer" }}
-                                          onClick={() => toggleTagValue(childId)}
-                                          onKeyDown={(event) => {
-                                            if (event.key === " " || event.key === "Enter") {
-                                              event.preventDefault();
-                                              toggleTagValue(childId);
-                                            }
-                                          }}
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            className="form-check-input mt-0 flex-shrink-0"
-                                            checked={checked}
-                                            readOnly
-                                            tabIndex={-1}
-                                            aria-hidden="true"
-                                            style={{ pointerEvents: "none" }}
-                                          />
-                                          <span className="form-check-label flex-grow-1 mb-0" style={{ pointerEvents: "none" }}>
-                                            {child.name || child.title || child.value || `تگ ${child.id}`}
-                                          </span>
-                                        </div>;
-                                      })}
-                                    </div>
-                                  </Col>
-                                ))}
-                              </Row>
+                              {form.school_id && <Select
+                                isMulti
+                                isClearable
+                                closeMenuOnSelect={false}
+                                classNamePrefix="react-select"
+                                placeholder="جستجو و انتخاب تگ‌ها..."
+                                noOptionsMessage={() => tagOptionsLoading ? "در حال دریافت..." : "تگی یافت نشد"}
+                                options={flatTagOptions}
+                                value={selectedTagOptions}
+                                inputValue={tagOptionsSearch}
+                                isLoading={tagOptionsLoading}
+                                onInputChange={(value, action) => {
+                                  if (action.action === "input-change") setTagOptionsSearch(value);
+                                }}
+                                onChange={(selected) => setTagValueIds((selected || []).map((item) => Number(item.value)))}
+                                onMenuScrollToBottom={() => {
+                                  if (!tagOptionsLoading && tagOptionsMeta.page < tagOptionsMeta.lastPage) {
+                                    loadTagOptions(tagOptionsMeta.page + 1, debouncedTagOptionsSearch, true);
+                                  }
+                                }}
+                              />}
+                              <small className="text-muted d-block mt-2">انتخاب تگ اختیاری است و امکان انتخاب چند مورد وجود دارد.</small>
                             </Col>
 
                             <Col md="12" className="mt-4">
