@@ -27,6 +27,7 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import moment from "moment-jalaali";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
+import QuestionHintSelect from "./QuestionHintSelect.jsx";
 import {
   getSupportForm,
   getSupportForms,
@@ -118,6 +119,8 @@ const buildPriority = (data = {}) => ({
 const buildQuestionHint = (data = {}) => ({
   support_form_id: data.support_form_id ?? "",
   question_id: data.question_id ?? "",
+  support_form_title: data.support_form_title ?? data.sourceFormTitle ?? "",
+  question_title: data.question_title ?? data.questionTitle ?? "",
 });
 
 const buildParentTagQuestionAnswer = (data = {}) => ({
@@ -169,13 +172,13 @@ const SupportFormForm = () => {
   const [grades, setGrades] = useState([]);
   const [supportForms, setSupportForms] = useState([]);
   const [parentTags, setParentTags] = useState([]);
-  const [supportFormQuestions, setSupportFormQuestions] = useState({});
   const [tagOptions, setTagOptions] = useState([]);
   const [tagOptionsMeta, setTagOptionsMeta] = useState({ page: 1, lastPage: 1 });
   const [tagOptionsSearch, setTagOptionsSearch] = useState("");
   const [debouncedTagOptionsSearch, setDebouncedTagOptionsSearch] = useState("");
   const [tagOptionsLoading, setTagOptionsLoading] = useState(false);
   const tagOptionsRequest = useRef(0);
+  const [questionHintError, setQuestionHintError] = useState("");
   const [activeTab, setActiveTab] = useState(1);
   const [passedSteps, setPassedSteps] = useState([1]);
 
@@ -211,9 +214,9 @@ const SupportFormForm = () => {
         const parsedHeadings = parseJsonField(formData?.headings).map(buildHeading);
         const parsedProblems = parseJsonField(formData?.problems).map(buildProblem);
         const parsedPriorities = parseJsonField(formData?.priorities).map(buildPriority);
-        const parsedQuestionHints = parseJsonField(formData?.question_hint).map(
-          buildQuestionHint
-        );
+        const parsedQuestionHints = (Array.isArray(formData?.question_hints)
+          ? formData.question_hints
+          : []).map(buildQuestionHint);
         const parsedParentTagQuestionAnswer = parseJsonField(
           formData?.parent_tag_question_answer
         ).map(buildParentTagQuestionAnswer);
@@ -257,6 +260,11 @@ const SupportFormForm = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     if (name === "school_id" && String(value) !== String(form.school_id)) {
+      if (questionHints.length && !window.confirm("با تغییر مجموعه، تمام راهنماهای سؤال پاک شوند؟")) {
+        return;
+      }
+      setQuestionHints([]);
+      setQuestionHintError("");
       setTagValueIds([]);
       setTagOptions([]);
       setTagOptionsMeta({ page: 1, lastPage: 1 });
@@ -268,35 +276,6 @@ const SupportFormForm = () => {
       [name]: type === "checkbox" ? checked : value,
     }));
   };
-
-  const loadSupportFormQuestions = useCallback(
-    async (supportFormId) => {
-      if (!supportFormId || supportFormQuestions[supportFormId]) return;
-      try {
-        const data = await getSupportForm(supportFormId);
-        const formData = data?.data || data;
-        const items = Array.isArray(formData?.questions) ? formData.questions : [];
-        setSupportFormQuestions((prev) => ({
-          ...prev,
-          [supportFormId]: items,
-        }));
-      } catch (e) {
-        console.error("خطا در دریافت سوالات فرم تماس", e);
-      }
-    },
-    [supportFormQuestions]
-  );
-
-  useEffect(() => {
-    const formIds = new Set(
-      (questionHints || [])
-        .map((item) => item.support_form_id)
-        .filter((value) => !!value)
-    );
-    formIds.forEach((supportFormId) => {
-      loadSupportFormQuestions(supportFormId);
-    });
-  }, [questionHints, loadSupportFormQuestions]);
 
   useEffect(() => {
     if (!form.school_id) {
@@ -393,10 +372,38 @@ const SupportFormForm = () => {
   const handleHeadingChange = updateListItem(setHeadings);
   const handleProblemChange = updateListItem(setProblems);
   const handlePriorityChange = updateListItem(setPriorities);
-  const handleQuestionHintChange = updateListItem(setQuestionHints);
   const handleParentTagQuestionAnswerChange = updateListItem(
     setParentTagQuestionAnswer
   );
+
+  const handleHintFormChange = (index, option) => {
+    setQuestionHintError("");
+    setQuestionHints((current) => current.map((item, itemIndex) => itemIndex === index
+      ? {
+          ...item,
+          support_form_id: option?.id ?? "",
+          support_form_title: option?.title ?? "",
+          question_id: "",
+          question_title: "",
+        }
+      : item));
+  };
+
+  const handleHintQuestionChange = (index, option) => {
+    const row = questionHints[index];
+    if (option && questionHints.some((item, itemIndex) =>
+      itemIndex !== index &&
+      Number(item.support_form_id) === Number(row.support_form_id) &&
+      Number(item.question_id) === Number(option.id)
+    )) {
+      setQuestionHintError("ترکیب فرم مبدأ و سؤال نباید تکراری باشد.");
+      return;
+    }
+    setQuestionHintError("");
+    setQuestionHints((current) => current.map((item, itemIndex) => itemIndex === index
+      ? { ...item, question_id: option?.id ?? "", question_title: option?.title ?? "" }
+      : item));
+  };
 
   const removeHeading = (index) => () => {
     setHeadings((prev) => prev.filter((_, idx) => idx !== index));
@@ -489,6 +496,17 @@ const SupportFormForm = () => {
               : null,
           };
         });
+        const incompleteHint = questionHints.some((item) => !item.support_form_id || !item.question_id);
+        const hintKeys = questionHints
+          .filter((item) => item.support_form_id && item.question_id)
+          .map((item) => `${Number(item.support_form_id)}:${Number(item.question_id)}`);
+        const duplicateHint = new Set(hintKeys).size !== hintKeys.length;
+        const selfHint = isEdit && questionHints.some((item) => Number(item.support_form_id) === Number(id));
+        if (incompleteHint) setQuestionHintError("برای هر راهنما، فرم تماس قبلی و سؤال را انتخاب کنید.");
+        else if (duplicateHint) setQuestionHintError("ترکیب فرم مبدأ و سؤال نباید تکراری باشد.");
+        else if (selfHint) setQuestionHintError("فرم نمی‌تواند خودش را به‌عنوان منبع راهنما انتخاب کند.");
+        else setQuestionHintError("");
+        if (incompleteHint || duplicateHint || selfHint) nextErrors.question_hints = "اطلاعات راهنمای سؤال را اصلاح کنید.";
 
         setListErrors((prev) => ({
           ...prev,
@@ -541,7 +559,7 @@ const SupportFormForm = () => {
       delete nextErrors._listErrors;
       return Object.keys(nextErrors).length === 0 && !hasQuestionErrors && !hasListErrors;
     },
-    [form, headings, problems, priorities, questions, listErrors]
+    [form, headings, id, isEdit, problems, priorities, questionHints, questions, listErrors]
   );
 
   const handleNext = () => {
@@ -620,7 +638,10 @@ const SupportFormForm = () => {
         accepted_allow_number_of_calls_status: toNumberOrNull(
           form.accepted_allow_number_of_calls_status
         ),
-        question_hint: JSON.stringify(cleanedQuestionHints),
+        question_hints: cleanedQuestionHints.map((item) => ({
+          support_form_id: Number(item.support_form_id),
+          question_id: Number(item.question_id),
+        })),
         next_support_form_id: toNumberOrNull(form.next_support_form_id),
         tag_value_ids: tagValueIds.map(Number),
         parent_tag_question_answer: JSON.stringify(cleanedParentTagQuestionAnswer),
@@ -655,6 +676,10 @@ const SupportFormForm = () => {
       }, 800);
     } catch (e) {
       console.error(e);
+      if ([400, 404].includes(e?.response?.status)) {
+        const message = e?.response?.data?.message;
+        setQuestionHintError(Array.isArray(message) ? message.join("، ") : message || "اطلاعات راهنمای سؤال معتبر نیست.");
+      }
       if (e?.response?.status === 422) {
         setErrors(normalizeApiErrors(e.response.data.errors));
       } else {
@@ -1113,58 +1138,37 @@ const SupportFormForm = () => {
                                   در صورت نیاز، سوالات قبلی را اضافه کنید.
                                 </p>
                               )}
+                              {questionHintError && <Alert color="danger" className="py-2">{questionHintError}</Alert>}
                               {questionHints.map((item, idx) => (
                                 <Row key={`hint-${idx}`} className="g-2 align-items-end mb-2">
                                   <Col md="5">
                                     <FormGroup>
-                                      <Label>فرم تماس</Label>
-                                      <Input
-                                        type="select"
+                                      <Label>فرم تماس قبلی</Label>
+                                      <QuestionHintSelect
+                                        type="form"
+                                        schoolId={form.school_id}
+                                        excludeId={id}
                                         value={item.support_form_id}
-                                        onChange={(e) => {
-                                          const nextValue = e.target.value;
-                                          handleQuestionHintChange(
-                                            idx,
-                                            "support_form_id",
-                                            nextValue
-                                          );
-                                          handleQuestionHintChange(idx, "question_id", "");
-                                          loadSupportFormQuestions(nextValue);
-                                        }}
-                                      >
-                                        <option value="">انتخاب فرم تماس</option>
-                                        {supportFormOptions.map((opt) => (
-                                          <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                          </option>
-                                        ))}
-                                      </Input>
+                                        label={item.support_form_title}
+                                        disabled={!form.school_id}
+                                        onChange={(option) => handleHintFormChange(idx, option)}
+                                        onError={setQuestionHintError}
+                                      />
                                     </FormGroup>
                                   </Col>
                                   <Col md="5">
                                     <FormGroup>
                                       <Label>سوال</Label>
-                                      <Input
-                                        type="select"
+                                      <QuestionHintSelect
+                                        type="question"
+                                        schoolId={form.school_id}
+                                        sourceFormId={item.support_form_id}
                                         value={item.question_id}
-                                        onChange={(e) =>
-                                          handleQuestionHintChange(
-                                            idx,
-                                            "question_id",
-                                            e.target.value
-                                          )
-                                        }
+                                        label={item.question_title}
                                         disabled={!item.support_form_id}
-                                      >
-                                        <option value="">انتخاب سوال</option>
-                                        {(supportFormQuestions[item.support_form_id] || []).map(
-                                          (q) => (
-                                            <option key={q.id} value={q.id}>
-                                              {q.question || q.title || `سوال ${q.id}`}
-                                            </option>
-                                          )
-                                        )}
-                                      </Input>
+                                        onChange={(option) => handleHintQuestionChange(idx, option)}
+                                        onError={setQuestionHintError}
+                                      />
                                     </FormGroup>
                                   </Col>
                                   <Col md="2" className="d-flex">
@@ -1173,7 +1177,10 @@ const SupportFormForm = () => {
                                       color="danger"
                                       outline
                                       className="mt-4"
-                                      onClick={removeListItem(setQuestionHints, idx)}
+                                      onClick={() => {
+                                        setQuestionHintError("");
+                                        setQuestionHints((current) => current.filter((_, itemIndex) => itemIndex !== idx));
+                                      }}
                                     >
                                       حذف
                                     </Button>
