@@ -96,6 +96,23 @@ const PreviousAnswersCard = ({ items, className = "" }) => {
   </div>;
 };
 
+const TagValuesCard = ({ items, className = "" }) => {
+  if (!items?.length) return null;
+  return <div className={`border rounded p-3 ${className}`} data-testid="student-tag-values">
+    <h5 className="mb-3"><i className="bx bx-info-circle me-1" />اطلاعات تکمیلی دانش‌آموز</h5>
+    <Row className="g-3">
+      {items.map((item) => (
+        <Col lg="4" md="6" key={item.tagId}>
+          <div className="bg-light rounded p-3 h-100">
+            <div className="text-muted small mb-1">{item.title}</div>
+            <div className="fw-semibold text-break">{item.value}</div>
+          </div>
+        </Col>
+      ))}
+    </Row>
+  </div>;
+};
+
 // ─── Answer Drawer ────────────────────────────────────────────────────────────
 
 const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswers, form, callContext, onSubmitted }) => {
@@ -324,22 +341,6 @@ const StudentInfoTab = ({ profile, loading }) => {
           <InfoCard key={f.label} {...f} />
         ))}
       </Row>
-      {profile.tagValues?.length > 0 && (
-        <div className="border rounded p-3 mt-4" data-testid="student-tag-values">
-          <h5 className="mb-3"><i className="bx bx-info-circle me-1" />اطلاعات تکمیلی دانش‌آموز</h5>
-          <Row className="g-3">
-            {profile.tagValues.map((item) => (
-              <Col lg="4" md="6" key={item.tagId}>
-                <div className="bg-light rounded p-3 h-100">
-                  <div className="text-muted small mb-1">{item.title}</div>
-                  <div className="fw-semibold text-break">{item.value}</div>
-                </div>
-              </Col>
-            ))}
-          </Row>
-        </div>
-      )}
-      <PreviousAnswersCard items={profile.previousAnswers} className="mt-4" />
     </>
   );
 };
@@ -433,7 +434,7 @@ const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
 
 // ─── Tab 3: Answers ───────────────────────────────────────────────────────────
 
-const AnswersTab = ({ formId, studentId, form, refreshKey, onFillAnswers }) => {
+const AnswersTab = ({ formId, studentId, form, previousAnswers, tagValues, refreshKey, onFillAnswers }) => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState({});
@@ -452,24 +453,31 @@ const AnswersTab = ({ formId, studentId, form, refreshKey, onFillAnswers }) => {
 
   if (sessions.length === 0)
     return (
-      <div className="text-center py-5">
-        <div className="mb-3">
-          <div className="rounded-circle d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10" style={{ width: 72, height: 72 }}>
-            <i className="bx bx-file-blank font-size-28 text-warning" />
+      <>
+        <PreviousAnswersCard items={previousAnswers} className="mb-4" />
+        <TagValuesCard items={tagValues} className="mb-4" />
+        <div className="text-center py-5">
+          <div className="mb-3">
+            <div className="rounded-circle d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10" style={{ width: 72, height: 72 }}>
+              <i className="bx bx-file-blank font-size-28 text-warning" />
+            </div>
           </div>
+          <h6 className="text-muted mb-3">هیچ پاسخنامه‌ای ثبت نشده است</h6>
+          <Button color="primary" onClick={() => onFillAnswers()}>
+            <i className="bx bx-edit me-2" />
+            پر کردن پاسخنامه
+          </Button>
         </div>
-        <h6 className="text-muted mb-3">هیچ پاسخنامه‌ای ثبت نشده است</h6>
-        <Button color="primary" onClick={() => onFillAnswers()}>
-          <i className="bx bx-edit me-2" />
-          پر کردن پاسخنامه
-        </Button>
-      </div>
+      </>
     );
 
   const toggle = (idx) => setOpen((p) => ({ ...p, [idx]: !p[idx] }));
 
   return (
-    <div className="vstack gap-2">
+    <div>
+      <PreviousAnswersCard items={previousAnswers} className="mb-4" />
+      <TagValuesCard items={tagValues} className="mb-4" />
+      <div className="vstack gap-2">
       {sessions.map((session, idx) => (
         <div key={session.voipCallId ?? idx} className="border rounded overflow-hidden">
           <div
@@ -513,6 +521,7 @@ const AnswersTab = ({ formId, studentId, form, refreshKey, onFillAnswers }) => {
           )}
         </div>
       ))}
+      </div>
     </div>
   );
 };
@@ -1092,6 +1101,8 @@ const StudentProfile = () => {
                     formId={formId}
                     studentId={studentId}
                     form={form}
+                    previousAnswers={profile?.previousAnswers}
+                    tagValues={profile?.tagValues}
                     refreshKey={refreshKey}
                     onFillAnswers={handleFillAnswers}
                   />

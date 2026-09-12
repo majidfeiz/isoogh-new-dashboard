@@ -27,6 +27,20 @@ const saveBlob = (blob, name) => {
   window.URL.revokeObjectURL(href);
 };
 
+const candidateSelectStyles = {
+  control: (base) => ({ ...base, minHeight: 54 }),
+  singleValue: (base) => ({ ...base, color: "#343a40", overflow: "visible" }),
+  menu: (base) => ({ ...base, zIndex: 20, backgroundColor: "#fff" }),
+  option: (base, state) => ({
+    ...base,
+    color: "#343a40",
+    backgroundColor: state.isSelected ? "#dfe5ff" : state.isFocused ? "#eef2ff" : "#fff",
+    cursor: state.isDisabled ? "not-allowed" : "pointer",
+    opacity: state.isDisabled ? 0.65 : 1,
+    ":active": { backgroundColor: "#d6defd" },
+  }),
+};
+
 const ParentTagUsers = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -181,10 +195,16 @@ const ParentTagUsers = () => {
               inputValue={candidateSearch}
               isLoading={candidateLoading}
               filterOption={null}
+              isRtl
+              styles={candidateSelectStyles}
               getOptionValue={(candidate) => String(candidate.userId)}
               getOptionLabel={(candidate) => candidate.name || candidate.username || candidate.ssn || "دانش‌آموز"}
               isOptionDisabled={(candidate) => candidate.alreadyAssigned}
-              formatOptionLabel={(candidate) => <div>
+              formatOptionLabel={(candidate, { context }) => context === "value" ? (
+                <span className="fw-semibold text-dark">
+                  {candidate.name || "بدون نام"}{candidate.username ? ` (${candidate.username})` : ""}
+                </span>
+              ) : <div>
                 <div className="d-flex align-items-center gap-2">
                   <span className="fw-semibold">{candidate.name || "بدون نام"}</span>
                   {candidate.alreadyAssigned && <span className="badge bg-secondary">قبلاً متصل شده</span>}
@@ -196,7 +216,10 @@ const ParentTagUsers = () => {
               onInputChange={(value, action) => {
                 if (action.action === "input-change") setCandidateSearch(value);
               }}
-              onChange={setSelectedCandidate}
+              onChange={(candidate) => {
+                setSelectedCandidate(candidate);
+                setCandidateSearch("");
+              }}
               onMenuScrollToBottom={() => {
                 if (!candidateLoading && candidateMeta.page < candidateMeta.lastPage) {
                   loadCandidates(candidateMeta.page + 1, debouncedCandidateSearch, true);
