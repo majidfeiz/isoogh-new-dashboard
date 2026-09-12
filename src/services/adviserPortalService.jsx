@@ -68,6 +68,16 @@ const normalizeTagValues = (values) => (Array.isArray(values) ? values : []).map
   value: item?.value == null ? "" : String(item.value),
 }));
 
+const normalizePreviousAnswers = (values) => (Array.isArray(values) ? values : []).map((item) => ({
+  sourceFormId: normalizeId(item?.sourceFormId ?? item?.source_form_id),
+  sourceFormTitle: item?.sourceFormTitle ?? item?.source_form_title ?? "",
+  questionId: normalizeId(item?.questionId ?? item?.question_id),
+  questionTitle: item?.questionTitle ?? item?.question_title ?? "",
+  answerText: item?.answerText ?? item?.answer_text ?? null,
+  hasAnswer: item?.hasAnswer === true || Number(item?.has_answer) === 1,
+  updatedAt: item?.updatedAt ?? item?.updated_at ?? null,
+}));
+
 /** @returns {AdviserFormStudent & Record<string, *>} */
 const normalizeStudent = (item = {}) => ({
   ...(() => {
@@ -98,6 +108,7 @@ const normalizeStudent = (item = {}) => ({
   answerSessions: item?.answer_sessions ?? item?.answerSessions ?? [],
   lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
   tagValues: normalizeTagValues(item?.tagValues ?? item?.tag_values),
+  previousAnswers: normalizePreviousAnswers(item?.previousAnswers ?? item?.previous_answers),
 });
 
 const normalizeWorkShift = (item = {}) => ({
@@ -136,6 +147,7 @@ const normalizeStudentProfile = (item = {}) => ({
   supportFormTitle: item?.supportFormTitle ?? item?.support_form_title ?? "",
   lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
   tagValues: normalizeTagValues(item?.tagValues ?? item?.tag_values),
+  previousAnswers: normalizePreviousAnswers(item?.previousAnswers ?? item?.previous_answers),
 });
 
 const normalizeStudentCallLog = (item = {}) => ({

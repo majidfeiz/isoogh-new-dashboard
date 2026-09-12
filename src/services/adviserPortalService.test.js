@@ -264,3 +264,13 @@ test("keeps tag values scoped to each requested student profile", async () => {
     "http://127.0.0.1:8040/adviser-portal/support-forms/7/students/11/profile",
   ])
 })
+
+test("preserves ordered previous answers from the profile without merging sessions", async () => {
+  apiGet.mockResolvedValue({ data: { data: { studentId: 10, previousAnswers: [
+    { sourceFormId: 2, sourceFormTitle: "اول", questionId: 5, questionTitle: "سؤال اول", answerText: "پاسخ", hasAnswer: true, updatedAt: "2026-09-10T10:00:00Z" },
+    { sourceFormId: 3, sourceFormTitle: "دوم", questionId: 7, questionTitle: "سؤال دوم", answerText: null, hasAnswer: false, updatedAt: null },
+  ] } } });
+  const profile = await getStudentProfile(7, 10)
+  expect(profile.previousAnswers.map((item) => item.sourceFormTitle)).toEqual(["اول", "دوم"])
+  expect(profile.previousAnswers[1]).toMatchObject({ hasAnswer: false, answerText: null })
+})

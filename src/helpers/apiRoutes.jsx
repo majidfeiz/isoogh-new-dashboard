@@ -214,6 +214,9 @@ export const API_ROUTES = {
   supportForms: {
     list: "/support-forms",
     tagOptions: "/support-forms/tag-options",
+    questionHintFormOptions: "/support-forms/question-hint-form-options",
+    questionHintQuestionOptions: (sourceFormId) =>
+      `/support-forms/question-hint-form-options/${sourceFormId}/questions`,
     create: "/support-forms",
     detail: (id) => `/support-forms/${id}`,
     update: (id) => `/support-forms/${id}`,

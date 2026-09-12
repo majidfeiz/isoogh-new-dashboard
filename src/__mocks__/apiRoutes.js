@@ -108,6 +108,9 @@ export const API_ROUTES = {
   },
   supportForms: {
     tagOptions: "/support-forms/tag-options",
+    questionHintFormOptions: "/support-forms/question-hint-form-options",
+    questionHintQuestionOptions: (sourceFormId) =>
+      `/support-forms/question-hint-form-options/${sourceFormId}/questions`,
     toggleAdviserActive: (formId, adviserId) => `/support-forms/${formId}/${adviserId}/active`,
   },
   advisers: {
