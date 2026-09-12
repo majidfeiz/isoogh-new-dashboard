@@ -180,6 +180,7 @@ const ParentTagUsers = () => {
               value={selectedCandidate}
               inputValue={candidateSearch}
               isLoading={candidateLoading}
+              filterOption={null}
               getOptionValue={(candidate) => String(candidate.userId)}
               getOptionLabel={(candidate) => candidate.name || candidate.username || candidate.ssn || "دانش‌آموز"}
               isOptionDisabled={(candidate) => candidate.alreadyAssigned}
