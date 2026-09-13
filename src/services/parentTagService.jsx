@@ -181,6 +181,7 @@ export async function getParentTagStudentCandidates(
       phone: item.phone ?? null,
       studentCode: item.studentCode ?? item.student_code ?? null,
       alreadyAssigned: Number(item.alreadyAssigned ?? item.already_assigned) === 1,
+      hasValue: Number(item.hasValue ?? item.has_value) === 1,
     })),
     pagination: {
       page: meta.page ?? page,
