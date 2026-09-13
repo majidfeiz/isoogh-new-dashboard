@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents, getAdviserSupportFormDetail, getStudentAnswers, getStudentCallLogs, makeCall, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
+import { getAdviserFormStudents, getAdviserSupportFormDetail, getStudentAnswers, getStudentCallLogs, getStudentProfile, makeCall, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -247,4 +247,30 @@ test("updates work shift with the student id and uses the returned row values", 
     workShiftId: 5,
     workShift: { id: 5, name: "عصر" },
   })
+})
+
+test("keeps tag values scoped to each requested student profile", async () => {
+  apiGet
+    .mockResolvedValueOnce({ data: { data: { studentId: 10, tagValues: [{ tagId: 3, title: "وضعیت", value: "پیگیری" }] } } })
+    .mockResolvedValueOnce({ data: { data: { studentId: 11, tagValues: [] } } })
+
+  const first = await getStudentProfile(7, 10)
+  const second = await getStudentProfile(7, 11)
+
+  expect(first.tagValues).toEqual([{ tagId: 3, title: "وضعیت", value: "پیگیری" }])
+  expect(second.tagValues).toEqual([])
+  expect(apiGet.mock.calls.map(([url]) => url)).toEqual([
+    "http://127.0.0.1:8040/adviser-portal/support-forms/7/students/10/profile",
+    "http://127.0.0.1:8040/adviser-portal/support-forms/7/students/11/profile",
+  ])
+})
+
+test("preserves ordered previous answers from the profile without merging sessions", async () => {
+  apiGet.mockResolvedValue({ data: { data: { studentId: 10, previousAnswers: [
+    { sourceFormId: 2, sourceFormTitle: "اول", questionId: 5, questionTitle: "سؤال اول", answerText: "پاسخ", hasAnswer: true, updatedAt: "2026-09-10T10:00:00Z" },
+    { sourceFormId: 3, sourceFormTitle: "دوم", questionId: 7, questionTitle: "سؤال دوم", answerText: null, hasAnswer: false, updatedAt: null },
+  ] } } });
+  const profile = await getStudentProfile(7, 10)
+  expect(profile.previousAnswers.map((item) => item.sourceFormTitle)).toEqual(["اول", "دوم"])
+  expect(profile.previousAnswers[1]).toMatchObject({ hasAnswer: false, answerText: null })
 })

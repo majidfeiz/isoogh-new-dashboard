@@ -77,9 +77,45 @@ const hasValidCallGroupId = (value) => {
   return normalized !== "" && normalized !== "null";
 };
 
+const PreviousAnswersCard = ({ items, className = "" }) => {
+  if (!items?.length) return null;
+  return <div className={`border rounded p-3 ${className}`} data-testid="student-previous-answers">
+    <h5 className="mb-3"><i className="bx bx-history me-1" />اطلاعات سابق دانش‌آموز</h5>
+    <div className="vstack gap-3">
+      {items.map((item, index) => (
+        <div className="bg-light rounded p-3" key={`${item.sourceFormId}-${item.questionId}-${index}`}>
+          <div className="fw-semibold">{item.sourceFormTitle || "فرم تماس قبلی"}</div>
+          <div className="text-muted small mb-2">{item.questionTitle || "سؤال"}</div>
+          {item.hasAnswer ? <>
+            <div className="text-break">{item.answerText || "—"}</div>
+            {item.updatedAt && <small className="text-muted d-block mt-2">آخرین بروزرسانی: {formatJalali(item.updatedAt, true)}</small>}
+          </> : <div className="text-muted">پاسخی از تماس‌های قبلی ثبت نشده است</div>}
+        </div>
+      ))}
+    </div>
+  </div>;
+};
+
+const TagValuesCard = ({ items, className = "" }) => {
+  if (!items?.length) return null;
+  return <div className={`border rounded p-3 ${className}`} data-testid="student-tag-values">
+    <h5 className="mb-3"><i className="bx bx-info-circle me-1" />اطلاعات تکمیلی دانش‌آموز</h5>
+    <Row className="g-3">
+      {items.map((item) => (
+        <Col lg="4" md="6" key={item.tagId}>
+          <div className="bg-light rounded p-3 h-100">
+            <div className="text-muted small mb-1">{item.title}</div>
+            <div className="fw-semibold text-break">{item.value}</div>
+          </div>
+        </Col>
+      ))}
+    </Row>
+  </div>;
+};
+
 // ─── Answer Drawer ────────────────────────────────────────────────────────────
 
-const AnswerDrawer = ({ open, onClose, studentName, studentPhone, form, callContext, onSubmitted }) => {
+const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswers, form, callContext, onSubmitted }) => {
   const { studentId, voipCallId } = callContext || {};
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -176,6 +212,7 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, form, callCont
         {answerError ? <Alert color="danger">{answerError}</Alert> : null}
         {answersLoading ? <div className="text-center py-5"><Spinner color="primary" /><div className="text-muted mt-2">در حال دریافت پاسخنامه تماس...</div></div> : null}
         {!answersLoading && <>
+        <PreviousAnswersCard items={previousAnswers} className="mb-4" />
         <div className="vstack gap-4">
           {(form?.questions || []).map((q, idx) => (
             <FormGroup key={q.id} className="mb-0">
@@ -298,11 +335,13 @@ const StudentInfoTab = ({ profile, loading }) => {
   ].filter(Boolean);
 
   return (
-    <Row className="g-3">
-      {fields.map((f) => (
-        <InfoCard key={f.label} {...f} />
-      ))}
-    </Row>
+    <>
+      <Row className="g-3">
+        {fields.map((f) => (
+          <InfoCard key={f.label} {...f} />
+        ))}
+      </Row>
+    </>
   );
 };
 
@@ -395,7 +434,7 @@ const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
 
 // ─── Tab 3: Answers ───────────────────────────────────────────────────────────
 
-const AnswersTab = ({ formId, studentId, form, refreshKey, onFillAnswers }) => {
+const AnswersTab = ({ formId, studentId, form, previousAnswers, tagValues, refreshKey, onFillAnswers }) => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState({});
@@ -414,24 +453,31 @@ const AnswersTab = ({ formId, studentId, form, refreshKey, onFillAnswers }) => {
 
   if (sessions.length === 0)
     return (
-      <div className="text-center py-5">
-        <div className="mb-3">
-          <div className="rounded-circle d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10" style={{ width: 72, height: 72 }}>
-            <i className="bx bx-file-blank font-size-28 text-warning" />
+      <>
+        <PreviousAnswersCard items={previousAnswers} className="mb-4" />
+        <TagValuesCard items={tagValues} className="mb-4" />
+        <div className="text-center py-5">
+          <div className="mb-3">
+            <div className="rounded-circle d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10" style={{ width: 72, height: 72 }}>
+              <i className="bx bx-file-blank font-size-28 text-warning" />
+            </div>
           </div>
+          <h6 className="text-muted mb-3">هیچ پاسخنامه‌ای ثبت نشده است</h6>
+          <Button color="primary" onClick={() => onFillAnswers()}>
+            <i className="bx bx-edit me-2" />
+            پر کردن پاسخنامه
+          </Button>
         </div>
-        <h6 className="text-muted mb-3">هیچ پاسخنامه‌ای ثبت نشده است</h6>
-        <Button color="primary" onClick={() => onFillAnswers()}>
-          <i className="bx bx-edit me-2" />
-          پر کردن پاسخنامه
-        </Button>
-      </div>
+      </>
     );
 
   const toggle = (idx) => setOpen((p) => ({ ...p, [idx]: !p[idx] }));
 
   return (
-    <div className="vstack gap-2">
+    <div>
+      <PreviousAnswersCard items={previousAnswers} className="mb-4" />
+      <TagValuesCard items={tagValues} className="mb-4" />
+      <div className="vstack gap-2">
       {sessions.map((session, idx) => (
         <div key={session.voipCallId ?? idx} className="border rounded overflow-hidden">
           <div
@@ -475,6 +521,7 @@ const AnswersTab = ({ formId, studentId, form, refreshKey, onFillAnswers }) => {
           )}
         </div>
       ))}
+      </div>
     </div>
   );
 };
@@ -1054,6 +1101,8 @@ const StudentProfile = () => {
                     formId={formId}
                     studentId={studentId}
                     form={form}
+                    previousAnswers={profile?.previousAnswers}
+                    tagValues={profile?.tagValues}
                     refreshKey={refreshKey}
                     onFillAnswers={handleFillAnswers}
                   />
@@ -1080,6 +1129,7 @@ const StudentProfile = () => {
         onClose={() => setDrawerOpen(false)}
         studentName={profile?.name}
         studentPhone={profile?.phone}
+        previousAnswers={profile?.previousAnswers}
         form={form}
         callContext={answerCallContext}
         onSubmitted={handleAnswerSubmitted}

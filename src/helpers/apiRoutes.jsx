@@ -174,10 +174,15 @@ export const API_ROUTES = {
     import: "/parent-tags/import",
     importStatus: (logId) => `/parent-tags/imports/${logId}`,
     users: (id) => `/parent-tags/${id}/users`,
+    studentCandidates: (id) => `/parent-tags/${id}/student-candidates`,
     detachUser: (id, userId) => `/parent-tags/${id}/users/${userId}`,
     exportUsers: (id) => `/parent-tags/${id}/users/export`,
     values: (id) => `/parent-tags/${id}/values`,
     deleteValue: (id, userId) => `/parent-tags/${id}/values/${userId}`,
+    valueImportTemplate: (id) => `/parent-tags/${id}/value-import-template/download`,
+    valueDeleteTemplate: (id) => `/parent-tags/${id}/value-delete-template/download`,
+    importValues: (id) => `/parent-tags/${id}/values/import`,
+    deleteImportValues: (id) => `/parent-tags/${id}/values/delete-import`,
     studentTags: (studentId) => `/parent-tags/students/${studentId}`,
   },
   voip: {
@@ -208,6 +213,10 @@ export const API_ROUTES = {
   },
   supportForms: {
     list: "/support-forms",
+    tagOptions: "/support-forms/tag-options",
+    questionHintFormOptions: "/support-forms/question-hint-form-options",
+    questionHintQuestionOptions: (sourceFormId) =>
+      `/support-forms/question-hint-form-options/${sourceFormId}/questions`,
     create: "/support-forms",
     detail: (id) => `/support-forms/${id}`,
     update: (id) => `/support-forms/${id}`,

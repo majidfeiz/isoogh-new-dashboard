@@ -1,5 +1,5 @@
 // src/pages/SupportForms/SupportFormForm.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Card,
   CardBody,
@@ -19,6 +19,7 @@ import {
   TabPane,
 } from "reactstrap";
 import classnames from "classnames";
+import Select from "react-select";
 import { useNavigate, useParams } from "react-router-dom";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -26,18 +27,17 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import moment from "moment-jalaali";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
+import QuestionHintSelect from "./QuestionHintSelect.jsx";
 import {
   getSupportForm,
   getSupportForms,
   createSupportForm,
+  getSupportFormTagOptions,
   updateSupportForm,
 } from "../../services/supportFormService.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { getGrades } from "../../services/gradeService.jsx";
-import {
-  getParentTags,
-  getParentTagValues,
-} from "../../services/parentTagService.jsx";
+import { getParentTags } from "../../services/parentTagService.jsx";
 
 const makeClientId = () => `cf_${Math.random().toString(36).slice(2, 10)}`;
 
@@ -119,11 +119,8 @@ const buildPriority = (data = {}) => ({
 const buildQuestionHint = (data = {}) => ({
   support_form_id: data.support_form_id ?? "",
   question_id: data.question_id ?? "",
-});
-
-const buildParentTagShowLimit = (data = {}) => ({
-  parent_tag_id: data.parent_tag_id ?? "",
-  tag_id: data.tag_id ?? "",
+  support_form_title: data.support_form_title ?? data.sourceFormTitle ?? "",
+  question_title: data.question_title ?? data.questionTitle ?? "",
 });
 
 const buildParentTagQuestionAnswer = (data = {}) => ({
@@ -158,7 +155,7 @@ const SupportFormForm = () => {
   const [problems, setProblems] = useState([buildProblem()]);
   const [priorities, setPriorities] = useState([buildPriority()]);
   const [questionHints, setQuestionHints] = useState([]);
-  const [parentTagShowLimit, setParentTagShowLimit] = useState([]);
+  const [tagValueIds, setTagValueIds] = useState([]);
   const [parentTagQuestionAnswer, setParentTagQuestionAnswer] = useState([]);
   const [errors, setErrors] = useState({});
   const [questionErrors, setQuestionErrors] = useState([]);
@@ -167,7 +164,6 @@ const SupportFormForm = () => {
     problems: [],
     priorities: [],
     questionHints: [],
-    parentTagShowLimit: [],
     parentTagQuestionAnswer: [],
   });
   const [alert, setAlert] = useState(null);
@@ -176,23 +172,26 @@ const SupportFormForm = () => {
   const [grades, setGrades] = useState([]);
   const [supportForms, setSupportForms] = useState([]);
   const [parentTags, setParentTags] = useState([]);
-  const [supportFormQuestions, setSupportFormQuestions] = useState({});
-  const [parentTagValues, setParentTagValues] = useState({});
+  const [tagOptions, setTagOptions] = useState([]);
+  const [tagOptionsMeta, setTagOptionsMeta] = useState({ page: 1, lastPage: 1 });
+  const [tagOptionsSearch, setTagOptionsSearch] = useState("");
+  const [debouncedTagOptionsSearch, setDebouncedTagOptionsSearch] = useState("");
+  const [tagOptionsLoading, setTagOptionsLoading] = useState(false);
+  const tagOptionsRequest = useRef(0);
+  const [questionHintError, setQuestionHintError] = useState("");
   const [activeTab, setActiveTab] = useState(1);
   const [passedSteps, setPassedSteps] = useState([1]);
 
   const fetchOptions = useCallback(async () => {
     try {
-      const [schoolsRes, gradesRes, supportFormsRes, parentTagsRes] = await Promise.all([
+      const [schoolsRes, gradesRes, supportFormsRes] = await Promise.all([
         getSchools({ page: 1, limit: 200 }),
         getGrades({ page: 1, limit: 200 }),
         getSupportForms({ page: 1, limit: 200 }),
-        getParentTags({ page: 1, limit: 200 }),
       ]);
       setSchools(schoolsRes.items || []);
       setGrades(gradesRes.items || []);
       setSupportForms(supportFormsRes.items || []);
-      setParentTags(parentTagsRes.items || []);
     } catch (e) {
       console.error("خطا در دریافت مجموعه‌ها/پایه‌ها", e);
     }
@@ -215,12 +214,9 @@ const SupportFormForm = () => {
         const parsedHeadings = parseJsonField(formData?.headings).map(buildHeading);
         const parsedProblems = parseJsonField(formData?.problems).map(buildProblem);
         const parsedPriorities = parseJsonField(formData?.priorities).map(buildPriority);
-        const parsedQuestionHints = parseJsonField(formData?.question_hint).map(
-          buildQuestionHint
-        );
-        const parsedParentTagShowLimit = parseJsonField(
-          formData?.parent_tag_show_limit
-        ).map(buildParentTagShowLimit);
+        const parsedQuestionHints = (Array.isArray(formData?.question_hints)
+          ? formData.question_hints
+          : []).map(buildQuestionHint);
         const parsedParentTagQuestionAnswer = parseJsonField(
           formData?.parent_tag_question_answer
         ).map(buildParentTagQuestionAnswer);
@@ -249,7 +245,7 @@ const SupportFormForm = () => {
         setProblems(parsedProblems.length ? parsedProblems : [buildProblem()]);
         setPriorities(parsedPriorities.length ? parsedPriorities : [buildPriority()]);
         setQuestionHints(parsedQuestionHints);
-        setParentTagShowLimit(parsedParentTagShowLimit);
+        setTagValueIds((formData?.tag_value_ids || []).map(Number).filter(Number.isInteger));
         setParentTagQuestionAnswer(parsedParentTagQuestionAnswer);
       } catch (e) {
         console.error(e);
@@ -263,67 +259,83 @@ const SupportFormForm = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    if (name === "school_id" && String(value) !== String(form.school_id)) {
+      if (questionHints.length && !window.confirm("با تغییر مجموعه، تمام راهنماهای سؤال پاک شوند؟")) {
+        return;
+      }
+      setQuestionHints([]);
+      setQuestionHintError("");
+      setTagValueIds([]);
+      setTagOptions([]);
+      setTagOptionsMeta({ page: 1, lastPage: 1 });
+      setTagOptionsSearch("");
+      setDebouncedTagOptionsSearch("");
+    }
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  const loadSupportFormQuestions = useCallback(
-    async (supportFormId) => {
-      if (!supportFormId || supportFormQuestions[supportFormId]) return;
-      try {
-        const data = await getSupportForm(supportFormId);
-        const formData = data?.data || data;
-        const items = Array.isArray(formData?.questions) ? formData.questions : [];
-        setSupportFormQuestions((prev) => ({
-          ...prev,
-          [supportFormId]: items,
-        }));
-      } catch (e) {
-        console.error("خطا در دریافت سوالات فرم تماس", e);
-      }
-    },
-    [supportFormQuestions]
-  );
-
-  const loadParentTagValues = useCallback(
-    async (parentTagId) => {
-      if (!parentTagId || parentTagValues[parentTagId]) return;
-      try {
-        const res = await getParentTagValues(parentTagId, { page: 1, limit: 200 });
-        setParentTagValues((prev) => ({
-          ...prev,
-          [parentTagId]: res.items || [],
-        }));
-      } catch (e) {
-        console.error("خطا در دریافت مقادیر تگ والد", e);
-      }
-    },
-    [parentTagValues]
-  );
+  useEffect(() => {
+    if (!form.school_id) {
+      setParentTags([]);
+      return;
+    }
+    let active = true;
+    getParentTags({ page: 1, limit: 200, schoolId: form.school_id, rootOnly: 1 })
+      .then((response) => {
+        if (!active) return;
+        const items = response.items || [];
+        setParentTags(items);
+      })
+      .catch(() => active && setParentTags([]));
+    return () => { active = false; };
+  }, [form.school_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const formIds = new Set(
-      (questionHints || [])
-        .map((item) => item.support_form_id)
-        .filter((value) => !!value)
-    );
-    formIds.forEach((supportFormId) => {
-      loadSupportFormQuestions(supportFormId);
-    });
-  }, [questionHints, loadSupportFormQuestions]);
+    const timer = setTimeout(() => setDebouncedTagOptionsSearch(tagOptionsSearch.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [tagOptionsSearch]);
+
+  const loadTagOptions = useCallback(async (page = 1, search = "", append = false) => {
+    if (!form.school_id) return;
+    const requestId = ++tagOptionsRequest.current;
+    setTagOptionsLoading(true);
+    try {
+      const response = await getSupportFormTagOptions({
+        schoolId: form.school_id,
+        search,
+        page,
+        limit: 20,
+      });
+      if (requestId !== tagOptionsRequest.current) return;
+      setTagOptions((current) => {
+        const map = new Map((append ? current : []).map((item) => [item.id, item]));
+        (response.items || []).forEach((item) => map.set(item.id, item));
+        return Array.from(map.values());
+      });
+      setTagOptionsMeta(response.pagination || { page, lastPage: 1 });
+    } catch (error) {
+      if (requestId !== tagOptionsRequest.current) return;
+      console.error("خطا در دریافت گزینه‌های تگ فرم تماس", error);
+      if (!append) setTagOptions([]);
+    } finally {
+      if (requestId === tagOptionsRequest.current) setTagOptionsLoading(false);
+    }
+  }, [form.school_id]);
 
   useEffect(() => {
-    const parentIds = new Set(
-      (parentTagShowLimit || [])
-        .map((item) => item.parent_tag_id)
-        .filter((value) => !!value)
-    );
-    parentIds.forEach((parentTagId) => {
-      loadParentTagValues(parentTagId);
-    });
-  }, [parentTagShowLimit, loadParentTagValues]);
+    if (form.school_id) loadTagOptions(1, debouncedTagOptionsSearch, false);
+  }, [debouncedTagOptionsSearch, form.school_id, loadTagOptions]);
+
+  useEffect(() => {
+    if (debouncedTagOptionsSearch || tagOptionsLoading || tagOptionsMeta.page >= tagOptionsMeta.lastPage) return;
+    const available = new Set(tagOptions.map((item) => item.id));
+    if (tagValueIds.some((id) => !available.has(id))) {
+      loadTagOptions(tagOptionsMeta.page + 1, "", true);
+    }
+  }, [debouncedTagOptionsSearch, loadTagOptions, tagOptions, tagOptionsLoading, tagOptionsMeta, tagValueIds]);
 
   const handleQuestionChange = (index, field, value) => {
     setQuestions((prev) =>
@@ -360,11 +372,38 @@ const SupportFormForm = () => {
   const handleHeadingChange = updateListItem(setHeadings);
   const handleProblemChange = updateListItem(setProblems);
   const handlePriorityChange = updateListItem(setPriorities);
-  const handleQuestionHintChange = updateListItem(setQuestionHints);
-  const handleParentTagShowLimitChange = updateListItem(setParentTagShowLimit);
   const handleParentTagQuestionAnswerChange = updateListItem(
     setParentTagQuestionAnswer
   );
+
+  const handleHintFormChange = (index, option) => {
+    setQuestionHintError("");
+    setQuestionHints((current) => current.map((item, itemIndex) => itemIndex === index
+      ? {
+          ...item,
+          support_form_id: option?.id ?? "",
+          support_form_title: option?.title ?? "",
+          question_id: "",
+          question_title: "",
+        }
+      : item));
+  };
+
+  const handleHintQuestionChange = (index, option) => {
+    const row = questionHints[index];
+    if (option && questionHints.some((item, itemIndex) =>
+      itemIndex !== index &&
+      Number(item.support_form_id) === Number(row.support_form_id) &&
+      Number(item.question_id) === Number(option.id)
+    )) {
+      setQuestionHintError("ترکیب فرم مبدأ و سؤال نباید تکراری باشد.");
+      return;
+    }
+    setQuestionHintError("");
+    setQuestionHints((current) => current.map((item, itemIndex) => itemIndex === index
+      ? { ...item, question_id: option?.id ?? "", question_title: option?.title ?? "" }
+      : item));
+  };
 
   const removeHeading = (index) => () => {
     setHeadings((prev) => prev.filter((_, idx) => idx !== index));
@@ -457,6 +496,17 @@ const SupportFormForm = () => {
               : null,
           };
         });
+        const incompleteHint = questionHints.some((item) => !item.support_form_id || !item.question_id);
+        const hintKeys = questionHints
+          .filter((item) => item.support_form_id && item.question_id)
+          .map((item) => `${Number(item.support_form_id)}:${Number(item.question_id)}`);
+        const duplicateHint = new Set(hintKeys).size !== hintKeys.length;
+        const selfHint = isEdit && questionHints.some((item) => Number(item.support_form_id) === Number(id));
+        if (incompleteHint) setQuestionHintError("برای هر راهنما، فرم تماس قبلی و سؤال را انتخاب کنید.");
+        else if (duplicateHint) setQuestionHintError("ترکیب فرم مبدأ و سؤال نباید تکراری باشد.");
+        else if (selfHint) setQuestionHintError("فرم نمی‌تواند خودش را به‌عنوان منبع راهنما انتخاب کند.");
+        else setQuestionHintError("");
+        if (incompleteHint || duplicateHint || selfHint) nextErrors.question_hints = "اطلاعات راهنمای سؤال را اصلاح کنید.";
 
         setListErrors((prev) => ({
           ...prev,
@@ -509,7 +559,7 @@ const SupportFormForm = () => {
       delete nextErrors._listErrors;
       return Object.keys(nextErrors).length === 0 && !hasQuestionErrors && !hasListErrors;
     },
-    [form, headings, problems, priorities, questions, listErrors]
+    [form, headings, id, isEdit, problems, priorities, questionHints, questions, listErrors]
   );
 
   const handleNext = () => {
@@ -565,9 +615,6 @@ const SupportFormForm = () => {
       const cleanedQuestionHints = questionHints
         .map((item) => buildQuestionHint(item))
         .filter((item) => item.support_form_id && item.question_id);
-      const cleanedParentTagShowLimit = parentTagShowLimit
-        .map((item) => buildParentTagShowLimit(item))
-        .filter((item) => item.parent_tag_id && item.tag_id);
       const cleanedParentTagQuestionAnswer = parentTagQuestionAnswer
         .map((item) => buildParentTagQuestionAnswer(item))
         .filter((item) => item.parent_tag_question_answer_id);
@@ -591,9 +638,12 @@ const SupportFormForm = () => {
         accepted_allow_number_of_calls_status: toNumberOrNull(
           form.accepted_allow_number_of_calls_status
         ),
-        question_hint: JSON.stringify(cleanedQuestionHints),
+        question_hints: cleanedQuestionHints.map((item) => ({
+          support_form_id: Number(item.support_form_id),
+          question_id: Number(item.question_id),
+        })),
         next_support_form_id: toNumberOrNull(form.next_support_form_id),
-        parent_tag_show_limit: JSON.stringify(cleanedParentTagShowLimit),
+        tag_value_ids: tagValueIds.map(Number),
         parent_tag_question_answer: JSON.stringify(cleanedParentTagQuestionAnswer),
         questions: questions.map((q) => ({
           ...(q.id ? { id: q.id } : {}),
@@ -626,6 +676,10 @@ const SupportFormForm = () => {
       }, 800);
     } catch (e) {
       console.error(e);
+      if ([400, 404].includes(e?.response?.status)) {
+        const message = e?.response?.data?.message;
+        setQuestionHintError(Array.isArray(message) ? message.join("، ") : message || "اطلاعات راهنمای سؤال معتبر نیست.");
+      }
       if (e?.response?.status === 422) {
         setErrors(normalizeApiErrors(e.response.data.errors));
       } else {
@@ -670,6 +724,18 @@ const SupportFormForm = () => {
         label: item.name || item.title || `تگ ${item.id}`,
       })),
     [parentTags]
+  );
+
+  const flatTagOptions = useMemo(
+    () => tagOptions.map((item) => ({ value: item.id, label: item.name })),
+    [tagOptions]
+  );
+  const selectedTagOptions = useMemo(
+    () => tagValueIds.map((tagId) => {
+      const option = tagOptions.find((item) => item.id === tagId);
+      return { value: tagId, label: option?.name || `تگ #${tagId}` };
+    }),
+    [tagOptions, tagValueIds]
   );
 
   const renderError = (field) =>
@@ -1072,58 +1138,37 @@ const SupportFormForm = () => {
                                   در صورت نیاز، سوالات قبلی را اضافه کنید.
                                 </p>
                               )}
+                              {questionHintError && <Alert color="danger" className="py-2">{questionHintError}</Alert>}
                               {questionHints.map((item, idx) => (
                                 <Row key={`hint-${idx}`} className="g-2 align-items-end mb-2">
                                   <Col md="5">
                                     <FormGroup>
-                                      <Label>فرم تماس</Label>
-                                      <Input
-                                        type="select"
+                                      <Label>فرم تماس قبلی</Label>
+                                      <QuestionHintSelect
+                                        type="form"
+                                        schoolId={form.school_id}
+                                        excludeId={id}
                                         value={item.support_form_id}
-                                        onChange={(e) => {
-                                          const nextValue = e.target.value;
-                                          handleQuestionHintChange(
-                                            idx,
-                                            "support_form_id",
-                                            nextValue
-                                          );
-                                          handleQuestionHintChange(idx, "question_id", "");
-                                          loadSupportFormQuestions(nextValue);
-                                        }}
-                                      >
-                                        <option value="">انتخاب فرم تماس</option>
-                                        {supportFormOptions.map((opt) => (
-                                          <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                          </option>
-                                        ))}
-                                      </Input>
+                                        label={item.support_form_title}
+                                        disabled={!form.school_id}
+                                        onChange={(option) => handleHintFormChange(idx, option)}
+                                        onError={setQuestionHintError}
+                                      />
                                     </FormGroup>
                                   </Col>
                                   <Col md="5">
                                     <FormGroup>
                                       <Label>سوال</Label>
-                                      <Input
-                                        type="select"
+                                      <QuestionHintSelect
+                                        type="question"
+                                        schoolId={form.school_id}
+                                        sourceFormId={item.support_form_id}
                                         value={item.question_id}
-                                        onChange={(e) =>
-                                          handleQuestionHintChange(
-                                            idx,
-                                            "question_id",
-                                            e.target.value
-                                          )
-                                        }
+                                        label={item.question_title}
                                         disabled={!item.support_form_id}
-                                      >
-                                        <option value="">انتخاب سوال</option>
-                                        {(supportFormQuestions[item.support_form_id] || []).map(
-                                          (q) => (
-                                            <option key={q.id} value={q.id}>
-                                              {q.question || q.title || `سوال ${q.id}`}
-                                            </option>
-                                          )
-                                        )}
-                                      </Input>
+                                        onChange={(option) => handleHintQuestionChange(idx, option)}
+                                        onError={setQuestionHintError}
+                                      />
                                     </FormGroup>
                                   </Col>
                                   <Col md="2" className="d-flex">
@@ -1132,7 +1177,10 @@ const SupportFormForm = () => {
                                       color="danger"
                                       outline
                                       className="mt-4"
-                                      onClick={removeListItem(setQuestionHints, idx)}
+                                      onClick={() => {
+                                        setQuestionHintError("");
+                                        setQuestionHints((current) => current.filter((_, itemIndex) => itemIndex !== idx));
+                                      }}
                                     >
                                       حذف
                                     </Button>
@@ -1142,92 +1190,30 @@ const SupportFormForm = () => {
                             </Col>
 
                             <Col md="12" className="mt-4">
-                              <div className="d-flex align-items-center justify-content-between mb-2">
-                                <Label className="mb-0">نمایش تگ والد</Label>
-                                <Button
-                                  type="button"
-                                  color="light"
-                                  size="sm"
-                                  onClick={addListItem(
-                                    setParentTagShowLimit,
-                                    buildParentTagShowLimit
-                                  )}
-                                >
-                                  افزودن تگ
-                                </Button>
-                              </div>
-                              {parentTagShowLimit.length === 0 && (
-                                <p className="text-muted mb-0">
-                                  اگر نیاز دارید تگ والد نمایش داده شود، اضافه کنید.
-                                </p>
-                              )}
-                              {parentTagShowLimit.map((item, idx) => (
-                                <Row key={`tagshow-${idx}`} className="g-2 align-items-end mb-2">
-                                  <Col md="5">
-                                    <FormGroup>
-                                      <Label>سرتگ</Label>
-                                      <Input
-                                        type="select"
-                                        value={item.parent_tag_id}
-                                        onChange={(e) => {
-                                          const nextValue = e.target.value;
-                                          handleParentTagShowLimitChange(
-                                            idx,
-                                            "parent_tag_id",
-                                            nextValue
-                                          );
-                                          handleParentTagShowLimitChange(idx, "tag_id", "");
-                                          loadParentTagValues(nextValue);
-                                        }}
-                                      >
-                                        <option value="">انتخاب سرتگ</option>
-                                        {parentTagOptions.map((opt) => (
-                                          <option key={opt.value} value={opt.value}>
-                                            {opt.label}
-                                          </option>
-                                        ))}
-                                      </Input>
-                                    </FormGroup>
-                                  </Col>
-                                  <Col md="5">
-                                    <FormGroup>
-                                      <Label>تگ</Label>
-                                      <Input
-                                        type="select"
-                                        value={item.tag_id}
-                                        onChange={(e) =>
-                                          handleParentTagShowLimitChange(
-                                            idx,
-                                            "tag_id",
-                                            e.target.value
-                                          )
-                                        }
-                                        disabled={!item.parent_tag_id}
-                                      >
-                                        <option value="">انتخاب تگ</option>
-                                        {(parentTagValues[item.parent_tag_id] || []).map(
-                                          (tag) => (
-                                            <option key={tag.id} value={tag.id}>
-                                              {tag.value || tag.name || `تگ ${tag.id}`}
-                                            </option>
-                                          )
-                                        )}
-                                      </Input>
-                                    </FormGroup>
-                                  </Col>
-                                  <Col md="2" className="d-flex">
-                                    <Button
-                                      type="button"
-                                      color="danger"
-                                      outline
-                                      className="mt-4"
-                                      onClick={removeListItem(setParentTagShowLimit, idx)}
-                                    >
-                                      حذف
-                                    </Button>
-                                  </Col>
-                                </Row>
-                              ))}
+                              <Label className="mb-2">تگ‌های قابل نمایش برای مشاور</Label>
+                              {!form.school_id && <p className="text-muted">ابتدا مجموعه فرم را انتخاب کنید.</p>}
+                              {form.school_id && <Select
+                                isMulti
+                                isClearable
+                                closeMenuOnSelect={false}
+                                classNamePrefix="react-select"
+                                placeholder="جستجو و انتخاب تگ‌ها..."
+                                noOptionsMessage={() => tagOptionsLoading ? "در حال دریافت..." : "تگی یافت نشد"}
+                                options={flatTagOptions}
+                                value={selectedTagOptions}
+                                inputValue={tagOptionsSearch}
+                                isLoading={tagOptionsLoading}
+                                onInputChange={(value, action) => {
+                                  if (action.action === "input-change") setTagOptionsSearch(value);
+                                }}
+                                onChange={(selected) => setTagValueIds((selected || []).map((item) => Number(item.value)))}
+                                onMenuScrollToBottom={() => {
+                                  if (!tagOptionsLoading && tagOptionsMeta.page < tagOptionsMeta.lastPage) {
+                                    loadTagOptions(tagOptionsMeta.page + 1, debouncedTagOptionsSearch, true);
+                                  }
+                                }}
+                              />}
+                              <small className="text-muted d-block mt-2">انتخاب تگ اختیاری است و امکان انتخاب چند مورد وجود دارد.</small>
                             </Col>
 
                             <Col md="12" className="mt-4">

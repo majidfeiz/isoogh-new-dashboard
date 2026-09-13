@@ -62,6 +62,22 @@ const normalizeCallCount = (value, fallback = 0) => {
   return Number.isFinite(count) ? Math.max(0, count) : fallback;
 };
 
+const normalizeTagValues = (values) => (Array.isArray(values) ? values : []).map((item) => ({
+  tagId: normalizeId(item?.tagId ?? item?.tag_id ?? item?.id),
+  title: item?.title ?? item?.name ?? "",
+  value: item?.value == null ? "" : String(item.value),
+}));
+
+const normalizePreviousAnswers = (values) => (Array.isArray(values) ? values : []).map((item) => ({
+  sourceFormId: normalizeId(item?.sourceFormId ?? item?.source_form_id),
+  sourceFormTitle: item?.sourceFormTitle ?? item?.source_form_title ?? "",
+  questionId: normalizeId(item?.questionId ?? item?.question_id),
+  questionTitle: item?.questionTitle ?? item?.question_title ?? "",
+  answerText: item?.answerText ?? item?.answer_text ?? null,
+  hasAnswer: item?.hasAnswer === true || Number(item?.has_answer) === 1,
+  updatedAt: item?.updatedAt ?? item?.updated_at ?? null,
+}));
+
 /** @returns {AdviserFormStudent & Record<string, *>} */
 const normalizeStudent = (item = {}) => ({
   ...(() => {
@@ -91,6 +107,8 @@ const normalizeStudent = (item = {}) => ({
   workShift: item?.workShift ?? item?.work_shift ?? null,
   answerSessions: item?.answer_sessions ?? item?.answerSessions ?? [],
   lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
+  tagValues: normalizeTagValues(item?.tagValues ?? item?.tag_values),
+  previousAnswers: normalizePreviousAnswers(item?.previousAnswers ?? item?.previous_answers),
 });
 
 const normalizeWorkShift = (item = {}) => ({
@@ -128,6 +146,8 @@ const normalizeStudentProfile = (item = {}) => ({
   supportFormId: item?.supportFormId ?? item?.support_form_id ?? null,
   supportFormTitle: item?.supportFormTitle ?? item?.support_form_title ?? "",
   lastVoipCallId: item?.lastVoipCallId ?? item?.last_voip_call_id ?? item?.voipCallId ?? item?.voip_call_id ?? null,
+  tagValues: normalizeTagValues(item?.tagValues ?? item?.tag_values),
+  previousAnswers: normalizePreviousAnswers(item?.previousAnswers ?? item?.previous_answers),
 });
 
 const normalizeStudentCallLog = (item = {}) => ({

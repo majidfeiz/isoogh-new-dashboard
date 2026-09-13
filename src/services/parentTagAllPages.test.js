@@ -45,4 +45,5 @@ test("loads every value page for the selected parent tag", async () => {
   await expect(getAllParentTagValues(9)).resolves.toEqual([{ id: 11 }, { id: 12 }]);
   expect(apiGet).toHaveBeenCalledTimes(2);
   expect(apiGet.mock.calls.map(([, config]) => config.params.page)).toEqual([1, 2]);
+  expect(apiGet.mock.calls.every(([, config]) => !("schoolId" in config.params))).toBe(true);
 });
