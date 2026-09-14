@@ -41,6 +41,16 @@ const candidateSelectStyles = {
   }),
 };
 
+const candidateStatus = (candidate) => {
+  if (!candidate.alreadyAssigned) {
+    return { color: "success", text: "اتصال جدید" };
+  }
+  if (!candidate.hasValue) {
+    return { color: "warning", text: "متصل، بدون مقدار؛ مقدار مجدداً ثبت می‌شود" };
+  }
+  return { color: "info", text: "متصل؛ مقدار فعلی جایگزین می‌شود" };
+};
+
 const ParentTagUsers = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -199,20 +209,23 @@ const ParentTagUsers = () => {
               styles={candidateSelectStyles}
               getOptionValue={(candidate) => String(candidate.userId)}
               getOptionLabel={(candidate) => candidate.name || candidate.username || candidate.ssn || "دانش‌آموز"}
-              isOptionDisabled={(candidate) => candidate.alreadyAssigned}
-              formatOptionLabel={(candidate, { context }) => context === "value" ? (
-                <span className="fw-semibold text-dark">
-                  {candidate.name || "بدون نام"}{candidate.username ? ` (${candidate.username})` : ""}
-                </span>
-              ) : <div>
+              formatOptionLabel={(candidate, { context }) => {
+                const status = candidateStatus(candidate);
+                return context === "value" ? (
+                  <div className="text-dark">
+                    <div className="fw-semibold">{candidate.name || "بدون نام"}{candidate.username ? ` (${candidate.username})` : ""}</div>
+                    <small className={`text-${status.color}`}>{status.text}</small>
+                  </div>
+                ) : <div>
                 <div className="d-flex align-items-center gap-2">
                   <span className="fw-semibold">{candidate.name || "بدون نام"}</span>
-                  {candidate.alreadyAssigned && <span className="badge bg-secondary">قبلاً متصل شده</span>}
+                  <span className={`badge bg-${status.color}`}>{status.text}</span>
                 </div>
                 <small className="text-muted d-block">
                   نام کاربری: {candidate.username || "-"} | کد ملی: {candidate.ssn || "-"} | کد دانش‌آموز: {candidate.studentCode || "-"}
                 </small>
-              </div>}
+              </div>;
+              }}
               onInputChange={(value, action) => {
                 if (action.action === "input-change") setCandidateSearch(value);
               }}
@@ -228,7 +241,7 @@ const ParentTagUsers = () => {
             />
           </Col>
           <Col md="4"><Label>مقدار اختیاری</Label><Input value={attachValue} onChange={(event) => setAttachValue(event.target.value)} /></Col>
-          <Col md="2"><Button color="primary" type="submit" disabled={attaching || !selectedCandidate || selectedCandidate.alreadyAssigned}>{attaching ? "در حال اتصال..." : "اتصال دانش‌آموز"}</Button></Col>
+          <Col md="2"><Button color="primary" type="submit" disabled={attaching || !selectedCandidate}>{attaching ? "در حال اتصال..." : "ثبت اتصال / مقدار"}</Button></Col>
         </Row>
       </Form>}
       <Row className="g-3 mb-4">{[{ kind: "upsert", title: "ثبت / ویرایش گروهی مقدار", permission: "parent-tag-values.upsert", isDelete: false }, { kind: "delete", title: "حذف گروهی مقدار", permission: "parent-tag-values.delete", isDelete: true }].filter((item) => hasPermission(item.permission)).map((item) => <Col lg="6" key={item.kind}><div className="border rounded p-3 h-100"><h5>{item.title}</h5><div className="d-flex gap-2 flex-wrap"><Button type="button" color="info" outline onClick={() => downloadTemplate(item.isDelete)}>دانلود نمونه XLSX</Button><Input type="file" accept=".xlsx" onChange={(e) => setFiles((old) => ({ ...old, [item.kind]: e.target.files?.[0] || null }))} style={{ maxWidth: 300 }} /><Button type="button" color={item.isDelete ? "danger" : "success"} disabled={importing === item.kind} onClick={() => submitImport(item.kind)}>{importing === item.kind ? "در حال پردازش..." : "ارسال فایل"}</Button></div></div></Col>)}</Row>

@@ -35,10 +35,18 @@ test("upsert, delete, attach and detach use user id and school scope", async () 
   expect(apiDelete).toHaveBeenNthCalledWith(2, "http://127.0.0.1:8040/parent-tags/9/users/13", { params: { schoolId: 94 } });
 });
 
-test("student autocomplete sends school, search and pagination and normalizes assigned rows", async () => {
-  apiGet.mockResolvedValue({ data: { data: { items: [{ userId: 12, studentId: 34, name: "علی", username: "ali", ssn: "001", studentCode: "S1", alreadyAssigned: 1 }], meta: { page: 2, limit: 20, total: 21, lastPage: 2 } } } });
+test("student autocomplete sends school, search and pagination and normalizes assignment and value states", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [
+    { userId: 12, studentId: 34, name: "علی", username: "ali", ssn: "001", studentCode: "S1", alreadyAssigned: 0, hasValue: 0 },
+    { userId: 13, studentId: 35, name: "رضا", username: "reza", ssn: "002", studentCode: "S2", alreadyAssigned: 1, hasValue: 0 },
+    { userId: 14, studentId: 36, name: "سارا", username: "sara", ssn: "003", studentCode: "S3", alreadyAssigned: 1, hasValue: 1 },
+  ], meta: { page: 2, limit: 20, total: 21, lastPage: 2 } } } });
   const result = await getParentTagStudentCandidates(9, { schoolId: 94, search: "ali", page: 2, limit: 20 });
-  expect(result.items[0]).toMatchObject({ userId: 12, studentId: 34, alreadyAssigned: true });
+  expect(result.items).toEqual(expect.arrayContaining([
+    expect.objectContaining({ userId: 12, alreadyAssigned: false, hasValue: false }),
+    expect.objectContaining({ userId: 13, alreadyAssigned: true, hasValue: false }),
+    expect.objectContaining({ userId: 14, alreadyAssigned: true, hasValue: true }),
+  ]));
   expect(apiGet).toHaveBeenCalledWith("http://127.0.0.1:8040/parent-tags/9/student-candidates", { params: { schoolId: 94, search: "ali", page: 2, limit: 20 } });
 });
 
