@@ -196,6 +196,10 @@ export const API_ROUTES = {
     callQueueStats: "/voip/call-queue/stats",
     retryCallQueueJob: (id) => `/voip/call-queue/${id}/retry`,
     cancelCallQueueJob: (id) => `/voip/call-queue/${id}/cancel`,
+    durationProcessingStatus: "/voip/duration-processing/status",
+    durationProcessingLogs: "/voip/duration-processing/logs",
+    durationProcessingSettings: "/voip/duration-processing/settings",
+    durationProcessingExecute: "/voip/duration-processing/execute",
   },
   voipAnalytics: {
     summary: "/voip/analytics/summary",

@@ -241,6 +241,7 @@ import CallTraces from "../pages/Voip/CallTraces/CallTraces.jsx";
 import CallQueue from "../pages/Voip/CallQueue/CallQueue.jsx";
 import AnswerSheetList from "../pages/AnswerSheets/AnswerSheetList.jsx";
 import VoipAnalytics from "../pages/Voip/Analytics/VoipAnalytics.jsx";
+import DurationProcessing from "../pages/Voip/DurationProcessing/DurationProcessing.jsx";
 import AuditLogs from "../pages/AuditLogs/AuditLogs.jsx";
 import ImportLogList from "../pages/ImportLogs/ImportLogList.jsx";
 import ImportLogDetail from "../pages/ImportLogs/ImportLogDetail.jsx";
@@ -432,6 +433,7 @@ const authProtectedRoutes = [
   },
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
+  { path: "/voip/duration-processing", component: <ProtectedRoute permission="voip.duration-processing.index"><DurationProcessing /></ProtectedRoute> },
   { path: "/audit-logs", component: <ProtectedRoute permission="audit-logs.index"><AuditLogs /></ProtectedRoute> },
   { path: "/import-logs", component: <ProtectedRoute permission="import-logs.index"><ImportLogList /></ProtectedRoute> },
   { path: "/import-logs/:id", component: <ProtectedRoute permission="import-logs.show"><ImportLogDetail /></ProtectedRoute> },

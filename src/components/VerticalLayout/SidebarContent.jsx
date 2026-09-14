@@ -349,7 +349,7 @@ const SidebarContent = (props) => {
         type: "group",
         label: "سرویس وویپ",
         icon: "bx bx-phone",
-        permissionAny: ["voip.outbound.index", "voip.analytics.index", "voip.call-traces.index", "voip.call-queue.index"],
+        permissionAny: ["voip.outbound.index", "voip.analytics.index", "voip.call-traces.index", "voip.call-queue.index", "voip.duration-processing.index"],
         children: [
           {
             label: "تماس خروجی",
@@ -375,6 +375,11 @@ const SidebarContent = (props) => {
             label: "آنالیز وویپ",
             to: "/voip/analytics",
             permission: "voip.analytics.index",
+          },
+          {
+            label: "محاسبه مدت تماس‌ها",
+            to: "/voip/duration-processing",
+            permission: "voip.duration-processing.index",
           },
         ],
       },
