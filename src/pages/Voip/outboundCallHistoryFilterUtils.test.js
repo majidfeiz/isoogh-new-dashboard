@@ -1,8 +1,16 @@
 import {
   mergeOutboundTagOptions,
+  isOutboundCallAdmin,
   parseOutboundCallQuery,
   serializeOutboundCallQuery,
 } from "./outboundCallHistoryFilterUtils.js";
+
+test("shows raw duration only to admin roles", () => {
+  expect(isOutboundCallAdmin({ roles: [{ name: "admin" }] })).toBe(true);
+  expect(isOutboundCallAdmin({ roles: [{ slug: "super_admin" }] })).toBe(true);
+  expect(isOutboundCallAdmin({ roles: [{ name: "manager" }] })).toBe(false);
+  expect(isOutboundCallAdmin({ roles: [] })).toBe(false);
+});
 
 test("preserves independent SSN and tag filters in the URL", () => {
   const query = parseOutboundCallQuery(new URLSearchParams(

@@ -23,6 +23,7 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
  * @typedef {Object} OutboundCallHistory
  * @property {number|string|null} id
  * @property {OutboundDisposition} [disposition]
+ * @property {number|null} [talk_duration_seconds]
  * @property {OutboundCallHistoryFile[]} files
  */
 
@@ -38,8 +39,9 @@ const normalizeOutboundFile = (file = {}) => ({
   description: file?.description ?? "",
 });
 
-const normalizeOutboundCallItem = (item = {}) => ({
+export const normalizeOutboundCallItem = (item = {}) => ({
   ...item,
+  talk_duration_seconds: item?.talk_duration_seconds ?? null,
   files: Array.isArray(item?.files) ? item.files.map(normalizeOutboundFile) : [],
 });
 
