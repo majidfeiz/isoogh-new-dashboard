@@ -50,3 +50,10 @@ export function mergeOutboundTagOptions(current, incoming) {
   incoming.forEach((item) => byId.set(String(item.id), item));
   return [...byId.values()];
 }
+
+export function isOutboundCallAdmin(user) {
+  return (user?.roles || []).some((role) => {
+    const name = String(typeof role === "string" ? role : role?.name || role?.slug || role?.label || "").toLowerCase();
+    return ["admin", "super_admin", "super-admin", "super admin"].includes(name);
+  });
+}
