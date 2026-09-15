@@ -20,9 +20,12 @@ import { io } from "socket.io-client";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
+import { useAuth } from "../../context/AuthContext.jsx";
 import { API_BASE_URL } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
-import { getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
+import { formatVoipTalkDuration, getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
+import { normalizeOutboundCallItem } from "../../services/voipService.jsx";
+import { isOutboundCallAdmin } from "./outboundCallHistoryFilterUtils.js";
 
 const NAMESPACE = "voip/outbound-call-histories";
 const HIGHLIGHT_DURATION_MS = 5000;
@@ -62,6 +65,8 @@ const extractListPayload = (payload) => {
 
 const OutboundCallHistoriesLive = () => {
   document.title = "تماس خروجی آنلاین | داشبورد آیسوق";
+  const { user } = useAuth();
+  const isAdmin = useMemo(() => isOutboundCallAdmin(user), [user]);
 
   const [status, setStatus] = useState("connecting");
   const [socketError, setSocketError] = useState("");
@@ -178,18 +183,18 @@ const OutboundCallHistoriesLive = () => {
         cell: ({ row }) => dispositionBadge(row.original?.disposition),
       },
       {
-        id: "playtime_string",
-        header: "مدت",
+        id: "talk_duration_seconds",
+        header: "مدت مکالمه واقعی",
         enableSorting: false,
-        cell: ({ row }) => {
-          const p = row.original?.playtime_string;
-          if (p) return p;
-          const dur = row.original?.duration;
-          if (dur == null) return "-";
-          const seconds = Number(dur);
-          return Number.isNaN(seconds) ? dur : `${seconds} ثانیه`;
-        },
+        cell: ({ row }) => formatVoipTalkDuration(row.original?.talk_duration_seconds),
       },
+      ...(isAdmin ? [{
+        id: "duration",
+        header: "مدت کل تماس",
+        accessorKey: "duration",
+        enableSorting: false,
+        cell: ({ row }) => row.original?.duration == null || row.original.duration === "" ? "—" : String(row.original.duration),
+      }] : []),
       {
         id: "starttime_unix",
         header: "زمان شروع",
@@ -203,7 +208,7 @@ const OutboundCallHistoriesLive = () => {
         cell: ({ row }) => getVoipEndedAtDisplay(row.original),
       },
     ],
-    [dispositionBadge]
+    [dispositionBadge, isAdmin]
   );
 
   const buildPayload = useCallback((overrides = {}) => {
@@ -269,7 +274,8 @@ const OutboundCallHistoriesLive = () => {
     setRows((prevRows) => {
       newRowIds = []; // reset on each call (React StrictMode may call twice)
       const prevIds = new Set(prevRows.map((r) => r.id != null ? String(r.id) : null).filter(Boolean));
-      return data.map((row) => {
+      return data.map((rawRow) => {
+        const row = normalizeOutboundCallItem(rawRow);
         if (row.id != null && !prevIds.has(String(row.id))) {
           newRowIds.push(row.id);
           return { ...row, __highlight: "added" };
@@ -290,8 +296,9 @@ const OutboundCallHistoriesLive = () => {
   // Handles outbound-call-histories.created — prepend if matches filters
   const handleCreatedEvent = useCallback((payload) => {
     // Record may come as the object directly or wrapped in a response envelope
-    const record = payload?.id != null ? payload : (payload?.data ?? payload?.record ?? payload?.item);
-    if (!record || record.id == null) return;
+    const rawRecord = payload?.id != null ? payload : (payload?.data ?? payload?.record ?? payload?.item);
+    if (!rawRecord || rawRecord.id == null) return;
+    const record = normalizeOutboundCallItem(rawRecord);
 
     const f = filtersRef.current;
     // Client-side disposition check — skip only when a specific value is active (not ALL/empty)

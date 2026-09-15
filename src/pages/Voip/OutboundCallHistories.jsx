@@ -32,9 +32,10 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
-import { getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
+import { formatVoipTalkDuration, getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
 import {
   mergeOutboundTagOptions,
+  isOutboundCallAdmin,
   outboundDateObject,
   parseOutboundCallQuery,
   serializeOutboundCallQuery,
@@ -72,7 +73,8 @@ const formatDateObjectGregorian = (dateObject) => {
 
 const OutboundCallHistories = () => {
   document.title = "تماس‌های خروجی | داشبورد آیسوق";
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
+  const isAdmin = useMemo(() => isOutboundCallAdmin(user), [user]);
   const [searchParams, setSearchParams] = useSearchParams();
   const initialQuery = useMemo(() => parseOutboundCallQuery(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -632,27 +634,25 @@ const OutboundCallHistories = () => {
       },
       {
         id: "talk_time",
-        header: "مدت مکالمه",
+        header: "مدت مکالمه واقعی",
         enableSorting: true,
         enableColumnFilter: false,
-        cell: ({ row }) => {
-          const p = row.original?.playtime_string;
-          if (p) return <span className="fw-semibold text-success">{p}</span>;
-
-          const dur = row.original?.duration;
-          if (dur == null) return <span className="text-muted">-</span>;
-
-          const seconds = Number(dur);
-          if (Number.isNaN(seconds)) return String(dur);
-
-          return seconds > 0 ? (
-            <span className="fw-semibold text-success">{`${seconds} ثانیه`}</span>
-          ) : (
-            <span className="text-muted">{`${seconds} ثانیه`}</span>
-          );
-        },
+        cell: ({ row }) => row.original?.talk_duration_seconds == null
+          ? <span className="text-muted">—</span>
+          : <span className={Number(row.original.talk_duration_seconds) > 0 ? "fw-semibold text-success" : "text-muted"}>{formatVoipTalkDuration(row.original.talk_duration_seconds)}</span>,
         meta: { sortKey: "duration" },
       },
+      ...(isAdmin ? [{
+        id: "duration",
+        header: "مدت کل تماس",
+        accessorKey: "duration",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => row.original?.duration == null || row.original.duration === ""
+          ? <span className="text-muted">—</span>
+          : <span className="text-muted font-monospace" dir="ltr">{String(row.original.duration)}</span>,
+        meta: { sortKey: null },
+      }] : []),
       {
         id: "support_form_title",
         header: "فرم پشتیبانی",
@@ -740,7 +740,7 @@ const OutboundCallHistories = () => {
         meta: { sortKey: "endtime_unix" },
       },
     ],
-    []
+    [isAdmin]
   );
 
   const columnSortKeyMap = useMemo(() => {
@@ -898,7 +898,7 @@ const OutboundCallHistories = () => {
                             style={{ whiteSpace: "nowrap" }}
                           >
                             <i className={`mdi ${isExportBusy ? "mdi-loading mdi-spin" : "mdi-file-download-outline"}`} />
-                            {isExportBusy ? "در حال دریافت..." : "خروجی CSV"}
+                            {isExportBusy ? "در حال دریافت..." : "خروجی مدت مکالمه واقعی"}
                           </Button>}
                           {isExportBusy && (
                             <Button
