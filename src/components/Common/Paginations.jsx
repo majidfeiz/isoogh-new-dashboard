@@ -11,11 +11,12 @@ const Paginations = ({
   paginationDiv = "col-sm-auto",
   paginationClass = "pagination pagination-sm mb-0",
   totalRecords,
+  totalPages: totalPagesProp,
 }) => {
   const total =
     typeof totalRecords === "number" ? totalRecords : data?.length || 0;
 
-  const totalPages = Math.max(1, Math.ceil(total / (perPageData || 1)));
+  const totalPages = Math.max(1, Number(totalPagesProp) || Math.ceil(total / (perPageData || 1)));
 
   // ✅ تنظیمات نمایش پنجره‌ای
   const siblingCount = 2; // تعداد صفحات اطراف current

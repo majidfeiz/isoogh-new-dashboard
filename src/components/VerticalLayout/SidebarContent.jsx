@@ -432,6 +432,7 @@ const SidebarContent = (props) => {
           "reports.index",
           "reports.adviser-call-performance.index",
           "reports.adviser-performance.index",
+          "adviser-form-performance-reports.index",
           "reports.contact-forms-comprehensive.index",
           "reports.contact-forms-online.index",
           "reports.student-voip-comprehensive.index",
@@ -454,6 +455,11 @@ const SidebarContent = (props) => {
             label: "گزارش عملکرد مشاوران",
             to: "/reports/adviser-performance",
             permission: "reports.adviser-performance.index",
+          },
+          {
+            label: "گزارش جدید عملکرد مشاوران",
+            to: "/reports/adviser-form-performance",
+            permission: "adviser-form-performance-reports.index",
           },
           {
             label: "گزارش جامع فرم‌های تماس",
