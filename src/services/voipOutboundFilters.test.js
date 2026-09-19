@@ -14,12 +14,15 @@ test("sends trimmed SSN and numeric tag with all active call filters", async () 
   apiGet.mockResolvedValue({ data: { data: { items: [], meta: { page: 2, limit: 15, total: 0, lastPage: 1 } } } });
   await getOutboundCallHistories({
     page: 2, per_page: 15, type: "StudentName", q: "علی", ssn: " 001 ", tagId: 12,
-    disposition: "ANSWERED", start_date: "2026-08-01", end_date: "2026-08-02",
+    disposition: "ANSWERED", start_date: "۱۴۰۵/۰۶/۰۱", end_date: "1405-06-10",
     sortBy: "id", sortOrder: "DESC", signal: controller.signal,
   });
   expect(apiGet.mock.calls[0][1]).toEqual(expect.objectContaining({
     signal: controller.signal,
-    params: expect.objectContaining({ ssn: "001", tagId: 12, disposition: "ANSWERED", page: 2 }),
+    params: expect.objectContaining({
+      ssn: "001", tagId: 12, disposition: "ANSWERED", page: 2,
+      start_date: "1405/06/01", end_date: "1405/06/10",
+    }),
   }));
 });
 
@@ -42,4 +45,18 @@ test("exports SSN and tag without page or per_page", async () => {
   expect(params.tagId).toBe(12);
   expect(params.page).toBeUndefined();
   expect(params.per_page).toBeUndefined();
+});
+
+test("exports the same date-only range and active filters without pagination", async () => {
+  apiGet.mockResolvedValue({ data: new Blob(["csv"]) });
+  await exportOutboundCallHistories({
+    page: 5, per_page: 100, start_date: "۱۴۰۵/۰۶/۰۱", end_date: "1405-06-10",
+    disposition: "ANSWERED", ssn: "001", tagId: 12, support_form_id: 4, adviser_id: 5,
+  });
+  expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining({
+    start_date: "1405/06/01", end_date: "1405/06/10", disposition: "ANSWERED",
+    ssn: "001", tagId: 12, support_form_id: 4, adviser_id: 5,
+  }));
+  expect(apiGet.mock.calls[0][1].params.page).toBeUndefined();
+  expect(apiGet.mock.calls[0][1].params.per_page).toBeUndefined();
 });

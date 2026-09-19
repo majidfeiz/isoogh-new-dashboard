@@ -1,6 +1,7 @@
 // src/pages/Voip/OutboundCallHistories.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  buildOutboundExportParams,
   Card,
   CardBody,
   CardHeader,
@@ -19,7 +20,6 @@ import {
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { toGregorian } from "jalaali-js";
 import Select from "react-select";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
@@ -32,12 +32,14 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
-import { formatVoipTalkDuration, getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
+import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
+import { isJalaliDateRangeValid, normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
 import {
   mergeOutboundTagOptions,
   isOutboundCallAdmin,
   outboundDateObject,
   parseOutboundCallQuery,
+  resetOutboundPage,
   serializeOutboundCallQuery,
 } from "./outboundCallHistoryFilterUtils.js";
 
@@ -62,13 +64,6 @@ const DISPOSITION_META = {
   "NO ANSWER": { label: "بدون پاسخ", color: "warning" },
   BUSY: { label: "مشغول", color: "info" },
   FAILED: { label: "ناموفق", color: "danger" },
-};
-
-const formatDateObjectGregorian = (dateObject) => {
-  if (!dateObject) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  const g = toGregorian(dateObject.year, dateObject.month.number, dateObject.day);
-  return `${g.gy}-${pad(g.gm)}-${pad(g.gd)}`;
 };
 
 const OutboundCallHistories = () => {
@@ -252,8 +247,8 @@ const OutboundCallHistories = () => {
       currentDisposition: disposition,
       currentSortBy: sort.by,
       currentSortOrder: sort.order,
-      currentStart: formatDateObjectGregorian(startDate),
-      currentEnd: formatDateObjectGregorian(endDate),
+      currentStart: normalizeJalaliDateOnly(startDate),
+      currentEnd: normalizeJalaliDateOnly(endDate),
       currentSsn: ssn,
       currentTagId: nextTagId,
     });
@@ -261,13 +256,13 @@ const OutboundCallHistories = () => {
 
   const handleSearch = useCallback(() => {
     setSearchError("");
-    if (startDate && endDate && startDate > endDate) {
+    if (!isJalaliDateRangeValid(startDate, endDate)) {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
       return;
     }
 
-    const start = formatDateObjectGregorian(startDate);
-    const end = formatDateObjectGregorian(endDate);
+    const start = normalizeJalaliDateOnly(startDate);
+    const end = normalizeJalaliDateOnly(endDate);
 
     fetchData({
       page: 1,
@@ -285,8 +280,8 @@ const OutboundCallHistories = () => {
 
   const handlePageChange = useCallback(
     (page) => {
-      const start = formatDateObjectGregorian(startDate);
-      const end = formatDateObjectGregorian(endDate);
+      const start = normalizeJalaliDateOnly(startDate);
+      const end = normalizeJalaliDateOnly(endDate);
 
       fetchData({
         page,
@@ -314,8 +309,8 @@ const OutboundCallHistories = () => {
         currentDisposition: value,
         currentSortBy: sort.by,
         currentSortOrder: sort.order,
-        currentStart: formatDateObjectGregorian(startDate),
-        currentEnd: formatDateObjectGregorian(endDate),
+        currentStart: normalizeJalaliDateOnly(startDate),
+        currentEnd: normalizeJalaliDateOnly(endDate),
         currentSsn: ssn,
         currentTagId: tagId,
       });
@@ -406,29 +401,23 @@ const OutboundCallHistories = () => {
   const handleExport = useCallback(async () => {
     if (exportAbortRef.current) return;
 
-    if (startDate && endDate && startDate > endDate) {
+    if (!isJalaliDateRangeValid(startDate, endDate)) {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
       return;
     }
 
-    const start = formatDateObjectGregorian(startDate);
-    const end = formatDateObjectGregorian(endDate);
+    const start = normalizeJalaliDateOnly(startDate);
+    const end = normalizeJalaliDateOnly(endDate);
     const cleanedQ = q?.trim?.() || "";
 
     setSearchError("");
     setExportState({ status: "preparing", receivedBytes: 0, totalBytes: null, percent: null, errorMessage: null });
 
     try {
-      const params = new URLSearchParams();
-      if (sort?.by) params.append("sort_by", sort.by);
-      if (sort?.order) params.append("sort_order", sort.order);
-      if (type) params.append("type", type);
-      if (cleanedQ) params.append("q", cleanedQ);
-      if (disposition !== "ALL") params.append("disposition", disposition);
-      if (start) params.append("start_date", start);
-      if (end) params.append("end_date", end);
-      if (ssn.trim()) params.append("ssn", ssn.trim());
-      if (tagId) params.append("tagId", String(Number(tagId)));
+      const params = buildOutboundExportParams({
+        sort_by: sort?.by, sort_order: sort?.order, type, q: cleanedQ, disposition,
+        start_date: start, end_date: end, ssn, tagId: tagId ? Number(tagId) : "",
+      });
 
       const queryString = params.toString();
       const url = `${getApiUrl(API_ROUTES.voip.exportOutboundCallHistories)}${queryString ? `?${queryString}` : ""}`;
@@ -723,7 +712,7 @@ const OutboundCallHistories = () => {
         enableSorting: true,
         enableColumnFilter: false,
         cell: ({ row }) => {
-          const val = getVoipStartedAtDisplay(row.original);
+          const val = row.original?.call_started_at_jalali || "—";
           return <span style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{val}</span>;
         },
         meta: { sortKey: "starttime_unix" },
@@ -734,7 +723,7 @@ const OutboundCallHistories = () => {
         enableSorting: true,
         enableColumnFilter: false,
         cell: ({ row }) => {
-          const val = getVoipEndedAtDisplay(row.original);
+          const val = row.original?.call_ended_at_jalali || "—";
           return <span style={{ fontSize: "0.82rem", whiteSpace: "nowrap" }}>{val}</span>;
         },
         meta: { sortKey: "endtime_unix" },
@@ -765,8 +754,8 @@ const OutboundCallHistories = () => {
           currentDisposition: disposition,
           currentSortBy: "",
           currentSortOrder: "",
-          currentStart: formatDateObjectGregorian(startDate),
-          currentEnd: formatDateObjectGregorian(endDate),
+          currentStart: normalizeJalaliDateOnly(startDate),
+          currentEnd: normalizeJalaliDateOnly(endDate),
           currentSsn: ssn,
           currentTagId: tagId,
         });
@@ -776,8 +765,8 @@ const OutboundCallHistories = () => {
       setSorting(nextSorting);
       setSort({ by: sortKey, order: sortDirection });
 
-      const start = formatDateObjectGregorian(startDate);
-      const end = formatDateObjectGregorian(endDate);
+      const start = normalizeJalaliDateOnly(startDate);
+      const end = normalizeJalaliDateOnly(endDate);
 
       fetchData({
         page: 1,
@@ -997,7 +986,7 @@ const OutboundCallHistories = () => {
                               calendar={persian}
                               locale={persian_fa}
                               value={startDate}
-                              onChange={(date) => setStartDate(date || null)}
+                              onChange={(date) => { setStartDate(date || null); setMeta(resetOutboundPage); }}
                               format="YYYY/MM/DD"
                               placeholder="تاریخ شروع"
                               className="form-control"
@@ -1011,7 +1000,7 @@ const OutboundCallHistories = () => {
                               calendar={persian}
                               locale={persian_fa}
                               value={endDate}
-                              onChange={(date) => setEndDate(date || null)}
+                              onChange={(date) => { setEndDate(date || null); setMeta(resetOutboundPage); }}
                               format="YYYY/MM/DD"
                               placeholder="تاریخ پایان"
                               className="form-control"
