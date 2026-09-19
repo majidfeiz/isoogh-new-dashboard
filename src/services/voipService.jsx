@@ -177,6 +177,47 @@ export async function exportOutboundCallHistories({
   return response?.data;
 }
 
+export async function exportOutboundCallHistoriesExcel({
+  type = "",
+  q = "",
+  disposition = "ALL",
+  start_date = "",
+  end_date = "",
+  ssn = "",
+  tagId = "",
+  support_form_id = "",
+  adviser_id = "",
+  super_adviser_id = "",
+  sort_by = "",
+  sort_order = "",
+  signal,
+} = {}) {
+  const params = Object.fromEntries(Object.entries({
+    type: type || undefined,
+    q: q?.trim?.() || undefined,
+    disposition: disposition && disposition !== "ALL" ? disposition : undefined,
+    start_date: normalizeJalaliDateOnly(start_date) || undefined,
+    end_date: normalizeJalaliDateOnly(end_date) || undefined,
+    ssn: ssn?.trim?.() || undefined,
+    tagId: tagId || undefined,
+    support_form_id: support_form_id || undefined,
+    adviser_id: adviser_id || undefined,
+    super_adviser_id: super_adviser_id || undefined,
+    sort_by: sort_by || undefined,
+    sort_order: sort_order || undefined,
+  }).filter(([, value]) => value !== undefined));
+  const response = await apiGet(getApiUrl(API_ROUTES.voip.exportOutboundCallHistoriesExcel), {
+    responseType: "blob",
+    timeout: 120000,
+    signal,
+    params,
+  });
+  return {
+    blob: response.data,
+    contentDisposition: response.headers?.["content-disposition"] || "",
+  };
+}
+
 /**
  * @typedef {"in_progress"|"waiting_for_cdr"|"completed"|"failed"} CallTraceStatus
  * @typedef {"info"|"success"|"warning"|"error"} CallTraceEventLevel
