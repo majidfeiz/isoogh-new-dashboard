@@ -430,6 +430,12 @@ export const API_ROUTES = {
     formsStatus: "/reports/forms-status",
     monthlyComparison: "/reports/monthly-comparison",
   },
+  adviserFormPerformanceReports: {
+    list: "/adviser-form-performance-reports",
+    schools: "/adviser-form-performance-reports/schools",
+    forms: "/adviser-form-performance-reports/forms",
+    export: "/adviser-form-performance-reports/export",
+  },
   dynamicReports: {
     list: "/dynamic-reports",
     create: "/dynamic-reports",
