@@ -261,6 +261,7 @@ import VoipWebhookLogs from "../pages/VoipWebhooks/VoipWebhookLogs.jsx";
 import ReportsDashboard from "../pages/Reports/ReportsDashboard.jsx";
 import AdviserCallPerformance from "../pages/Reports/AdviserCallPerformance.jsx";
 import AdviserPerformance from "../pages/Reports/AdviserPerformance.jsx";
+import AdviserFormPerformanceReport from "../pages/Reports/AdviserFormPerformanceReport.jsx";
 import ContactFormsComprehensive from "../pages/Reports/ContactFormsComprehensive.jsx";
 import ContactFormsOnline from "../pages/Reports/ContactFormsOnline.jsx";
 import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.jsx";
@@ -455,6 +456,7 @@ const authProtectedRoutes = [
   { path: "/reports", component: <ReportsDashboard /> },
   { path: "/reports/adviser-call-performance", component: <AdviserCallPerformance /> },
   { path: "/reports/adviser-performance", component: <ProtectedRoute permission="reports.adviser-performance.index"><AdviserPerformance /></ProtectedRoute> },
+  { path: "/reports/adviser-form-performance", component: <ProtectedRoute permission="adviser-form-performance-reports.index"><AdviserFormPerformanceReport /></ProtectedRoute> },
   { path: "/reports/contact-forms-comprehensive", component: <ContactFormsComprehensive /> },
   { path: "/reports/contact-forms-online", component: <ContactFormsOnline /> },
   { path: "/reports/student-voip-comprehensive", component: <StudentVoipComprehensive /> },

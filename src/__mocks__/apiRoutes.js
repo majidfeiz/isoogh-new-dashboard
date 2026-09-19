@@ -64,6 +64,12 @@ export const API_ROUTES = {
     adviserPerformanceSchools: "/reports/adviser-performance/schools",
     adviserPerformanceForms: "/reports/adviser-performance/forms",
   },
+  adviserFormPerformanceReports: {
+    list: "/adviser-form-performance-reports",
+    schools: "/adviser-form-performance-reports/schools",
+    forms: "/adviser-form-performance-reports/forms",
+    export: "/adviser-form-performance-reports/export",
+  },
   answerSheets: {
     list: "/answer-sheets",
     detail: (sessionId) => `/answer-sheets/${sessionId}`,
