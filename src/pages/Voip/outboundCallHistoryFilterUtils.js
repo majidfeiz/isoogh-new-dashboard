@@ -1,7 +1,4 @@
-import DateObject from "react-date-object";
-import gregorian from "react-date-object/calendars/gregorian";
-import persian from "react-date-object/calendars/persian";
-import persianFa from "react-date-object/locales/persian_fa";
+import { jalaliDateObject, normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
 
 export function parseOutboundCallQuery(params) {
   const page = Number(params.get("page"));
@@ -14,8 +11,8 @@ export function parseOutboundCallQuery(params) {
     disposition: params.get("disposition") || "ALL",
     sortBy: params.get("sort_by") || "",
     sortOrder: params.get("sort_order") || "",
-    startDate: params.get("start_date") || "",
-    endDate: params.get("end_date") || "",
+    startDate: normalizeJalaliDateOnly(params.get("start_date")),
+    endDate: normalizeJalaliDateOnly(params.get("end_date")),
   };
 }
 
@@ -29,8 +26,8 @@ export function serializeOutboundCallQuery(query) {
     disposition: query.disposition !== "ALL" ? query.disposition : "",
     sort_by: query.sortBy,
     sort_order: query.sortOrder,
-    start_date: query.startDate,
-    end_date: query.endDate,
+    start_date: normalizeJalaliDateOnly(query.startDate),
+    end_date: normalizeJalaliDateOnly(query.endDate),
   };
   Object.entries(values).forEach(([key, value]) => {
     if (value) params.set(key, String(value));
@@ -40,9 +37,41 @@ export function serializeOutboundCallQuery(query) {
 }
 
 export function outboundDateObject(value) {
-  if (!value) return null;
-  return new DateObject({ date: value, format: "YYYY-MM-DD", calendar: gregorian })
-    .convert(persian).setLocale(persianFa);
+  return jalaliDateObject(value);
+}
+
+export const resetOutboundPage = (state = {}) => ({ ...state, page: 1 });
+
+export function buildOutboundSocketPayload(filters = {}) {
+  const q = filters.q?.trim?.() || "";
+  const payload = {
+    page: Number(filters.page) || 1,
+    per_page: Number(filters.per_page) || 15,
+    sort_by: filters.sort_by || "id",
+    sort_order: filters.sort_order || "DESC",
+  };
+  if (q) {
+    payload.q = q;
+    if (filters.type) payload.type = filters.type;
+  }
+  if (filters.disposition && filters.disposition !== "ALL") payload.disposition = filters.disposition;
+  const startDate = normalizeJalaliDateOnly(filters.start_date);
+  const endDate = normalizeJalaliDateOnly(filters.end_date);
+  if (startDate) payload.start_date = startDate;
+  if (endDate) payload.end_date = endDate;
+  if (filters.ssn?.trim?.()) payload.ssn = filters.ssn.trim();
+  if (filters.tagId) payload.tagId = filters.tagId;
+  if (filters.support_form_id) payload.support_form_id = filters.support_form_id;
+  if (filters.adviser_id) payload.adviser_id = filters.adviser_id;
+  if (filters.super_adviser_id) payload.super_adviser_id = filters.super_adviser_id;
+  return payload;
+}
+
+export function buildOutboundExportParams(filters = {}) {
+  const payload = buildOutboundSocketPayload({ ...filters, page: 1, per_page: 15 });
+  delete payload.page;
+  delete payload.per_page;
+  return new URLSearchParams(Object.entries(payload).map(([key, value]) => [key, String(value)]));
 }
 
 export function mergeOutboundTagOptions(current, incoming) {

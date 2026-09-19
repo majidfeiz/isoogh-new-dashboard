@@ -1,6 +1,7 @@
 // src/services/voipService.jsx
 import { apiGet } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
+import { normalizeJalaliDateOnly } from "../helpers/jalaliDateOnly.js";
 
 /**
  * @typedef {Object} OutboundCallHistoryFile
@@ -83,8 +84,8 @@ export async function getOutboundCallHistories({
       // API فقط snake_case می‌خواهد
       sort_by: sortBy || undefined,
       sort_order: sortOrder || undefined,
-      start_date: start_date || undefined,
-      end_date: end_date || undefined,
+      start_date: normalizeJalaliDateOnly(start_date) || undefined,
+      end_date: normalizeJalaliDateOnly(end_date) || undefined,
       ssn: ssn?.trim?.() || undefined,
       tagId: tagId || undefined,
       support_form_id: support_form_id || undefined,
@@ -149,6 +150,9 @@ export async function exportOutboundCallHistories({
   end_date = "",
   ssn = "",
   tagId = "",
+  support_form_id = "",
+  adviser_id = "",
+  super_adviser_id = "",
   onDownloadProgress,
 } = {}) {
   const url = getApiUrl(API_ROUTES.voip.exportOutboundCallHistories);
@@ -160,10 +164,13 @@ export async function exportOutboundCallHistories({
       type: type || undefined,
       q: q || undefined,
       disposition: disposition && disposition !== "ALL" ? disposition : undefined,
-      start_date: start_date || undefined,
-      end_date: end_date || undefined,
+      start_date: normalizeJalaliDateOnly(start_date) || undefined,
+      end_date: normalizeJalaliDateOnly(end_date) || undefined,
       ssn: ssn?.trim?.() || undefined,
       tagId: tagId || undefined,
+      support_form_id: support_form_id || undefined,
+      adviser_id: adviser_id || undefined,
+      super_adviser_id: super_adviser_id || undefined,
     },
   });
 
