@@ -43,6 +43,10 @@ const AdviserFormPerformanceReport = () => {
   const [formId, setFormId] = useState("")
   const [page, setPage] = useState(1)
   const [limit, setLimit] = useState(15)
+  const [studentSearchInput, setStudentSearchInput] = useState("")
+  const [adviserSearchInput, setAdviserSearchInput] = useState("")
+  const [studentSearch, setStudentSearch] = useState("")
+  const [adviserSearch, setAdviserSearch] = useState("")
   const [report, setReport] = useState(() => emptyReport())
   const [schoolsState, setSchoolsState] = useState({ loading: true, error: "" })
   const [formsState, setFormsState] = useState({ loading: false, error: "" })
@@ -54,6 +58,28 @@ const AdviserFormPerformanceReport = () => {
   const [reportRetry, setReportRetry] = useState(0)
   const formsRequest = useRef(0)
   const reportRequest = useRef(0)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const nextValue = studentSearchInput.trim()
+      if (nextValue !== studentSearch) {
+        setPage(1)
+        setStudentSearch(nextValue)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [studentSearchInput, studentSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const nextValue = adviserSearchInput.trim()
+      if (nextValue !== adviserSearch) {
+        setPage(1)
+        setAdviserSearch(nextValue)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [adviserSearchInput, adviserSearch])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -94,7 +120,7 @@ const AdviserFormPerformanceReport = () => {
     const controller = new AbortController()
     const requestId = ++reportRequest.current
     setReportState({ loading: true, error: "" })
-    getAdviserFormPerformanceReport({ schoolId, formId, page, limit }, controller.signal).then((data) => {
+    getAdviserFormPerformanceReport({ schoolId, formId, studentSearch, adviserSearch, page, limit }, controller.signal).then((data) => {
       if (!controller.signal.aborted && requestId === reportRequest.current) setReport(data)
     }).catch((error) => {
       if (isForbidden(error)) setForbidden(true)
@@ -103,7 +129,7 @@ const AdviserFormPerformanceReport = () => {
       if (!controller.signal.aborted && requestId === reportRequest.current) setReportState((state) => ({ ...state, loading: false }))
     })
     return () => controller.abort()
-  }, [schoolId, formId, page, limit, reportRetry])
+  }, [schoolId, formId, studentSearch, adviserSearch, page, limit, reportRetry])
 
   const questions = useMemo(() => sortQuestions(report.questions), [report.questions])
   const changeSchool = (value) => {
@@ -115,18 +141,28 @@ const AdviserFormPerformanceReport = () => {
     reportRequest.current += 1
     setFormId(value); setPage(1); setReport(emptyReport(1, limit))
   }
+  const clearStudentSearch = () => {
+    setStudentSearchInput("")
+    setStudentSearch("")
+    setPage(1)
+  }
+  const clearAdviserSearch = () => {
+    setAdviserSearchInput("")
+    setAdviserSearch("")
+    setPage(1)
+  }
   const handleExport = useCallback(async () => {
     if (!schoolId || !formId || exporting) return
     setExporting(true)
     try {
-      const { blob, contentDisposition } = await exportAdviserFormPerformanceReport({ schoolId, formId })
+      const { blob, contentDisposition } = await exportAdviserFormPerformanceReport({ schoolId, formId, studentSearch, adviserSearch })
       downloadBlob(blob, filenameFromContentDisposition(contentDisposition))
       toast.success("فایل Excel با موفقیت دانلود شد.")
     } catch (error) {
       if (isForbidden(error)) setForbidden(true)
       // The shared HTTP client displays the standard failure toast.
     } finally { setExporting(false) }
-  }, [schoolId, formId, exporting])
+  }, [schoolId, formId, studentSearch, adviserSearch, exporting])
 
   if (forbidden) return <AccessDenied />
 
@@ -142,19 +178,37 @@ const AdviserFormPerformanceReport = () => {
         </Button>}
       </CardHeader>
       <CardBody><Row className="g-3 align-items-end">
-        <Col md="6" xl="4"><Label htmlFor="performance-school">مجموعه</Label>
+        <Col md="6" xl="3"><Label htmlFor="performance-school">مجموعه</Label>
           <Input id="performance-school" type="select" value={schoolId} disabled={schoolsState.loading} onChange={(e) => changeSchool(e.target.value)}>
             <option value="">{schoolsState.loading ? "در حال دریافت مجموعه‌ها..." : "انتخاب مجموعه"}</option>
             {schools.map((school) => <option key={school.id} value={school.id}>{school.title}</option>)}
           </Input>
           {schoolsState.error && <div className="text-danger small mt-1">{schoolsState.error} <Button color="link" size="sm" className="p-0" onClick={() => setSchoolsRetry((v) => v + 1)}>تلاش مجدد</Button></div>}
         </Col>
-        <Col md="6" xl="4"><Label htmlFor="performance-form">فرم</Label>
+        <Col md="6" xl="3"><Label htmlFor="performance-form">فرم</Label>
           <Input id="performance-form" type="select" value={formId} disabled={!schoolId || formsState.loading} onChange={(e) => changeForm(e.target.value)}>
             <option value="">{formsState.loading ? "در حال دریافت فرم‌ها..." : "انتخاب فرم"}</option>
             {forms.map((form) => <option key={form.id} value={form.id}>{form.title}</option>)}
           </Input>
           {formsState.error && <div className="text-danger small mt-1">{formsState.error} <Button color="link" size="sm" className="p-0" onClick={() => setFormsRetry((v) => v + 1)}>تلاش مجدد</Button></div>}
+        </Col>
+        <Col md="6" xl="3"><Label htmlFor="performance-student-search">جستجوی دانش‌آموز</Label>
+          <div className="input-group">
+            <Input id="performance-student-search" value={studentSearchInput} placeholder="نام، کد ملی یا نام کاربری"
+              onChange={(e) => setStudentSearchInput(e.target.value)} />
+            {studentSearchInput && <Button color="secondary" outline type="button" aria-label="پاک‌کردن جستجوی دانش‌آموز" onClick={clearStudentSearch}>
+              <i className="mdi mdi-close" aria-hidden="true" />
+            </Button>}
+          </div>
+        </Col>
+        <Col md="6" xl="3"><Label htmlFor="performance-adviser-search">جستجوی مشاور</Label>
+          <div className="input-group">
+            <Input id="performance-adviser-search" value={adviserSearchInput} placeholder="نام یا کد مشاور"
+              onChange={(e) => setAdviserSearchInput(e.target.value)} />
+            {adviserSearchInput && <Button color="secondary" outline type="button" aria-label="پاک‌کردن جستجوی مشاور" onClick={clearAdviserSearch}>
+              <i className="mdi mdi-close" aria-hidden="true" />
+            </Button>}
+          </div>
         </Col>
       </Row></CardBody>
     </Card>

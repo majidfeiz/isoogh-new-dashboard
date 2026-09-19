@@ -3,10 +3,16 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx"
 
 const unwrap = (response) => response?.data?.data ?? response?.data ?? {}
 
-const selectionParams = ({ schoolId, formId } = {}) => ({
-  schoolId: schoolId == null || schoolId === "" ? undefined : schoolId,
-  formId: formId == null || formId === "" ? undefined : formId,
-})
+const cleanSearch = (value) => String(value ?? "").trim() || undefined
+
+const selectionParams = ({ schoolId, formId, studentSearch, adviserSearch } = {}) => Object.fromEntries(
+  Object.entries({
+    schoolId: schoolId == null || schoolId === "" ? undefined : schoolId,
+    formId: formId == null || formId === "" ? undefined : formId,
+    studentSearch: cleanSearch(studentSearch),
+    adviserSearch: cleanSearch(adviserSearch),
+  }).filter(([, value]) => value !== undefined)
+)
 
 export async function getAdviserFormPerformanceSchools(signal) {
   const response = await apiGet(getApiUrl(API_ROUTES.adviserFormPerformanceReports.schools), { signal })
@@ -22,9 +28,9 @@ export async function getAdviserFormPerformanceForms(schoolId, signal) {
   return Array.isArray(data) ? data : data?.items || []
 }
 
-export async function getAdviserFormPerformanceReport({ schoolId, formId, page = 1, limit = 15 }, signal) {
+export async function getAdviserFormPerformanceReport({ schoolId, formId, studentSearch, adviserSearch, page = 1, limit = 15 }, signal) {
   const response = await apiGet(getApiUrl(API_ROUTES.adviserFormPerformanceReports.list), {
-    params: { schoolId, formId, page, limit }, signal, timeout: 30000,
+    params: { ...selectionParams({ schoolId, formId, studentSearch, adviserSearch }), page, limit }, signal, timeout: 30000,
   })
   const data = unwrap(response)
   return {
@@ -36,9 +42,9 @@ export async function getAdviserFormPerformanceReport({ schoolId, formId, page =
   }
 }
 
-export async function exportAdviserFormPerformanceReport({ schoolId, formId }) {
+export async function exportAdviserFormPerformanceReport({ schoolId, formId, studentSearch, adviserSearch }) {
   const response = await apiGet(getApiUrl(API_ROUTES.adviserFormPerformanceReports.export), {
-    params: selectionParams({ schoolId, formId }), responseType: "blob", timeout: 60000,
+    params: selectionParams({ schoolId, formId, studentSearch, adviserSearch }), responseType: "blob", timeout: 60000,
   })
   return { blob: response.data, contentDisposition: response.headers?.["content-disposition"] || "" }
 }
