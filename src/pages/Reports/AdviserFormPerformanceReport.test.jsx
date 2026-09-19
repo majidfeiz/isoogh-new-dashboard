@@ -33,6 +33,7 @@ beforeEach(() => {
   service.getAdviserFormPerformanceSchools.mockResolvedValue([{ id: 1, title: "الف" }, { id: 2, title: "ب" }])
   service.getAdviserFormPerformanceForms.mockResolvedValue([{ id: 10, title: "فرم" }])
   service.getAdviserFormPerformanceReport.mockResolvedValue(report)
+  service.exportAdviserFormPerformanceReport.mockResolvedValue({ blob: new Blob(["xlsx"]), contentDisposition: "" })
 })
 
 const renderPage = () => render(<MemoryRouter><AdviserFormPerformanceReport /></MemoryRouter>)
@@ -77,4 +78,35 @@ test("keeps export hidden without the export permission", async () => {
   renderPage()
   await screen.findByLabelText("مجموعه")
   expect(screen.queryByTestId("export-button")).not.toBeInTheDocument()
+})
+
+test("debounces independent server searches, trims values, clears separately and exports active filters", async () => {
+  renderPage()
+  fireEvent.change(await screen.findByLabelText("مجموعه"), { target: { value: "1" } })
+  fireEvent.change(await screen.findByLabelText("فرم"), { target: { value: "10" } })
+  await screen.findByRole("table", { name: "گزارش عملکرد مشاوران" })
+  service.getAdviserFormPerformanceReport.mockClear()
+
+  fireEvent.change(screen.getByLabelText("جستجوی دانش‌آموز"), { target: { value: "  علی  " } })
+  expect(service.getAdviserFormPerformanceReport).not.toHaveBeenCalled()
+  await waitFor(() => expect(service.getAdviserFormPerformanceReport).toHaveBeenLastCalledWith(
+    expect.objectContaining({ schoolId: "1", formId: "10", studentSearch: "علی", adviserSearch: "", page: 1 }),
+    expect.any(AbortSignal),
+  ), { timeout: 1000 })
+
+  fireEvent.change(screen.getByLabelText("جستجوی مشاور"), { target: { value: " رضا " } })
+  await waitFor(() => expect(service.getAdviserFormPerformanceReport).toHaveBeenLastCalledWith(
+    expect.objectContaining({ studentSearch: "علی", adviserSearch: "رضا", page: 1 }),
+    expect.any(AbortSignal),
+  ), { timeout: 1000 })
+
+  fireEvent.click(screen.getByRole("button", { name: "پاک‌کردن جستجوی دانش‌آموز" }))
+  await waitFor(() => expect(service.getAdviserFormPerformanceReport).toHaveBeenLastCalledWith(
+    expect.objectContaining({ studentSearch: "", adviserSearch: "رضا", page: 1 }),
+    expect.any(AbortSignal),
+  ))
+  fireEvent.click(screen.getByTestId("export-button"))
+  await waitFor(() => expect(service.exportAdviserFormPerformanceReport).toHaveBeenCalledWith({
+    schoolId: "1", formId: "10", studentSearch: "", adviserSearch: "رضا",
+  }))
 })

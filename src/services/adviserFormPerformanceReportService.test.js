@@ -35,3 +35,17 @@ test("export sends only the active school and form and exposes response headers"
   expect(apiGet.mock.calls[0][1].params).toEqual({ schoolId: 7, formId: 8 })
   expect(apiGet.mock.calls[0][1].responseType).toBe("blob")
 })
+
+test("trims active searches and omits empty searches from report and export", async () => {
+  apiGet
+    .mockResolvedValueOnce({ data: { data: { rows: [], questions: [], meta: { page: 1, limit: 15, total: 0, lastPage: 1 } } } })
+    .mockResolvedValueOnce({ data: new Blob(["xlsx"]), headers: {} })
+  await getAdviserFormPerformanceReport({
+    schoolId: 7, formId: 8, studentSearch: "  علی  ", adviserSearch: "   ", page: 1, limit: 15,
+  })
+  await exportAdviserFormPerformanceReport({ schoolId: 7, formId: 8, studentSearch: " علی ", adviserSearch: " رضا " })
+  expect(apiGet.mock.calls[0][1].params).toEqual({ schoolId: 7, formId: 8, studentSearch: "علی", page: 1, limit: 15 })
+  expect(apiGet.mock.calls[1][1].params).toEqual({ schoolId: 7, formId: 8, studentSearch: "علی", adviserSearch: "رضا" })
+  expect(apiGet.mock.calls[1][1].params).not.toHaveProperty("page")
+  expect(apiGet.mock.calls[1][1].params).not.toHaveProperty("limit")
+})
