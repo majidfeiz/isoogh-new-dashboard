@@ -15,7 +15,6 @@ import moment from "moment-jalaali";
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import { toGregorian } from "jalaali-js";
 import { io } from "socket.io-client";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
@@ -23,20 +22,14 @@ import TableContainer from "../../components/Common/TableContainer";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { API_BASE_URL } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
-import { formatVoipTalkDuration, getVoipEndedAtDisplay, getVoipStartedAtDisplay } from "../../helpers/voipTime.js";
+import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
 import { normalizeOutboundCallItem } from "../../services/voipService.jsx";
-import { isOutboundCallAdmin } from "./outboundCallHistoryFilterUtils.js";
+import { buildOutboundSocketPayload, isOutboundCallAdmin } from "./outboundCallHistoryFilterUtils.js";
+import { normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
 
 const NAMESPACE = "voip/outbound-call-histories";
 const HIGHLIGHT_DURATION_MS = 5000;
 const AUTO_REFRESH_MS = 15000;
-
-const formatDateObjectGregorian = (dateObject) => {
-  if (!dateObject) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  const g = toGregorian(dateObject.year, dateObject.month.number, dateObject.day);
-  return `${g.gy}-${pad(g.gm)}-${pad(g.gd)}`;
-};
 
 // Safely extract list + meta from any common server response shape
 const extractListPayload = (payload) => {
@@ -199,39 +192,20 @@ const OutboundCallHistoriesLive = () => {
         id: "starttime_unix",
         header: "زمان شروع",
         enableSorting: false,
-        cell: ({ row }) => getVoipStartedAtDisplay(row.original),
+        cell: ({ row }) => row.original?.call_started_at_jalali || "—",
       },
       {
         id: "endtime_unix",
         header: "زمان پایان",
         enableSorting: false,
-        cell: ({ row }) => getVoipEndedAtDisplay(row.original),
+        cell: ({ row }) => row.original?.call_ended_at_jalali || "—",
       },
     ],
     [dispositionBadge, isAdmin]
   );
 
   const buildPayload = useCallback((overrides = {}) => {
-    const f = { ...filtersRef.current, ...overrides };
-    const q = f.q?.trim() || "";
-    const payload = {
-      page: Number(f.page) || 1,
-      per_page: Number(f.per_page) || 15,
-      sort_by: f.sort_by || "id",
-      sort_order: f.sort_order || "DESC",
-    };
-    // type only sent alongside a non-empty q
-    if (q) {
-      payload.q = q;
-      if (f.type) payload.type = f.type;
-    }
-    // ALL or empty → omit disposition (backend treats absence as ALL)
-    if (f.disposition && f.disposition !== "ALL") {
-      payload.disposition = f.disposition;
-    }
-    if (f.start_date) payload.start_date = f.start_date;
-    if (f.end_date) payload.end_date = f.end_date;
-    return payload;
+    return buildOutboundSocketPayload({ ...filtersRef.current, ...overrides });
   }, []);
 
   const scheduleClearHighlight = useCallback((id) => {
@@ -402,8 +376,8 @@ const OutboundCallHistoriesLive = () => {
   const handleApplyFilters = useCallback((e) => {
     e?.preventDefault?.();
     if (!socketRef.current?.connected) return;
-    const start = formatDateObjectGregorian(startDatePicker);
-    const end = formatDateObjectGregorian(endDatePicker);
+    const start = normalizeJalaliDateOnly(startDatePicker);
+    const end = normalizeJalaliDateOnly(endDatePicker);
     setFilters((prev) => ({ ...prev, page: 1, start_date: start, end_date: end }));
     const payload = buildPayload({ page: 1, start_date: start, end_date: end });
     socketRef.current.emit("subscribe", payload);

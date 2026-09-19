@@ -41,6 +41,7 @@ import {
   removeParentTagImportHeaders,
   toParentTagImportSheetRows,
 } from "./parentTagImportUtils.js";
+import { formatParentTagJalaliDateTime } from "./parentTagDateUtils.js";
 
 const IMPORT_JOB_STORAGE_KEY = "parent-tags:active-import";
 const IMPORT_STATUS_LABELS = {
@@ -48,14 +49,6 @@ const IMPORT_STATUS_LABELS = {
   processing: "در حال پردازش",
   success: "تکمیل‌شده",
   failed: "تکمیل با خطا/ناموفق",
-};
-
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  const iso = date.toISOString();
-  return iso.replace("T", " ").slice(0, 16);
 };
 
 const getParentName = (row) =>
@@ -312,7 +305,7 @@ const ParentTagList = () => {
         accessorKey: "created_at",
         enableColumnFilter: false,
         enableSorting: true,
-        cell: (info) => formatDateTime(info.getValue()),
+        cell: (info) => formatParentTagJalaliDateTime(info.getValue()),
       },
       {
         id: "actions",
