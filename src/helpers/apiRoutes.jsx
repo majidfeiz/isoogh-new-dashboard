@@ -189,6 +189,7 @@ export const API_ROUTES = {
     outboundCallHistories: "/voip/outbound-call-histories",
     outboundCallHistoryTags: "/voip/outbound-call-histories/tags",
     exportOutboundCallHistories: "/voip/outbound-call-histories/export",
+    exportOutboundCallHistoriesExcel: "/voip/outbound-call-histories/export/xlsx",
     outboundCallHistoriesSocketDocs: "/voip/outbound-call-histories/socket-docs",
     callTraces: "/voip/call-traces",
     callTrace: (id) => `/voip/call-traces/${id}`,

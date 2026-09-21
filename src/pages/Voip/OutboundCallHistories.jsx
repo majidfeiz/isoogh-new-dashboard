@@ -1,7 +1,6 @@
 // src/pages/Voip/OutboundCallHistories.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  buildOutboundExportParams,
   Card,
   CardBody,
   CardHeader,
@@ -29,12 +28,15 @@ import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-import { getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
+import { exportOutboundCallHistoriesExcel, getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
 import { isJalaliDateRangeValid, normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
+import OutboundExportActions from "./OutboundExportActions.jsx";
+import { downloadOutboundExcel, outboundExcelFilename } from "./outboundCallHistoryExcelUtils.js";
 import {
+  buildOutboundExportParams,
   mergeOutboundTagOptions,
   isOutboundCallAdmin,
   outboundDateObject,
@@ -80,6 +82,9 @@ const OutboundCallHistories = () => {
   const [q, setQ] = useState(initialQuery.q);
   const [ssn, setSsn] = useState(initialQuery.ssn);
   const [tagId, setTagId] = useState(initialQuery.tagId);
+  const [supportFormId] = useState(initialQuery.supportFormId);
+  const [adviserId] = useState(initialQuery.adviserId);
+  const [superAdviserId] = useState(initialQuery.superAdviserId);
   const [disposition, setDisposition] = useState(initialQuery.disposition);
   const [loading, setLoading] = useState(false);
   const [sorting, setSorting] = useState(initialQuery.sortBy ? [{ id: initialQuery.sortBy, desc: initialQuery.sortOrder === "DESC" }] : []);
@@ -98,6 +103,8 @@ const OutboundCallHistories = () => {
 
   const [exportState, setExportState] = useState(INITIAL_EXPORT_STATE);
   const exportAbortRef = useRef(null);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const excelAbortRef = useRef(null);
 
   const [fileModalOpen, setFileModalOpen] = useState(false);
   const [selectedCallFiles, setSelectedCallFiles] = useState([]);
@@ -144,6 +151,9 @@ const OutboundCallHistories = () => {
           end_date: currentEnd,
           ssn: currentSsn,
           tagId: currentTagId ? Number(currentTagId) : "",
+          support_form_id: supportFormId || "",
+          adviser_id: adviserId || "",
+          super_adviser_id: superAdviserId || "",
           signal: controller.signal,
         });
         if (controller.signal.aborted) return;
@@ -168,6 +178,9 @@ const OutboundCallHistories = () => {
           q: cleanedQ,
           ssn: currentSsn,
           tagId: currentTagId,
+          supportFormId,
+          adviserId,
+          superAdviserId,
           disposition: currentDisposition,
           sortBy: currentSortBy,
           sortOrder: currentSortOrder,
@@ -183,7 +196,7 @@ const OutboundCallHistories = () => {
         if (callsAbortRef.current === controller && !controller.signal.aborted) setLoading(false);
       }
     },
-    [setSearchParams]
+    [adviserId, setSearchParams, superAdviserId, supportFormId]
   );
 
   useEffect(() => {
@@ -417,6 +430,7 @@ const OutboundCallHistories = () => {
       const params = buildOutboundExportParams({
         sort_by: sort?.by, sort_order: sort?.order, type, q: cleanedQ, disposition,
         start_date: start, end_date: end, ssn, tagId: tagId ? Number(tagId) : "",
+        support_form_id: supportFormId, adviser_id: adviserId, super_adviser_id: superAdviserId,
       });
 
       const queryString = params.toString();
@@ -479,7 +493,7 @@ const OutboundCallHistories = () => {
     } finally {
       exportAbortRef.current = null;
     }
-  }, [disposition, endDate, q, sort.by, sort.order, ssn, startDate, tagId, type]);
+  }, [adviserId, disposition, endDate, q, sort.by, sort.order, ssn, startDate, superAdviserId, supportFormId, tagId, type]);
 
   const handleCancelExport = useCallback(() => {
     if (exportAbortRef.current) {
@@ -488,6 +502,47 @@ const OutboundCallHistories = () => {
     }
     setExportState(INITIAL_EXPORT_STATE);
   }, []);
+
+  const handleExcelExport = useCallback(async () => {
+    if (excelLoading || excelAbortRef.current) return;
+    if (!isJalaliDateRangeValid(startDate, endDate)) {
+      setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
+      return;
+    }
+    const controller = new AbortController();
+    excelAbortRef.current = controller;
+    setExcelLoading(true);
+    try {
+      const result = await exportOutboundCallHistoriesExcel({
+        type,
+        q,
+        ssn,
+        tagId: tagId ? Number(tagId) : "",
+        disposition,
+        start_date: normalizeJalaliDateOnly(startDate),
+        end_date: normalizeJalaliDateOnly(endDate),
+        sort_by: sort.by,
+        sort_order: sort.order,
+        support_form_id: supportFormId,
+        adviser_id: adviserId,
+        super_adviser_id: superAdviserId,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      downloadOutboundExcel(result.blob, outboundExcelFilename(result.contentDisposition));
+      toast.success("فایل Excel با موفقیت دانلود شد.");
+    } catch (error) {
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError" || controller.signal.aborted) return;
+      // The shared HTTP client displays the standard error toast.
+    } finally {
+      if (excelAbortRef.current === controller) {
+        excelAbortRef.current = null;
+        setExcelLoading(false);
+      }
+    }
+  }, [adviserId, disposition, endDate, excelLoading, q, sort.by, sort.order, ssn, startDate, superAdviserId, supportFormId, tagId, type]);
+
+  useEffect(() => () => excelAbortRef.current?.abort(), []);
 
   const getFileLabel = (file) =>
     file?.title?.trim?.() || file?.name?.trim?.() || file?.code?.trim?.() || "فایل";
@@ -876,34 +931,8 @@ const OutboundCallHistories = () => {
                       </Col>
 
                       <Col md="4" className="d-flex align-items-end">
-                        <div className="d-flex gap-2 w-100 justify-content-end">
-                          {hasPermission("voip.outbound.index.export") && <Button
-                            color="success"
-                            size="sm"
-                            type="button"
-                            onClick={handleExport}
-                            disabled={isExportBusy || loading}
-                            className="d-flex align-items-center gap-1 px-3"
-                            style={{ whiteSpace: "nowrap" }}
-                          >
-                            <i className={`mdi ${isExportBusy ? "mdi-loading mdi-spin" : "mdi-file-download-outline"}`} />
-                            {isExportBusy ? "در حال دریافت..." : "خروجی مدت مکالمه واقعی"}
-                          </Button>}
-                          {isExportBusy && (
-                            <Button
-                              color="danger"
-                              size="sm"
-                              outline
-                              type="button"
-                              onClick={handleCancelExport}
-                              className="d-flex align-items-center gap-1"
-                              style={{ whiteSpace: "nowrap" }}
-                            >
-                              <i className="mdi mdi-close" />
-                              لغو
-                            </Button>
-                          )}
-                        </div>
+                        <OutboundExportActions hasPermission={hasPermission} csvBusy={isExportBusy} excelLoading={excelLoading}
+                          tableLoading={loading} onCsv={handleExport} onExcel={handleExcelExport} onCancelCsv={handleCancelExport} />
                       </Col>
                     </Row>
 

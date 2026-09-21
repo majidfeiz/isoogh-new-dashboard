@@ -14,7 +14,6 @@ import { getSupportForms } from "../../services/supportFormService.jsx"
 import {
   canExportOnlineReport,
   canViewOnlineReport,
-  defaultOnlineQuery,
   flattenOnlineGroups,
   formatOnlineDuration,
   formatOnlinePercent,
@@ -27,6 +26,7 @@ import {
   sortedQuestions,
   toggleOnlineSort,
 } from "./contactFormsOnlineUtils.js"
+import { isAdminUser } from "./inactiveAdvisersUtils.js"
 
 const fa = (value) => value == null ? "—" : Number(value).toLocaleString("fa-IR")
 
@@ -35,17 +35,17 @@ const FIXED_COLUMNS = [
   { key: "adviserName", label: "نام مشاور" },
   { key: "adviserNumber", label: "شماره مشاور" },
   { key: "totalStudents", label: "تعداد دانش‌آموزان" },
-  { key: "totalCallsPercent", label: "مجموع تماس‌ها (%)", help: "(تعداد تمام CDRهای فرم ÷ دانش‌آموزان تخصیص‌یافته) × ۱۰۰" },
-  { key: "successfulCallsPercent", label: "تماس موفق (%)", help: "(دانش‌آموزان دارای تماس ANSWERED ÷ دانش‌آموزان تخصیص‌یافته) × ۱۰۰" },
-  { key: "totalConversationSeconds", label: "مجموع مکالمات", help: "جمع playtime_seconds غیرمنفی تماس‌های ANSWERED" },
-  { key: "successfulFormsPercent", label: "فرم موفق (%)", help: "(دانش‌آموزان با وضعیت فرم ۱ ÷ کل دانش‌آموزان فرم) × ۱۰۰" },
-  { key: "incompleteFormsPercent", label: "فرم ناقص (%)", help: "(دانش‌آموزان با وضعیت فرم ۲ ÷ کل دانش‌آموزان فرم) × ۱۰۰" },
+  { key: "totalCallsPercent", label: "درصد دانش‌آموزان دارای تماس", help: "(تعداد دانش‌آموزان یکتای دارای تماس فرم و شناسه گروه تماس ÷ دانش‌آموزان تخصیص‌یافته) × ۱۰۰" },
+  { key: "successfulCallsPercent", label: "تماس موفق (%)", help: "(دانش‌آموزان دارای حداقل یک CDR با disposition=ANSWERED ÷ دانش‌آموزان تخصیص‌یافته) × ۱۰۰" },
+  { key: "totalConversationSeconds", label: "مجموع مکالمات", help: "جمع duration غیرمنفی تماس‌های ANSWERED" },
+  { key: "successfulFormsPercent", label: "فرم موفق (%)", help: "(دانش‌آموزان با support_form_students.status=1 ÷ کل دانش‌آموزان فرم) × ۱۰۰" },
+  { key: "incompleteFormsPercent", label: "فرم ناقص (%)", help: "(دانش‌آموزان با status=2 ÷ کل دانش‌آموزان فرم) × ۱۰۰" },
   { key: "averageFormCompletionPercent", label: "میانگین فرم (%)", help: "متوسط درصد تکمیل بر مبنای سؤال‌های اجباری" },
 ]
 
 const ContactFormsOnline = () => {
   document.title = "گزارش آنلاین فرم تماس‌ها | داشبورد آیسوق"
-  const { permissions, hasPermission } = useAuth()
+  const { permissions, user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryString = searchParams.toString()
   const query = useMemo(() => parseOnlineQuery(new URLSearchParams(queryString)), [queryString])
@@ -56,8 +56,10 @@ const ContactFormsOnline = () => {
   const [forms, setForms] = useState([])
   const [schools, setSchools] = useState([])
   const [exporting, setExporting] = useState(false)
-  const showSchoolFilter = hasPermission("schools.index")
+  const [retryKey, setRetryKey] = useState(0)
+  const showSchoolFilter = isAdminUser(user)
   const canExport = canExportOnlineReport(permissions)
+  const requestQuery = useMemo(() => ({ ...query, schoolId: showSchoolFilter ? query.schoolId : "" }), [query, showSchoolFilter])
 
   const updateQuery = useCallback((updates) => {
     setSearchParams(serializeOnlineQuery({ ...query, ...updates }))
@@ -72,20 +74,20 @@ const ContactFormsOnline = () => {
     }
     setLoading(true)
     setError("")
-    return getContactFormsOnlineReport(query, signal)
-      .then(setData)
+    return getContactFormsOnlineReport(requestQuery, signal)
+      .then((result) => { if (!signal.aborted) setData(result) })
       .catch((requestError) => {
         if (requestError?.code === "ERR_CANCELED" || requestError?.name === "CanceledError" || signal?.aborted) return
-        setError("دریافت گزارش آنلاین فرم تماس با خطا مواجه شد.")
+        if (!signal.aborted) setError("دریافت گزارش آنلاین فرم تماس با خطا مواجه شد.")
       })
       .finally(() => { if (!signal?.aborted) setLoading(false) })
-  }, [query])
+  }, [requestQuery])
 
   useEffect(() => {
     const controller = new AbortController()
     loadReport(controller.signal)
     return () => controller.abort()
-  }, [loadReport])
+  }, [loadReport, retryKey])
 
   useEffect(() => {
     if (showSchoolFilter) {
@@ -120,7 +122,7 @@ const ContactFormsOnline = () => {
     if (!query.formId || exporting) return
     setExporting(true)
     try {
-      const blob = await exportContactFormsOnlineReport(query)
+      const blob = await exportContactFormsOnlineReport(requestQuery)
       saveOnlineReportBlob(blob)
     } catch {
       // httpClient shows the standard API error toast
@@ -136,6 +138,7 @@ const ContactFormsOnline = () => {
 
   const renderValue = (row, key) => {
     if (key === "totalConversationSeconds") return formatOnlineDuration(row[key])
+    if (key === "totalCallsPercent") return formatOnlinePercent(row[key], true)
     if (key.endsWith("Percent")) return formatOnlinePercent(row[key])
     if (key === "totalStudents") return fa(row[key])
     return row[key] || "—"
@@ -158,7 +161,7 @@ const ContactFormsOnline = () => {
         <Col xl="3" md="6"><Label>جستجو</Label><Input value={search} onChange={(event) => setSearch(event.target.value)}
           placeholder="نام، شماره یا مقدار آماری" /></Col>
         <Col xl="auto" className="d-flex gap-2 flex-wrap">
-          <Button color="secondary" outline onClick={() => setSearchParams(serializeOnlineQuery(resetOnlineView(query)))}>
+          <Button color="secondary" outline onClick={() => { setSearch(""); setSearchParams(serializeOnlineQuery(resetOnlineView(query))) }}>
             <i className="mdi mdi-refresh me-1" />نمایش همه
           </Button>
           {canExport && <Button color="success" disabled={!query.formId || exporting} onClick={handleExport}>
@@ -172,7 +175,7 @@ const ContactFormsOnline = () => {
       <i className="mdi mdi-file-question-outline fs-1 d-block mb-2" />برای مشاهده گزارش، ابتدا یک فرم تماس انتخاب کنید.
     </CardBody></Card>}
     {state === "error" && <div className="alert alert-danger text-center py-4">{error}<div className="mt-2">
-      <Button color="danger" outline onClick={() => loadReport(new AbortController().signal)}>تلاش مجدد</Button></div></div>}
+      <Button color="danger" outline onClick={() => setRetryKey((key) => key + 1)}>تلاش مجدد</Button></div></div>}
     {state === "empty" && <Card><CardBody className="text-center text-muted py-5">
       <i className="mdi mdi-account-off-outline fs-1 d-block mb-2" />برای این فرم، سرمشاور یا مشاوری یافت نشد.
     </CardBody></Card>}
@@ -195,7 +198,7 @@ const ContactFormsOnline = () => {
           {questions.map((question) => <th key={question.id}
             onClick={() => setSearchParams(serializeOnlineQuery(toggleOnlineSort(query, question.sortKey || `question:${question.id}`)))}
             className={question.required ? "text-danger" : ""} style={{ cursor: "pointer" }}
-            title="درصد دانش‌آموزان دارای حداقل یک پاسخ معتبر برای سؤال">
+            title="(دانش‌آموزان دارای حداقل یک رکورد پاسخ برای سؤال ÷ کل دانش‌آموزان فرم) × ۱۰۰">
             {question.title}{question.required && " *"}{renderSortIcon(question.sortKey || `question:${question.id}`)}
           </th>)}
         </tr></thead>
