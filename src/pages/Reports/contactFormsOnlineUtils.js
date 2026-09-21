@@ -71,9 +71,11 @@ export function formatOnlineDuration(seconds) {
     .map((part) => String(part).padStart(2, "0")).join(":")
 }
 
-export function formatOnlinePercent(value) {
+export function formatOnlinePercent(value, capped = false) {
   if (value == null || value === "") return "—"
-  return `${Number(value).toLocaleString("fa-IR", { maximumFractionDigits: 1 })}٪`
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return "—"
+  return `${(capped ? Math.min(100, Math.max(0, numeric)) : numeric).toLocaleString("fa-IR", { maximumFractionDigits: 1 })}٪`
 }
 
 export function sortedQuestions(questions = []) {
