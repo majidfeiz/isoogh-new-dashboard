@@ -61,9 +61,12 @@ test("debounces search and allows cancellation", () => {
   jest.useRealTimers()
 })
 
-test("formats duration and does not clamp percentages above 100", () => {
+test("formats duration and caps only student call coverage at 100 percent", () => {
   expect(formatOnlineDuration(3661)).toBe("01:01:01")
   expect(formatOnlinePercent(125.44)).toContain("۱۲۵٫۴")
+  expect(formatOnlinePercent(125.44, true)).toBe("۱۰۰٪")
+  expect(formatOnlinePercent(-3, true)).toBe("۰٪")
+  expect(formatOnlinePercent("invalid", true)).toBe("—")
 })
 
 test("derives no-form, loading, error, empty and ready states", () => {
