@@ -90,6 +90,14 @@ const ContactFormsOnline = () => {
   }, [loadReport, retryKey])
 
   useEffect(() => {
+    const refreshArchivedAssignment = (event) => {
+      if (String(event.detail?.formId) === String(query.formId)) setRetryKey((key) => key + 1)
+    }
+    window.addEventListener("support-form-assignment-archive-changed", refreshArchivedAssignment)
+    return () => window.removeEventListener("support-form-assignment-archive-changed", refreshArchivedAssignment)
+  }, [query.formId])
+
+  useEffect(() => {
     if (showSchoolFilter) {
       getSchools({ page: 1, limit: 100 }).then((result) => setSchools(result.items || [])).catch(() => setSchools([]))
     }

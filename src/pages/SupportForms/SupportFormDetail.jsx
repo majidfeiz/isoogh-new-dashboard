@@ -33,6 +33,8 @@ import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { adviserStudentStatus, canManageAdviserStudentArchive, isArchivedAssignment } from "./adviserStudentArchiveUtils.js";
 import {
   getSupportForm,
   getSupportFormQuestions,
@@ -52,9 +54,8 @@ import {
   autoImportAdviserStudents,
   detachSupportFormAdviserStudent,
   detachSupportFormAdviserStudents,
-  changeStudentSupportFormStatus,
+  setSupportFormAdviserStudentArchive,
   getSupportFormAllStudents,
-  getSupportFormInterruptedCalls,
   copySupportForm,
 } from "../../services/supportFormService.jsx";
 import {
@@ -69,7 +70,7 @@ const TAB = {
   ADVISERS: "3",
   STUDENTS: "4",
   ALL_STUDENTS: "5",
-  INTERRUPTED: "6",
+  INCOMPLETE: "6",
 };
 
 const formatDate = (value) => {
@@ -84,9 +85,8 @@ const formatDate = (value) => {
 };
 
 const StatusBadge = ({ status }) => {
-  if (status === 2)
-    return <Badge color="warning">قطع‌شده</Badge>;
-  return <Badge color="success">نرمال</Badge>;
+  const value = adviserStudentStatus(status);
+  return <Badge color={value.color}>{value.label}</Badge>;
 };
 
 const makeClientId = () => `cid_${Math.random().toString(36).slice(2, 9)}`;
@@ -926,18 +926,22 @@ const AdvisersTab = ({ formId }) => {
 
 // ─── Students Tab (per adviser) ────────────────────────────────────────────────
 
-const StudentsTab = ({ formId }) => {
+export const StudentsTab = ({ formId, schoolId }) => {
+  const { user, hasPermission } = useAuth();
+  const canArchive = canManageAdviserStudentArchive(user, hasPermission);
   const [advisers, setAdvisers] = useState([]);
   const [selectedAdviser, setSelectedAdviser] = useState("");
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 });
   const [search, setSearch] = useState("");
+  const [archiveFilter, setArchiveFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState(null);
   const [deleteModal, setDeleteModal] = useState(false);
   const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState(null);
 
   const [candidateSearch, setCandidateSearch] = useState("");
   const [candidateResults, setCandidateResults] = useState([]);
@@ -960,7 +964,7 @@ const StudentsTab = ({ formId }) => {
   }, [formId]);
 
   const fetchStudents = useCallback(
-    async (page = 1, q = search) => {
+    async (page = 1, q = search, archive = archiveFilter) => {
       if (!selectedAdviser) return;
       setLoading(true);
       setAlert(null);
@@ -969,6 +973,7 @@ const StudentsTab = ({ formId }) => {
           page,
           limit: 10,
           search: q || undefined,
+          archive,
         });
         setData(res.items || []);
         setMeta(res.pagination || { page, limit: 10, total: 0, lastPage: 1 });
@@ -978,7 +983,7 @@ const StudentsTab = ({ formId }) => {
         setLoading(false);
       }
     },
-    [formId, selectedAdviser, search]
+    [archiveFilter, formId, selectedAdviser, search]
   );
 
   useEffect(() => {
@@ -1004,13 +1009,42 @@ const StudentsTab = ({ formId }) => {
     }
   };
 
-  const handleChangeStatus = async (row, status) => {
+  const handleArchive = async () => {
+    const row = pendingArchive;
+    if (!row || actionLoading) return;
+    if (!canArchive || !selectedAdviser) {
+      setAlert({ type: "danger", message: "دسترسی آرشیو این تخصیص در دسترس نیست." });
+      setPendingArchive(null);
+      return;
+    }
+    if (!row.id) {
+      setAlert({ type: "danger", message: "شناسه تخصیص دانش‌آموز در پاسخ فهرست وجود ندارد." });
+      setPendingArchive(null);
+      return;
+    }
+    const restoring = isArchivedAssignment(row);
     setActionLoading(row.id);
     try {
-      await changeStudentSupportFormStatus({ row_id: row.id, status });
-      await fetchStudents(meta.page);
-    } catch {
-      setAlert({ type: "danger", message: "خطا در تغییر وضعیت دانش‌آموز." });
+      let resolvedSchoolId = schoolId;
+      if (!resolvedSchoolId) {
+        const form = await getSupportForm(formId);
+        const details = form?.data || form;
+        resolvedSchoolId = details?.school_id ?? details?.schoolId ?? details?.school?.id;
+      }
+      if (!resolvedSchoolId) throw new Error("missing-school-id");
+      await setSupportFormAdviserStudentArchive(formId, selectedAdviser, row.id, resolvedSchoolId, restoring);
+      setPendingArchive(null);
+      await fetchStudents(1);
+      window.dispatchEvent(new CustomEvent("support-form-assignment-archive-changed", { detail: { formId: String(formId) } }));
+      setAlert({ type: "success", message: restoring ? "تخصیص بازگردانده شد." : "تخصیص آرشیو شد." });
+    } catch (error) {
+      const status = error?.response?.status;
+      setAlert({ type: "danger", message: error?.message === "missing-school-id"
+        ? "شناسه مجموعهٔ فرم تماس در دسترس نیست. صفحه را دوباره بارگذاری کنید."
+        : status === 403
+        ? "شما اجازهٔ آرشیو یا بازگردانی این تخصیص را ندارید."
+        : status === 404 ? "این تخصیص یا فرم تماس پیدا نشد."
+          : "تغییر وضعیت آرشیو انجام نشد." });
     } finally {
       setActionLoading(false);
     }
@@ -1145,21 +1179,23 @@ const StudentsTab = ({ formId }) => {
         cell: ({ row }) => <StatusBadge status={row.original?.status} />,
       },
       {
+        id: "archive",
+        header: "آرشیو",
+        enableSorting: false,
+        cell: ({ row }) => isArchivedAssignment(row.original) ? <Badge color="secondary">آرشیو شده</Badge> : "—",
+      },
+      {
         id: "actions",
         header: "عملیات",
         enableSorting: false,
         cell: ({ row }) => {
-          const isInt = row.original?.status === 2;
+          const archived = isArchivedAssignment(row.original);
           return (
             <div className="d-flex gap-1">
-              <Button
-                size="sm"
-                color={isInt ? "success" : "warning"}
-                disabled={actionLoading === row.original?.id}
-                onClick={() => handleChangeStatus(row.original, isInt ? 0 : 2)}
-              >
-                {isInt ? "بازگشت به نرمال" : "قطع‌شده"}
-              </Button>
+              {canArchive && <Button size="sm" type="button" color={archived ? "success" : "warning"} outline
+                disabled={!!actionLoading} onClick={() => setPendingArchive(row.original)}>
+                {actionLoading === row.original?.id ? "در حال انجام..." : archived ? "بازگردانی" : "آرشیو"}
+              </Button>}
               <Button
                 size="sm"
                 color="danger"
@@ -1173,7 +1209,7 @@ const StudentsTab = ({ formId }) => {
         },
       },
     ],
-    [actionLoading]
+    [actionLoading, canArchive]
   );
 
   const candidateColumns = useMemo(
@@ -1201,6 +1237,23 @@ const StudentsTab = ({ formId }) => {
 
   return (
     <div>
+      <Modal isOpen={!!pendingArchive} toggle={() => { if (!actionLoading) setPendingArchive(null); }} centered>
+        <ModalHeader toggle={() => { if (!actionLoading) setPendingArchive(null); }}>
+          {isArchivedAssignment(pendingArchive) ? "بازگردانی تخصیص" : "آرشیو تخصیص"}
+        </ModalHeader>
+        <ModalBody>
+          <p>{isArchivedAssignment(pendingArchive)
+            ? "این دانش‌آموز از آرشیو بازگردانده شود؟"
+            : "این دانش‌آموز آرشیو شود؟"}</p>
+          <div className="d-flex justify-content-end gap-2">
+            <Button type="button" color="light" disabled={!!actionLoading} onClick={() => setPendingArchive(null)}>انصراف</Button>
+            <Button type="button" color={isArchivedAssignment(pendingArchive) ? "success" : "warning"}
+              disabled={!!actionLoading} onClick={handleArchive}>
+              {actionLoading ? "در حال انجام..." : isArchivedAssignment(pendingArchive) ? "بازگردانی" : "آرشیو"}
+            </Button>
+          </div>
+        </ModalBody>
+      </Modal>
       <DeleteModal
         show={deleteModal}
         onDeleteClick={handleDetachOne}
@@ -1304,15 +1357,26 @@ const StudentsTab = ({ formId }) => {
             onSubmit={(e) => { e.preventDefault(); fetchStudents(1); }}
           >
             <Row className="g-2 align-items-end">
-              <Col md="6">
+              <Col md="5">
                 <InputGroup>
                   <InputGroupText><i className="bx bx-search" /></InputGroupText>
                   <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جستجو در لیست" />
                 </InputGroup>
               </Col>
-              <Col md="6" className="d-flex gap-2">
+              <Col md="3">
+                <Label for="studentsArchiveFilter" className="mb-1">وضعیت آرشیو</Label>
+                <Input id="studentsArchiveFilter" type="select" value={archiveFilter} onChange={(event) => {
+                  setArchiveFilter(event.target.value);
+                  fetchStudents(1, search, event.target.value);
+                }}>
+                  <option value="all">همه</option>
+                  <option value="active">فعال</option>
+                  <option value="archived">آرشیو شده</option>
+                </Input>
+              </Col>
+              <Col md="4" className="d-flex gap-2">
                 <Button color="primary" type="submit" className="w-100" disabled={loading}>جستجو</Button>
-                <Button color="light" type="button" className="w-100" onClick={() => { setSearch(""); fetchStudents(1, ""); }}>ریست</Button>
+                <Button color="light" type="button" className="w-100" onClick={() => { setSearch(""); setArchiveFilter("all"); fetchStudents(1, "", "all"); }}>ریست</Button>
               </Col>
             </Row>
           </Form>
@@ -1401,46 +1465,80 @@ const StudentsTab = ({ formId }) => {
 
 // ─── All Students Tab ──────────────────────────────────────────────────────────
 
-const AllStudentsTab = ({ formId }) => {
+export const AllStudentsTab = ({ formId, schoolId, incompleteOnly = false }) => {
+  const { user, hasPermission } = useAuth();
+  const canArchive = canManageAdviserStudentArchive(user, hasPermission);
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 });
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [archiveFilter, setArchiveFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [pendingArchive, setPendingArchive] = useState(null);
 
   const fetchData = useCallback(
-    async (page = 1) => {
+    async (page = 1, currentSearch = search, currentStatus = statusFilter, currentArchive = archiveFilter) => {
       setLoading(true);
       setAlert(null);
       try {
         const res = await getSupportFormAllStudents(formId, {
           page,
           limit: 10,
-          search: search || undefined,
-          status: statusFilter !== "" ? statusFilter : undefined,
+          search: currentSearch || undefined,
+          status: incompleteOnly ? 2 : currentStatus !== "" ? currentStatus : undefined,
+          archive: currentArchive,
         });
         setData(res.items || []);
         setMeta(res.pagination || { page, limit: 10, total: 0, lastPage: 1 });
       } catch {
-        setAlert({ type: "danger", message: "خطا در دریافت دانش‌آموزان." });
+        setAlert({ type: "danger", message: incompleteOnly ? "خطا در دریافت تماس‌های ناقص." : "خطا در دریافت دانش‌آموزان." });
       } finally {
         setLoading(false);
       }
     },
-    [formId, search, statusFilter]
+    [archiveFilter, formId, incompleteOnly, search, statusFilter]
   );
 
-  useEffect(() => { fetchData(1); }, [fetchData]);
+  useEffect(() => { fetchData(1); }, [formId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleChangeStatus = async (row, status) => {
+  const handleArchive = async () => {
+    const row = pendingArchive;
+    if (!row || actionLoading) return;
+    if (!canArchive || !row.id) {
+      setPendingArchive(null);
+      setAlert({ type: "danger", message: "شناسه تخصیص یا دسترسی آرشیو در دسترس نیست." });
+      return;
+    }
+    const adviserId = row.adviser_id ?? row.adviser?.id;
+    if (!adviserId) {
+      setPendingArchive(null);
+      setAlert({ type: "danger", message: "شناسه مشاور این تخصیص در پاسخ فهرست وجود ندارد." });
+      return;
+    }
+    const restoring = isArchivedAssignment(row);
     setActionLoading(row.id);
     try {
-      await changeStudentSupportFormStatus({ row_id: row.id, status });
-      await fetchData(meta.page);
-    } catch {
-      setAlert({ type: "danger", message: "خطا در تغییر وضعیت." });
+      let resolvedSchoolId = schoolId;
+      if (!resolvedSchoolId) {
+        const form = await getSupportForm(formId);
+        const details = form?.data || form;
+        resolvedSchoolId = details?.school_id ?? details?.schoolId ?? details?.school?.id;
+      }
+      if (!resolvedSchoolId) throw new Error("missing-school-id");
+      await setSupportFormAdviserStudentArchive(formId, adviserId, row.id, resolvedSchoolId, restoring);
+      setPendingArchive(null);
+      await fetchData(1);
+      window.dispatchEvent(new CustomEvent("support-form-assignment-archive-changed", { detail: { formId: String(formId) } }));
+      setAlert({ type: "success", message: restoring ? "تخصیص بازگردانده شد." : "تخصیص آرشیو شد." });
+    } catch (error) {
+      const status = error?.response?.status;
+      setAlert({ type: "danger", message: error?.message === "missing-school-id"
+        ? "شناسه مجموعهٔ فرم تماس در دسترس نیست. صفحه را دوباره بارگذاری کنید."
+        : status === 403 ? "شما اجازهٔ آرشیو یا بازگردانی این تخصیص را ندارید."
+          : status === 404 ? "این تخصیص یا فرم تماس پیدا نشد."
+            : "تغییر وضعیت آرشیو انجام نشد." });
     } finally {
       setActionLoading(null);
     }
@@ -1466,29 +1564,44 @@ const AllStudentsTab = ({ formId }) => {
         cell: ({ row }) => <StatusBadge status={row.original?.status} />,
       },
       {
+        id: "archive",
+        header: "آرشیو",
+        enableSorting: false,
+        cell: ({ row }) => isArchivedAssignment(row.original) ? <Badge color="secondary">آرشیو شده</Badge> : "—",
+      },
+      {
         id: "actions",
         header: "عملیات",
         enableSorting: false,
-        cell: ({ row }) => {
-          const isInt = row.original?.status === 2;
-          return (
-            <Button
-              size="sm"
-              color={isInt ? "success" : "warning"}
-              disabled={actionLoading === row.original?.id}
-              onClick={() => handleChangeStatus(row.original, isInt ? 0 : 2)}
-            >
-              {isInt ? "بازگشت به نرمال" : "علامت‌گذاری قطع‌شده"}
-            </Button>
-          );
-        },
+        cell: ({ row }) => canArchive ? <Button size="sm" type="button" outline
+          color={isArchivedAssignment(row.original) ? "success" : "warning"}
+          disabled={!!actionLoading} onClick={() => setPendingArchive(row.original)}>
+          {actionLoading === row.original?.id ? "در حال انجام..." : isArchivedAssignment(row.original) ? "بازگردانی" : "آرشیو"}
+        </Button> : "—",
       },
     ],
-    [actionLoading]
+    [actionLoading, canArchive]
   );
 
   return (
     <div>
+      <Modal isOpen={!!pendingArchive} toggle={() => { if (!actionLoading) setPendingArchive(null); }} centered>
+        <ModalHeader toggle={() => { if (!actionLoading) setPendingArchive(null); }}>
+          {isArchivedAssignment(pendingArchive) ? "بازگردانی تخصیص" : "آرشیو تخصیص"}
+        </ModalHeader>
+        <ModalBody>
+          <p>{isArchivedAssignment(pendingArchive)
+            ? "این دانش‌آموز از آرشیو بازگردانده شود؟"
+            : "این دانش‌آموز آرشیو شود؟"}</p>
+          <div className="d-flex justify-content-end gap-2">
+            <Button type="button" color="light" disabled={!!actionLoading} onClick={() => setPendingArchive(null)}>انصراف</Button>
+            <Button type="button" color={isArchivedAssignment(pendingArchive) ? "success" : "warning"}
+              disabled={!!actionLoading} onClick={handleArchive}>
+              {actionLoading ? "در حال انجام..." : isArchivedAssignment(pendingArchive) ? "بازگردانی" : "آرشیو"}
+            </Button>
+          </div>
+        </ModalBody>
+      </Modal>
       {alert && <Alert color={alert.type} className="mb-3">{alert.message}</Alert>}
 
       <Form
@@ -1496,22 +1609,41 @@ const AllStudentsTab = ({ formId }) => {
         onSubmit={(e) => { e.preventDefault(); fetchData(1); }}
       >
         <Row className="g-2 align-items-end">
-          <Col md="5">
+          <Col md="4">
+            <Label className="mb-1">جستجوی دانش‌آموز</Label>
             <InputGroup>
               <InputGroupText><i className="bx bx-search" /></InputGroupText>
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جستجو (نام، کد ملی)" />
             </InputGroup>
           </Col>
-          <Col md="3">
-            <Input type="select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          {!incompleteOnly && <Col md="2">
+            <Label className="mb-1">وضعیت تماس</Label>
+            <Input type="select" value={statusFilter} onChange={(e) => {
+              setStatusFilter(e.target.value);
+              fetchData(1, search, e.target.value, archiveFilter);
+            }}>
               <option value="">همه وضعیت‌ها</option>
-              <option value="0">نرمال</option>
-              <option value="2">قطع‌شده</option>
+              <option value="0">بدون وضعیت</option>
+              <option value="1">تماس موفق</option>
+              <option value="2">ناقص</option>
+            </Input>
+          </Col>}
+          <Col md="2">
+            <Label className="mb-1">وضعیت آرشیو</Label>
+            <Input type="select" value={archiveFilter} onChange={(e) => {
+              setArchiveFilter(e.target.value);
+              fetchData(1, search, statusFilter, e.target.value);
+            }}>
+              <option value="all">همه</option>
+              <option value="active">فعال</option>
+              <option value="archived">آرشیو شده</option>
             </Input>
           </Col>
           <Col md="4" className="d-flex gap-2">
             <Button color="primary" type="submit" className="w-100" disabled={loading}>جستجو</Button>
-            <Button color="light" type="button" className="w-100" onClick={() => { setSearch(""); setStatusFilter(""); }}>ریست</Button>
+            <Button color="light" type="button" className="w-100" onClick={() => {
+              setSearch(""); setStatusFilter(""); setArchiveFilter("all"); fetchData(1, "", "", "all");
+            }}>ریست</Button>
           </Col>
         </Row>
       </Form>
@@ -1544,142 +1676,9 @@ const AllStudentsTab = ({ formId }) => {
   );
 };
 
-// ─── Interrupted Calls Tab ─────────────────────────────────────────────────────
+// ─── Incomplete Calls Tab ────────────────────────────────────────────────────
 
-const InterruptedCallsTab = ({ formId }) => {
-  const [data, setData] = useState([]);
-  const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 });
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [alert, setAlert] = useState(null);
-  const [actionLoading, setActionLoading] = useState(null);
-
-  const fetchData = useCallback(
-    async (page = 1) => {
-      setLoading(true);
-      setAlert(null);
-      try {
-        const res = await getSupportFormInterruptedCalls(formId, {
-          page,
-          limit: 10,
-          search: search || undefined,
-        });
-        setData(res.items || []);
-        setMeta(res.pagination || { page, limit: 10, total: 0, lastPage: 1 });
-      } catch {
-        setAlert({ type: "danger", message: "خطا در دریافت تماس‌های قطع‌شده." });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [formId, search]
-  );
-
-  useEffect(() => { fetchData(1); }, [fetchData]);
-
-  const handleRestore = async (row) => {
-    setActionLoading(row.id);
-    try {
-      await changeStudentSupportFormStatus({ row_id: row.id, status: 0 });
-      await fetchData(meta.page);
-    } catch {
-      setAlert({ type: "danger", message: "خطا در بازگشت وضعیت." });
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const columns = useMemo(
-    () => [
-      { id: "code", header: "کد دانش‌آموز", enableSorting: false, cell: ({ row }) => row.original?.student?.code || "-" },
-      { id: "name", header: "نام", enableSorting: false, cell: ({ row }) => row.original?.student?.user?.name || "-" },
-      { id: "ssn", header: "کد ملی", enableSorting: false, cell: ({ row }) => row.original?.student?.user?.ssn || "-" },
-      { id: "phone", header: "تلفن", enableSorting: false, cell: ({ row }) => row.original?.student?.user?.phone || "-" },
-      {
-        id: "adviser",
-        header: "مشاور",
-        enableSorting: false,
-        cell: ({ row }) => {
-          const a = row.original?.adviser;
-          return a?.user?.name || a?.code || "-";
-        },
-      },
-      {
-        id: "status",
-        header: "وضعیت",
-        enableSorting: false,
-        cell: () => <Badge color="warning">قطع‌شده</Badge>,
-      },
-      {
-        id: "actions",
-        header: "عملیات",
-        enableSorting: false,
-        cell: ({ row }) => (
-          <Button
-            size="sm"
-            color="success"
-            disabled={actionLoading === row.original?.id}
-            onClick={() => handleRestore(row.original)}
-          >
-            بازگشت به نرمال
-          </Button>
-        ),
-      },
-    ],
-    [actionLoading]
-  );
-
-  return (
-    <div>
-      {alert && <Alert color={alert.type} className="mb-3">{alert.message}</Alert>}
-
-      <Form
-        className="mb-3"
-        onSubmit={(e) => { e.preventDefault(); fetchData(1); }}
-      >
-        <Row className="g-2 align-items-end">
-          <Col md="6">
-            <InputGroup>
-              <InputGroupText><i className="bx bx-search" /></InputGroupText>
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جستجو" />
-            </InputGroup>
-          </Col>
-          <Col md="3">
-            <Button color="primary" type="submit" className="w-100" disabled={loading}>جستجو</Button>
-          </Col>
-          <Col md="3">
-            <Button color="light" type="button" className="w-100" onClick={() => { setSearch(""); }}>ریست</Button>
-          </Col>
-        </Row>
-      </Form>
-
-      {loading ? (
-        <div className="text-center py-4"><Spinner color="primary" /></div>
-      ) : (
-        <>
-          <TableContainer
-            columns={columns}
-            data={data}
-            isGlobalFilter={false}
-            isPagination={false}
-            isLoading={loading}
-            tableClass="table-bordered table-nowrap dt-responsive nowrap w-100"
-          />
-          <Paginations
-            perPageData={meta.limit}
-            data={data}
-            totalRecords={meta.total}
-            currentPage={meta.page}
-            setCurrentPage={fetchData}
-            isShowingPageLength
-            paginationDiv="col-sm-auto"
-            paginationClass="pagination pagination-sm mb-0"
-          />
-        </>
-      )}
-    </div>
-  );
-};
+const IncompleteCallsTab = (props) => <AllStudentsTab {...props} incompleteOnly />;
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -1731,7 +1730,7 @@ const SupportFormDetail = () => {
     { id: TAB.ADVISERS, label: "مشاوران", icon: "bx bx-user-voice" },
     { id: TAB.STUDENTS, label: "دانش‌آموزان", icon: "bx bx-group" },
     { id: TAB.ALL_STUDENTS, label: "همه دانش‌آموزان", icon: "bx bx-list-ul" },
-    { id: TAB.INTERRUPTED, label: "تماس‌های قطع‌شده", icon: "bx bx-phone-off" },
+    { id: TAB.INCOMPLETE, label: "تماس‌های ناقص", icon: "bx bx-phone-off" },
   ];
 
   return (
@@ -1807,15 +1806,15 @@ const SupportFormDetail = () => {
                   </TabPane>
 
                   <TabPane tabId={TAB.STUDENTS}>
-                    {activeTab === TAB.STUDENTS && <StudentsTab formId={id} />}
+                    {activeTab === TAB.STUDENTS && <StudentsTab formId={id} schoolId={formData?.school_id ?? formData?.schoolId ?? formData?.school?.id} />}
                   </TabPane>
 
                   <TabPane tabId={TAB.ALL_STUDENTS}>
-                    {activeTab === TAB.ALL_STUDENTS && <AllStudentsTab formId={id} />}
+                    {activeTab === TAB.ALL_STUDENTS && <AllStudentsTab formId={id} schoolId={formData?.school_id ?? formData?.schoolId ?? formData?.school?.id} />}
                   </TabPane>
 
-                  <TabPane tabId={TAB.INTERRUPTED}>
-                    {activeTab === TAB.INTERRUPTED && <InterruptedCallsTab formId={id} />}
+                  <TabPane tabId={TAB.INCOMPLETE}>
+                    {activeTab === TAB.INCOMPLETE && <IncompleteCallsTab formId={id} schoolId={formData?.school_id ?? formData?.schoolId ?? formData?.school?.id} />}
                   </TabPane>
                 </TabContent>
               </CardBody>
