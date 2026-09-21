@@ -2,13 +2,16 @@ import { jalaliDateObject, normalizeJalaliDateOnly } from "../../helpers/jalaliD
 
 export function parseOutboundCallQuery(params) {
   const page = Number(params.get("page"));
+  const formId = params.get("support_form_id") || "";
   return {
     page: Number.isInteger(page) && page > 0 ? page : 1,
     type: params.get("type") || "",
     q: params.get("q") || "",
     ssn: params.get("ssn") || "",
+    username: params.get("username") || "",
+    schoolId: params.get("schoolId") || "",
     tagId: params.get("tagId") || "",
-    supportFormId: params.get("support_form_id") || "",
+    supportFormId: /^[1-9]\d*$/.test(formId) || formId === "ALL" ? formId : "",
     adviserId: params.get("adviser_id") || "",
     superAdviserId: params.get("super_adviser_id") || "",
     disposition: params.get("disposition") || "ALL",
@@ -25,8 +28,10 @@ export function serializeOutboundCallQuery(query) {
     type: query.type,
     q: query.q?.trim?.(),
     ssn: query.ssn?.trim?.(),
+    username: query.username?.trim?.(),
+    schoolId: query.schoolId,
     tagId: query.tagId,
-    support_form_id: query.supportFormId,
+    support_form_id: /^[1-9]\d*$/.test(String(query.supportFormId || "")) || query.supportFormId === "ALL" ? query.supportFormId : "",
     adviser_id: query.adviserId,
     super_adviser_id: query.superAdviserId,
     disposition: query.disposition !== "ALL" ? query.disposition : "",
@@ -48,6 +53,8 @@ export function outboundDateObject(value) {
 
 export const resetOutboundPage = (state = {}) => ({ ...state, page: 1 });
 
+export const outboundStudentSsn = (value) => value == null || value === "" ? "—" : String(value);
+
 export function buildOutboundSocketPayload(filters = {}) {
   const q = filters.q?.trim?.() || "";
   const payload = {
@@ -66,8 +73,10 @@ export function buildOutboundSocketPayload(filters = {}) {
   if (startDate) payload.start_date = startDate;
   if (endDate) payload.end_date = endDate;
   if (filters.ssn?.trim?.()) payload.ssn = filters.ssn.trim();
+  if (filters.username?.trim?.()) payload.username = filters.username.trim();
+  if (filters.schoolId) payload.schoolId = filters.schoolId;
   if (filters.tagId) payload.tagId = filters.tagId;
-  if (filters.support_form_id) payload.support_form_id = filters.support_form_id;
+  if (/^[1-9]\d*$/.test(String(filters.support_form_id || "")) || filters.support_form_id === "ALL") payload.support_form_id = filters.support_form_id;
   if (filters.adviser_id) payload.adviser_id = filters.adviser_id;
   if (filters.super_adviser_id) payload.super_adviser_id = filters.super_adviser_id;
   return payload;

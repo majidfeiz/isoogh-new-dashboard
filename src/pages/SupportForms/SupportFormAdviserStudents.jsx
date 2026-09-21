@@ -30,22 +30,28 @@ import {
   attachSupportFormAdviserStudents,
   attachSupportFormAdviserStudentsByTag,
   autoImportAdviserStudents,
-  changeStudentSupportFormStatus,
+  setSupportFormAdviserStudentArchive,
   detachSupportFormAdviserStudent,
   detachSupportFormAdviserStudents,
 } from "../../services/supportFormService.jsx";
 import { getParentTags, getParentTagValues } from "../../services/parentTagService.jsx";
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { adviserStudentStatus, canManageAdviserStudentArchive, isArchivedAssignment } from "./adviserStudentArchiveUtils.js";
 
 const SupportFormAdviserStudents = () => {
   const { id, adviserId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const adviserInfo = location.state?.adviser;
+  const { user, hasPermission } = useAuth();
+  const canArchive = canManageAdviserStudentArchive(user, hasPermission);
 
   document.title = "دانش‌آموزان مشاور | داشبورد آیسوق";
 
   const [formTitle, setFormTitle] = useState("");
+  const [schoolId, setSchoolId] = useState(null);
+  const [archiveBusyId, setArchiveBusyId] = useState(null);
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({
     page: 1,
@@ -55,6 +61,7 @@ const SupportFormAdviserStudents = () => {
   });
   const [filters, setFilters] = useState({
     search: "",
+    archive: "all",
   });
   const [sorting, setSorting] = useState([{ id: "id", desc: true }]);
   const [sort, setSort] = useState({ by: "id", order: "DESC" });
@@ -86,6 +93,7 @@ const SupportFormAdviserStudents = () => {
     try {
       const res = await getSupportForm(id);
       setFormTitle(res?.title || "");
+      setSchoolId(res?.school_id ?? res?.schoolId ?? res?.school?.id ?? null);
     } catch (e) {
       console.error("خطا در دریافت عنوان فرم تماس", e);
     }
@@ -102,6 +110,7 @@ const SupportFormAdviserStudents = () => {
           page,
           limit: meta.limit,
           search: currentFilters.search || undefined,
+          archive: currentFilters.archive || "all",
           sortBy: currentSort?.by,
           sortOrder: currentSort?.order,
         });
@@ -145,7 +154,7 @@ const SupportFormAdviserStudents = () => {
   };
 
   const handleResetFilters = () => {
-    const reset = { search: "" };
+    const reset = { search: "", archive: "all" };
     setFilters(reset);
     fetchData(1, reset, sort);
   };
@@ -253,18 +262,30 @@ const SupportFormAdviserStudents = () => {
     }
   };
 
-  const handleChangeStatus = useCallback(
-    async (row, status) => {
-      try {
-        await changeStudentSupportFormStatus({ row_id: row.id, status });
-        await fetchData(meta.page, filters, sort);
-      } catch (e) {
-        console.error("خطا در تغییر وضعیت", e);
-        setAlert({ type: "danger", message: "خطا در تغییر وضعیت دانش‌آموز." });
-      }
-    },
-    [fetchData, filters, meta.page, sort]
-  );
+  const handleArchive = useCallback(async (row) => {
+    if (!canArchive || !row?.id || archiveBusyId != null) return;
+    if (!schoolId) {
+      setAlert({ type: "danger", message: "شناسه مجموعهٔ فرم تماس در دسترس نیست." });
+      return;
+    }
+    const restoring = isArchivedAssignment(row);
+    if (!window.confirm(restoring ? "این تخصیص از آرشیو بازگردانده شود؟" : "این تخصیص دانش‌آموز آرشیو شود؟")) return;
+    setArchiveBusyId(row.id);
+    try {
+      await setSupportFormAdviserStudentArchive(id, adviserId, row.id, schoolId, restoring);
+      await fetchData(1, filters, sort, { preserveAlert: true });
+      window.dispatchEvent(new CustomEvent("support-form-assignment-archive-changed", { detail: { formId: String(id) } }));
+      setAlert({ type: "success", message: restoring ? "تخصیص بازگردانده شد." : "تخصیص آرشیو شد." });
+    } catch (error) {
+      const status = error?.response?.status;
+      setAlert({ type: "danger", message: status === 403
+        ? "شما اجازهٔ آرشیو یا بازگردانی این تخصیص را ندارید."
+        : status === 404 ? "این تخصیص یا فرم تماس پیدا نشد."
+          : "تغییر وضعیت آرشیو انجام نشد." });
+    } finally {
+      setArchiveBusyId(null);
+    }
+  }, [adviserId, archiveBusyId, canArchive, fetchData, filters, id, schoolId, sort]);
 
   const handleAutoImport = useCallback(async () => {
     setAttachLoading(true);
@@ -462,26 +483,29 @@ const SupportFormAdviserStudents = () => {
         accessorKey: "status",
         enableSorting: true,
         cell: ({ row }) => {
-          const s = row.original?.status;
-          if (s === 2) return <span className="badge bg-warning">قطع‌شده</span>;
-          return <span className="badge bg-success">نرمال</span>;
+          const status = adviserStudentStatus(row.original?.status);
+          return <span className={`badge bg-${status.color}`}>{status.label}</span>;
         },
+      },
+      {
+        id: "archive",
+        header: "آرشیو",
+        enableSorting: false,
+        cell: ({ row }) => isArchivedAssignment(row.original)
+          ? <span className="badge bg-secondary">آرشیو شده</span> : "—",
       },
       {
         id: "actions",
         header: "عملیات",
         enableSorting: false,
         cell: ({ row }) => {
-          const isInt = row.original?.status === 2;
+          const archived = isArchivedAssignment(row.original);
           return (
             <div className="d-flex gap-1">
-              <Button
-                size="sm"
-                color={isInt ? "success" : "warning"}
-                onClick={() => handleChangeStatus(row.original, isInt ? 0 : 2)}
-              >
-                {isInt ? "بازگشت به نرمال" : "قطع‌شده"}
-              </Button>
+              {canArchive && <Button size="sm" color={archived ? "success" : "warning"} outline
+                disabled={archiveBusyId != null} onClick={() => handleArchive(row.original)}>
+                {archiveBusyId === row.original?.id ? "در حال انجام..." : archived ? "بازگردانی" : "آرشیو"}
+              </Button>}
               <Button color="secondary" size="sm" onClick={() => openDeleteModal(row.original)}>
                 حذف
               </Button>
@@ -490,7 +514,7 @@ const SupportFormAdviserStudents = () => {
         },
       },
     ],
-    [handleChangeStatus]
+    [archiveBusyId, canArchive, handleArchive]
   );
 
   const candidateColumns = useMemo(
@@ -710,6 +734,19 @@ const SupportFormAdviserStudents = () => {
                           placeholder="نام، کد ملی یا تلفن"
                         />
                       </InputGroup>
+                    </Col>
+                    <Col xl="3" lg="4" md="6">
+                      <Label className="form-label" htmlFor="archiveFilter">وضعیت آرشیو</Label>
+                      <Input id="archiveFilter" type="select" name="archive" value={filters.archive}
+                        onChange={(event) => {
+                          const next = { ...filters, archive: event.target.value };
+                          setFilters(next);
+                          fetchData(1, next, sort);
+                        }}>
+                        <option value="all">همه</option>
+                        <option value="active">فعال</option>
+                        <option value="archived">آرشیو شده</option>
+                      </Input>
                     </Col>
                     <Col xl="3" lg="4" md="6" className="d-flex gap-2">
                       <Button

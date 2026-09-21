@@ -29,6 +29,8 @@ import Paginations from "../../components/Common/Paginations.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 import { exportOutboundCallHistoriesExcel, getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
+import { getSupportForms } from "../../services/supportFormService.jsx";
+import { getSchools } from "../../services/schoolService.jsx";
 import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
@@ -39,6 +41,7 @@ import {
   buildOutboundExportParams,
   mergeOutboundTagOptions,
   isOutboundCallAdmin,
+  outboundStudentSsn,
   outboundDateObject,
   parseOutboundCallQuery,
   resetOutboundPage,
@@ -81,8 +84,17 @@ const OutboundCallHistories = () => {
   const [type, setType] = useState(initialQuery.type);
   const [q, setQ] = useState(initialQuery.q);
   const [ssn, setSsn] = useState(initialQuery.ssn);
+  const [username, setUsername] = useState(initialQuery.username);
+  const [usernameInput, setUsernameInput] = useState(initialQuery.username);
+  const [schoolId, setSchoolId] = useState(initialQuery.schoolId);
   const [tagId, setTagId] = useState(initialQuery.tagId);
-  const [supportFormId] = useState(initialQuery.supportFormId);
+  const [supportFormId, setSupportFormId] = useState(initialQuery.supportFormId);
+  const [schools, setSchools] = useState([]);
+  const [formOptions, setFormOptions] = useState([]);
+  const [formSearch, setFormSearch] = useState("");
+  const [formMeta, setFormMeta] = useState({ page: 1, lastPage: 1 });
+  const [formsLoading, setFormsLoading] = useState(false);
+  const [formsError, setFormsError] = useState("");
   const [adviserId] = useState(initialQuery.adviserId);
   const [superAdviserId] = useState(initialQuery.superAdviserId);
   const [disposition, setDisposition] = useState(initialQuery.disposition);
@@ -99,6 +111,7 @@ const OutboundCallHistories = () => {
   const [tagsError, setTagsError] = useState("");
   const callsAbortRef = useRef(null);
   const tagsAbortRef = useRef(null);
+  const formsAbortRef = useRef(null);
   const pageLimitRef = useRef(15);
 
   const [exportState, setExportState] = useState(INITIAL_EXPORT_STATE);
@@ -132,6 +145,9 @@ const OutboundCallHistories = () => {
       currentEnd = "",
       currentSsn = "",
       currentTagId = "",
+      currentUsername = username,
+      currentSupportFormId = supportFormId,
+      currentSchoolId = schoolId,
     } = {}) => {
       callsAbortRef.current?.abort();
       const controller = new AbortController();
@@ -150,8 +166,10 @@ const OutboundCallHistories = () => {
           start_date: currentStart,
           end_date: currentEnd,
           ssn: currentSsn,
+          username: currentUsername,
+          schoolId: isAdmin ? currentSchoolId : "",
           tagId: currentTagId ? Number(currentTagId) : "",
-          support_form_id: supportFormId || "",
+          support_form_id: currentSupportFormId || "",
           adviser_id: adviserId || "",
           super_adviser_id: superAdviserId || "",
           signal: controller.signal,
@@ -177,8 +195,10 @@ const OutboundCallHistories = () => {
           type: currentType,
           q: cleanedQ,
           ssn: currentSsn,
+          username: currentUsername,
+          schoolId: isAdmin ? currentSchoolId : "",
           tagId: currentTagId,
-          supportFormId,
+          supportFormId: currentSupportFormId,
           adviserId,
           superAdviserId,
           disposition: currentDisposition,
@@ -196,7 +216,7 @@ const OutboundCallHistories = () => {
         if (callsAbortRef.current === controller && !controller.signal.aborted) setLoading(false);
       }
     },
-    [adviserId, setSearchParams, superAdviserId, supportFormId]
+    [adviserId, setSearchParams, superAdviserId, supportFormId, schoolId, username, isAdmin]
   );
 
   useEffect(() => {
@@ -210,12 +230,60 @@ const OutboundCallHistories = () => {
       currentStart: initialQuery.startDate,
       currentEnd: initialQuery.endDate,
       currentSsn: initialQuery.ssn,
+      currentUsername: initialQuery.username,
+      currentSchoolId: initialQuery.schoolId,
+      currentSupportFormId: initialQuery.supportFormId,
       currentTagId: initialQuery.tagId,
     });
     return () => callsAbortRef.current?.abort();
     // Run only once on mount — fetchData is stable enough for this initial load
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin || !hasPermission("schools.index")) return;
+    getSchools({ page: 1, limit: 100 }).then((result) => setSchools(result.items || [])).catch(() => setSchools([]));
+  }, [hasPermission, isAdmin]);
+
+  const loadForms = useCallback(async (page = 1, search = formSearch, append = false) => {
+    if (!hasPermission("support-forms.index") || (isAdmin && !schoolId)) return;
+    formsAbortRef.current?.abort();
+    const controller = new AbortController();
+    formsAbortRef.current = controller;
+    setFormsLoading(true);
+    setFormsError("");
+    try {
+      const result = await getSupportForms({ schoolId: schoolId || undefined, search, page, limit: 20, signal: controller.signal });
+      if (controller.signal.aborted) return;
+      setFormOptions((current) => {
+        const options = append ? current : [];
+        return [...new Map([...options, ...(result.items || [])].map((form) => [String(form.id), form])).values()];
+      });
+      setFormMeta({ page: result.pagination.page, lastPage: result.pagination.lastPage });
+    } catch (error) {
+      if (!controller.signal.aborted && error?.code !== "ERR_CANCELED") setFormsError("دریافت فرم‌ها با خطا مواجه شد.");
+    } finally {
+      if (!controller.signal.aborted) setFormsLoading(false);
+    }
+  }, [formSearch, hasPermission, isAdmin, schoolId]);
+
+  useEffect(() => {
+    setFormOptions([]);
+    const timer = setTimeout(() => loadForms(1, formSearch), formSearch ? 400 : 0);
+    return () => { clearTimeout(timer); formsAbortRef.current?.abort(); };
+  }, [loadForms, formSearch]);
+
+  useEffect(() => {
+    if (usernameInput === username) return;
+    const timer = setTimeout(() => {
+      const next = usernameInput.trim();
+      setUsername(next);
+      fetchData({ page: 1, currentType: type, currentQ: q, currentDisposition: disposition,
+        currentSortBy: sort.by, currentSortOrder: sort.order, currentStart: normalizeJalaliDateOnly(startDate),
+        currentEnd: normalizeJalaliDateOnly(endDate), currentSsn: ssn, currentTagId: tagId, currentUsername: next });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [usernameInput]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadTags = useCallback(async (page = 1, search = tagSearch, append = false) => {
     tagsAbortRef.current?.abort();
@@ -267,7 +335,7 @@ const OutboundCallHistories = () => {
     });
   }, [disposition, endDate, fetchData, q, sort.by, sort.order, ssn, startDate, type]);
 
-  const handleSearch = useCallback(() => {
+  const handleSearch = useCallback((overrides = {}) => {
     setSearchError("");
     if (!isJalaliDateRangeValid(startDate, endDate)) {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
@@ -288,8 +356,11 @@ const OutboundCallHistories = () => {
       currentEnd: end,
       currentSsn: ssn,
       currentTagId: tagId,
+      currentUsername: overrides.username ?? usernameInput.trim(),
+      currentSupportFormId: overrides.supportFormId ?? supportFormId,
+      currentSchoolId: overrides.schoolId ?? schoolId,
     });
-  }, [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate, ssn, tagId]);
+  }, [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate, ssn, tagId, usernameInput, supportFormId, schoolId]);
 
   const handlePageChange = useCallback(
     (page) => {
@@ -342,6 +413,9 @@ const OutboundCallHistories = () => {
       setQ("");
       setDisposition("ALL");
       setSsn("");
+      setUsername("");
+      setUsernameInput("");
+      setSupportFormId("");
       setTagId("");
       setStartDate(null);
       setEndDate(null);
@@ -357,6 +431,8 @@ const OutboundCallHistories = () => {
         currentEnd: "",
         currentSsn: "",
         currentTagId: "",
+        currentUsername: "",
+        currentSupportFormId: "",
       });
   },
     [fetchData, sort.by, sort.order]
@@ -429,7 +505,7 @@ const OutboundCallHistories = () => {
     try {
       const params = buildOutboundExportParams({
         sort_by: sort?.by, sort_order: sort?.order, type, q: cleanedQ, disposition,
-        start_date: start, end_date: end, ssn, tagId: tagId ? Number(tagId) : "",
+        start_date: start, end_date: end, ssn, username: usernameInput.trim(), schoolId: isAdmin ? schoolId : "", tagId: tagId ? Number(tagId) : "",
         support_form_id: supportFormId, adviser_id: adviserId, super_adviser_id: superAdviserId,
       });
 
@@ -493,7 +569,7 @@ const OutboundCallHistories = () => {
     } finally {
       exportAbortRef.current = null;
     }
-  }, [adviserId, disposition, endDate, q, sort.by, sort.order, ssn, startDate, superAdviserId, supportFormId, tagId, type]);
+  }, [adviserId, disposition, endDate, q, sort.by, sort.order, ssn, usernameInput, schoolId, isAdmin, startDate, superAdviserId, supportFormId, tagId, type]);
 
   const handleCancelExport = useCallback(() => {
     if (exportAbortRef.current) {
@@ -517,6 +593,8 @@ const OutboundCallHistories = () => {
         type,
         q,
         ssn,
+        username: usernameInput.trim(),
+        schoolId: isAdmin ? schoolId : "",
         tagId: tagId ? Number(tagId) : "",
         disposition,
         start_date: normalizeJalaliDateOnly(startDate),
@@ -540,7 +618,7 @@ const OutboundCallHistories = () => {
         setExcelLoading(false);
       }
     }
-  }, [adviserId, disposition, endDate, excelLoading, q, sort.by, sort.order, ssn, startDate, superAdviserId, supportFormId, tagId, type]);
+  }, [adviserId, disposition, endDate, excelLoading, q, sort.by, sort.order, ssn, usernameInput, schoolId, isAdmin, startDate, superAdviserId, supportFormId, tagId, type]);
 
   useEffect(() => () => excelAbortRef.current?.abort(), []);
 
@@ -759,6 +837,15 @@ const OutboundCallHistories = () => {
             <span className="text-muted">-</span>
           );
         },
+        meta: { sortKey: null },
+      },
+      {
+        id: "student_ssn",
+        header: "کد ملی دانش‌آموز",
+        accessorKey: "student_ssn",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => <span className="font-monospace" dir="ltr">{outboundStudentSsn(row.original?.student_ssn)}</span>,
         meta: { sortKey: null },
       },
       {
@@ -1000,6 +1087,45 @@ const OutboundCallHistories = () => {
                         />
                         {tagsError && <button type="button" className="btn btn-link btn-sm p-0 mt-1"
                           onClick={() => loadTags(1, tagSearch, false)}>تلاش مجدد</button>}
+                      </Col>
+                    </Row>
+
+                    <Row className="g-3 align-items-end mt-1">
+                      {isAdmin && hasPermission("schools.index") && <Col md="3" sm="6">
+                        <Label className="form-label fw-medium mb-2">مجموعه</Label>
+                        <Input type="select" bsSize="sm" value={schoolId} onChange={(event) => {
+                          const nextSchoolId = event.target.value;
+                          setSchoolId(nextSchoolId);
+                          setSupportFormId("");
+                          setFormSearch("");
+                          setFormOptions([]);
+                          formsAbortRef.current?.abort();
+                          handleSearch({ schoolId: nextSchoolId, supportFormId: "" });
+                        }}>
+                          <option value="">همه مجموعه‌ها</option>
+                          {schools.map((school) => <option key={school.id} value={school.id}>{school.name || school.title}</option>)}
+                        </Input>
+                      </Col>}
+                      <Col md="4" sm="6">
+                        <Label className="form-label fw-medium mb-2">فرم تماس</Label>
+                        <Select isRtl isClearable isDisabled={!hasPermission("support-forms.index") || (isAdmin && !schoolId)}
+                          value={supportFormId === "ALL" ? null : formOptions.find((form) => String(form.id) === String(supportFormId)) || (supportFormId ? { id: supportFormId, title: `فرم ${supportFormId}` } : null)}
+                          options={formOptions} getOptionValue={(form) => String(form.id)} getOptionLabel={(form) => form.title}
+                          onChange={(form) => {
+                            const nextFormId = form ? String(form.id) : "";
+                            setSupportFormId(nextFormId);
+                            handleSearch({ supportFormId: nextFormId });
+                          }}
+                          onInputChange={(value, action) => { if (action.action === "input-change") setFormSearch(value); }}
+                          onMenuScrollToBottom={() => { if (!formsLoading && formMeta.page < formMeta.lastPage) loadForms(formMeta.page + 1, formSearch, true); }}
+                          isLoading={formsLoading} placeholder={hasPermission("support-forms.index") ? "همه فرم‌ها" : "دسترسی فرم‌ها وجود ندارد"}
+                          noOptionsMessage={() => formsError || "فرمی یافت نشد"} classNamePrefix="react-select" />
+                        {formsError && <button type="button" className="btn btn-link btn-sm p-0 mt-1" onClick={() => loadForms(1, formSearch)}>تلاش مجدد</button>}
+                      </Col>
+                      <Col md="3" sm="6">
+                        <Label className="form-label fw-medium mb-2">نام کاربری دانش‌آموز</Label>
+                        <Input type="text" bsSize="sm" value={usernameInput} onChange={(event) => setUsernameInput(event.target.value)}
+                          placeholder="جستجوی نام کاربری" className="border-0 shadow-sm" />
                       </Col>
                     </Row>
 

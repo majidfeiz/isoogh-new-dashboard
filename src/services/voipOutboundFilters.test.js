@@ -1,4 +1,5 @@
 import { apiGet } from "../helpers/httpClient.jsx";
+import { getSupportForms } from "./supportFormService.jsx";
 import {
   exportOutboundCallHistories,
   exportOutboundCallHistoriesExcel,
@@ -9,6 +10,37 @@ import {
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn() }));
 
 beforeEach(() => apiGet.mockReset());
+
+test("loads searchable forms for the selected school with cancellation", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [{ id: 3113, title: "فرم تماس" }], meta: { page: 1, lastPage: 2 } } } });
+  const controller = new AbortController();
+  const result = await getSupportForms({ schoolId: 8, search: "تماس", page: 1, limit: 20, signal: controller.signal });
+  expect(result.items[0]).toEqual(expect.objectContaining({ id: 3113, title: "فرم تماس" }));
+  expect(apiGet.mock.calls[0][1]).toEqual(expect.objectContaining({
+    signal: controller.signal,
+    params: expect.objectContaining({ schoolId: 8, search: "تماس", page: 1, limit: 20 }),
+  }));
+});
+
+test("combines username, school and form with existing list filters", async () => {
+  apiGet.mockResolvedValue({ data: { data: { data: [{ student_ssn: "0012345678" }], meta: { total: 1 } } } });
+  const result = await getOutboundCallHistories({ page: 1, per_page: 15, schoolId: 8,
+    support_form_id: 3113, username: "student", ssn: "001", tagId: 4, disposition: "ANSWERED" });
+  expect(result.items[0].student_ssn).toBe("0012345678");
+  expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining({
+    schoolId: 8, support_form_id: 3113, username: "student", ssn: "001", tagId: 4,
+  }));
+});
+
+test("combines username, school and form in both export services", async () => {
+  apiGet.mockResolvedValue({ data: new Blob(["export"]), headers: {} });
+  const filters = { schoolId: 8, support_form_id: 3113, username: "student", ssn: "001" };
+  await exportOutboundCallHistories(filters);
+  await exportOutboundCallHistoriesExcel(filters);
+  for (const [, config] of apiGet.mock.calls) {
+    expect(config.params).toEqual(expect.objectContaining(filters));
+  }
+});
 
 test("sends trimmed SSN and numeric tag with all active call filters", async () => {
   const controller = new AbortController();
