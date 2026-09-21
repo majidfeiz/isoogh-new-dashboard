@@ -3,6 +3,7 @@ import {
   buildOutboundExportParams,
   mergeOutboundTagOptions,
   isOutboundCallAdmin,
+  outboundStudentSsn,
   parseOutboundCallQuery,
   resetOutboundPage,
   serializeOutboundCallQuery,
@@ -25,6 +26,20 @@ test("preserves independent SSN and tag filters in the URL", () => {
   expect(params.get("ssn")).toBe("001");
   expect(params.get("tagId")).toBe("12");
   expect(params.get("page")).toBe("3");
+});
+
+test("preserves leading zeroes in student national ID and shows missing values", () => {
+  expect(outboundStudentSsn("0012345678")).toBe("0012345678");
+  expect(outboundStudentSsn(null)).toBe("—");
+  expect(outboundStudentSsn(undefined)).toBe("—");
+});
+
+test("keeps username, school and only a valid form ID in the URL", () => {
+  const query = parseOutboundCallQuery(new URLSearchParams("page=4&username=student&schoolId=8&support_form_id=3113"));
+  expect(query).toEqual(expect.objectContaining({ page: 4, username: "student", schoolId: "8", supportFormId: "3113" }));
+  expect(serializeOutboundCallQuery(query).get("support_form_id")).toBe("3113");
+  expect(parseOutboundCallQuery(new URLSearchParams("support_form_id=-1")).supportFormId).toBe("");
+  expect(serializeOutboundCallQuery({ ...query, page: 1, supportFormId: "" }).has("support_form_id")).toBe(false);
 });
 
 test("trims SSN, removes cleared tag and deduplicates appended tags", () => {
@@ -66,12 +81,12 @@ test("serializes a single Jalali day exactly and restores it for the picker", ()
 test("preserves date range and all active filters in websocket list/subscribe/refresh payloads", () => {
   const payload = buildOutboundSocketPayload({
     page: 3, per_page: 50, type: "StudentName", q: " علی ", ssn: " 001 ", tagId: 12,
-    disposition: "ANSWERED", support_form_id: 4, adviser_id: 5,
+    disposition: "ANSWERED", support_form_id: 4, adviser_id: 5, username: " student ", schoolId: 8,
     start_date: "۱۴۰۵/۰۶/۰۱", end_date: "1405-06-10", sort_by: "id", sort_order: "DESC",
   });
   expect(payload).toEqual({
     page: 3, per_page: 50, type: "StudentName", q: "علی", ssn: "001", tagId: 12,
-    disposition: "ANSWERED", support_form_id: 4, adviser_id: 5,
+    disposition: "ANSWERED", support_form_id: 4, adviser_id: 5, username: "student", schoolId: 8,
     start_date: "1405/06/01", end_date: "1405/06/10", sort_by: "id", sort_order: "DESC",
   });
 });
@@ -82,13 +97,13 @@ test("resets pagination to page one when either date changes", () => {
 
 test("CSV uses the table date range and filters but excludes pagination", () => {
   const params = buildOutboundExportParams({
-    page: 8, per_page: 100, type: "StudentName", q: " علی ", ssn: "001", tagId: 12,
+    page: 8, per_page: 100, type: "StudentName", q: " علی ", ssn: "001", username: "student", schoolId: 8, support_form_id: 3113, tagId: 12,
     disposition: "ANSWERED", start_date: "1405/06/01", end_date: "1405/06/10",
     sort_by: "id", sort_order: "DESC",
   });
   expect(Object.fromEntries(params)).toEqual({
     sort_by: "id", sort_order: "DESC", q: "علی", type: "StudentName", disposition: "ANSWERED",
-    start_date: "1405/06/01", end_date: "1405/06/10", ssn: "001", tagId: "12",
+    start_date: "1405/06/01", end_date: "1405/06/10", ssn: "001", username: "student", schoolId: "8", support_form_id: "3113", tagId: "12",
   });
   expect(params.has("page")).toBe(false);
   expect(params.has("per_page")).toBe(false);

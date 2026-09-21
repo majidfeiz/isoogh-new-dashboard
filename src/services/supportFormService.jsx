@@ -33,6 +33,7 @@ export async function getSupportForms({
   gradeId,
   sortBy,
   sortOrder,
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.supportForms.list);
   const response = await apiGet(url, {
@@ -45,6 +46,7 @@ export async function getSupportForms({
       sortBy: sortBy || undefined,
       sortOrder: sortOrder || undefined,
     },
+    signal,
   });
 
   const payload = response?.data;

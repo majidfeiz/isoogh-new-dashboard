@@ -72,6 +72,8 @@ const OutboundCallHistoriesLive = () => {
     disposition: "ALL",
     type: "",
     q: "",
+    username: "",
+    support_form_id: "",
     sort_order: "DESC",
     sort_by: "id",
     start_date: "",
@@ -369,7 +371,7 @@ const OutboundCallHistoriesLive = () => {
     setFilters((prev) => ({
       ...prev,
       [field]: value,
-      ...(field === "disposition" ? { page: 1 } : {}),
+      page: 1,
     }));
   }, []);
 
@@ -390,6 +392,8 @@ const OutboundCallHistoriesLive = () => {
     disposition: "ALL",
     type: "",
     q: "",
+    username: "",
+    support_form_id: "",
     sort_order: "DESC",
     sort_by: "id",
     start_date: "",
@@ -555,6 +559,15 @@ const OutboundCallHistoriesLive = () => {
                     onChange={(e) => handleFilterChange("q", e.target.value)}
                     placeholder="نام، شماره..."
                   />
+                </Col>
+                <Col md={2} sm={6}>
+                  <Label className="form-label text-muted small mb-1">نام کاربری دانش‌آموز</Label>
+                  <Input bsSize="sm" value={filters.username} onChange={(e) => handleFilterChange("username", e.target.value)} />
+                </Col>
+                <Col md={2} sm={6}>
+                  <Label className="form-label text-muted small mb-1">شناسه فرم تماس</Label>
+                  <Input bsSize="sm" inputMode="numeric" value={filters.support_form_id}
+                    onChange={(e) => { if (/^\d*$/.test(e.target.value)) handleFilterChange("support_form_id", e.target.value); }} />
                 </Col>
                 <Col md={2} sm={6}>
                   <Label className="form-label text-muted small mb-1">از تاریخ</Label>
