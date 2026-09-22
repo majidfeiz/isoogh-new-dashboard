@@ -1,4 +1,4 @@
-import { supportFormQuestionPayload, supportFormSchedulePayload } from "./supportFormEditLockUtils.js";
+import { supportFormQuestionPayload, supportFormEditableFieldsPayload } from "./supportFormEditLockUtils.js";
 
 test("keeps existing question and option IDs and answers in the update DTO", () => {
   const original = [{
@@ -14,10 +14,19 @@ test("keeps existing question and option IDs and answers in the update DTO", () 
   expect(original[0].code).toBe("Q1");
 });
 
-test("keeps exact received schedule values while schedule editing is locked", () => {
-  const original = { start_at: 1790000000, end_at: 1790086399 };
+test("omits questions and schedule when editing a form with calls", () => {
   const convert = jest.fn(() => 1);
-  expect(supportFormSchedulePayload({ start_at: new Date(), end_at: new Date() }, original, true, convert))
-    .toEqual(original);
+  expect(supportFormEditableFieldsPayload({ start_at: new Date(), end_at: new Date() }, [{ question: "متن" }], true, true, convert))
+    .toEqual({});
   expect(convert).not.toHaveBeenCalled();
+});
+
+test("includes questions and schedule when creating a form or editing before calls", () => {
+  const form = { start_at: new Date(), end_at: new Date() };
+  const questions = [{ question: "متن", options: [] }];
+  const convert = jest.fn(() => 1790000000);
+  const expected = { start_at: 1790000000, end_at: 1790000000, questions: supportFormQuestionPayload(questions) };
+
+  expect(supportFormEditableFieldsPayload(form, questions, false, false, convert)).toEqual(expected);
+  expect(supportFormEditableFieldsPayload(form, questions, true, false, convert)).toEqual(expected);
 });

@@ -17,8 +17,12 @@ export function supportFormQuestionPayload(questions = []) {
   }));
 }
 
-export function supportFormSchedulePayload(form, original, locked, toUnixSeconds) {
-  return locked
-    ? { start_at: original.start_at, end_at: original.end_at }
-    : { start_at: toUnixSeconds(form.start_at), end_at: toUnixSeconds(form.end_at) };
+export function supportFormEditableFieldsPayload(form, questions, isEdit, hasCalls, toUnixSeconds) {
+  if (isEdit && hasCalls) return {};
+
+  return {
+    start_at: toUnixSeconds(form.start_at),
+    end_at: toUnixSeconds(form.end_at),
+    questions: supportFormQuestionPayload(questions),
+  };
 }
