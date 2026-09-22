@@ -245,8 +245,7 @@ export const API_ROUTES = {
     adviserStudentCandidates: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/student-candidates`,
     adviserStudents: (id, adviserId) => `/support-forms/${id}/advisers/${adviserId}/students`,
-    archiveAdviserStudent: (id, adviserId, assignmentId) => `/support-forms/${id}/advisers/${adviserId}/students/${assignmentId}/archive`,
-    restoreAdviserStudent: (id, adviserId, assignmentId) => `/support-forms/${id}/advisers/${adviserId}/students/${assignmentId}/archive/restore`,
+    adviserStudentAssignment: (id, adviserId, assignmentId) => `/support-forms/${id}/advisers/${adviserId}/students/${assignmentId}`,
     adviserStudentsByTag: (id, adviserId) =>
       `/support-forms/${id}/advisers/${adviserId}/students/by-tag`,
     setAdviserStudents: (id, adviserId) =>

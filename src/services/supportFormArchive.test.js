@@ -7,7 +7,7 @@ beforeEach(() => apiPatch.mockReset());
 
 test.each([
   [false, "/support-forms/10/advisers/15/students/501/archive"],
-  [true, "/support-forms/10/advisers/15/students/501/archive/restore"],
+  [true, "/support-forms/10/advisers/15/students/501/restore"],
 ])("uses the assignment ID, school query and no body for archive and restore", async (restore, path) => {
   apiPatch.mockResolvedValue({ data: { data: { id: 501, is_archived: !restore, status: 1 } } });
   await expect(setSupportFormAdviserStudentArchive(10, 15, 501, 8, restore))

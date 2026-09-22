@@ -228,9 +228,8 @@ export async function getSupportFormAdviserStudents(id, adviserId, params = {}) 
 }
 
 export async function setSupportFormAdviserStudentArchive(id, adviserId, assignmentId, schoolId, restore = false) {
-  const route = restore
-    ? API_ROUTES.supportForms.restoreAdviserStudent(id, adviserId, assignmentId)
-    : API_ROUTES.supportForms.archiveAdviserStudent(id, adviserId, assignmentId);
+  const assignmentRoute = API_ROUTES.supportForms.adviserStudentAssignment(id, adviserId, assignmentId);
+  const route = `${assignmentRoute}/${restore ? "restore" : "archive"}`;
   const response = await apiPatch(getApiUrl(route), null, { params: { schoolId } });
   return response?.data?.data ?? response?.data;
 }
