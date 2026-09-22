@@ -114,6 +114,7 @@ export const API_ROUTES = {
     stats: "/adviser-portal/stats",
   },
   supportForms: {
+    adviserStudentAssignment: (formId, adviserId, assignmentId) => `/support-forms/${formId}/advisers/${adviserId}/students/${assignmentId}`,
     tagOptions: "/support-forms/tag-options",
     questionHintFormOptions: "/support-forms/question-hint-form-options",
     questionHintQuestionOptions: (sourceFormId) =>

@@ -1,5 +1,5 @@
 // src/services/supportFormService.jsx
-import { apiGet, apiPost, apiPut, apiDelete } from "../helpers/httpClient.jsx";
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
 export const normalizeSupportFormActive = (value) => Number(value) === 1;
@@ -33,6 +33,7 @@ export async function getSupportForms({
   gradeId,
   sortBy,
   sortOrder,
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.supportForms.list);
   const response = await apiGet(url, {
@@ -45,6 +46,7 @@ export async function getSupportForms({
       sortBy: sortBy || undefined,
       sortOrder: sortOrder || undefined,
     },
+    signal,
   });
 
   const payload = response?.data;
@@ -223,6 +225,13 @@ export async function getSupportFormAdviserStudents(id, adviserId, params = {}) 
           : 1),
     },
   };
+}
+
+export async function setSupportFormAdviserStudentArchive(id, adviserId, assignmentId, schoolId, restore = false) {
+  const assignmentRoute = API_ROUTES.supportForms.adviserStudentAssignment(id, adviserId, assignmentId);
+  const route = `${assignmentRoute}/${restore ? "restore" : "archive"}`;
+  const response = await apiPatch(getApiUrl(route), null, { params: { schoolId } });
+  return response?.data?.data ?? response?.data;
 }
 
 export async function getSupportFormAdviserStudentCandidates(id, adviserId, params = {}) {

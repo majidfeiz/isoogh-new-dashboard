@@ -28,6 +28,7 @@ import moment from "moment-jalaali";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import QuestionHintSelect from "./QuestionHintSelect.jsx";
+import { supportFormEditableFieldsPayload } from "./supportFormEditLockUtils.js";
 import {
   getSupportForm,
   getSupportForms,
@@ -151,6 +152,14 @@ const SupportFormForm = () => {
     next_support_form_id: "",
   });
   const [questions, setQuestions] = useState([buildQuestion()]);
+  const [editCapabilities, setEditCapabilities] = useState({
+    has_calls: false,
+    can_edit_questions: !isEdit,
+    can_edit_schedule: !isEdit,
+  });
+  const [formLoading, setFormLoading] = useState(isEdit);
+  const questionsLocked = isEdit && !editCapabilities.can_edit_questions;
+  const scheduleLocked = isEdit && !editCapabilities.can_edit_schedule;
   const [headings, setHeadings] = useState([buildHeading()]);
   const [problems, setProblems] = useState([buildProblem()]);
   const [priorities, setPriorities] = useState([buildPriority()]);
@@ -201,13 +210,17 @@ const SupportFormForm = () => {
     fetchOptions();
   }, [fetchOptions]);
 
-  useEffect(() => {
+  const loadExistingForm = useCallback(async () => {
     if (!isEdit) return;
-
-    (async () => {
-      try {
+    setFormLoading(true);
+    try {
         const data = await getSupportForm(id);
         const formData = data?.data || data;
+        setEditCapabilities({
+          has_calls: !!formData?.has_calls,
+          can_edit_questions: formData?.can_edit_questions !== false,
+          can_edit_schedule: formData?.can_edit_schedule !== false,
+        });
         const fetchedQuestions = Array.isArray(formData?.questions)
           ? formData.questions.map((q) => buildQuestion(q))
           : [buildQuestion()];
@@ -241,6 +254,8 @@ const SupportFormForm = () => {
           next_support_form_id: formData?.next_support_form_id ?? "",
         });
         setQuestions(fetchedQuestions.length ? fetchedQuestions : [buildQuestion()]);
+        setErrors({});
+        setQuestionErrors([]);
         setHeadings(parsedHeadings.length ? parsedHeadings : [buildHeading()]);
         setProblems(parsedProblems.length ? parsedProblems : [buildProblem()]);
         setPriorities(parsedPriorities.length ? parsedPriorities : [buildPriority()]);
@@ -253,9 +268,12 @@ const SupportFormForm = () => {
           type: "danger",
           message: "خطا در دریافت اطلاعات فرم تماس",
         });
+      } finally {
+        setFormLoading(false);
       }
-    })();
   }, [id, isEdit]);
+
+  useEffect(() => { loadExistingForm(); }, [loadExistingForm]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -338,12 +356,14 @@ const SupportFormForm = () => {
   }, [debouncedTagOptionsSearch, loadTagOptions, tagOptions, tagOptionsLoading, tagOptionsMeta, tagValueIds]);
 
   const handleQuestionChange = (index, field, value) => {
+    if (questionsLocked || formLoading) return;
     setQuestions((prev) =>
       prev.map((q, idx) => (idx === index ? { ...q, [field]: value } : q))
     );
   };
 
   const handleOptionChange = (qIndex, optIndex, field, value) => {
+    if (questionsLocked || formLoading) return;
     setQuestions((prev) =>
       prev.map((q, idx) => {
         if (idx !== qIndex) return q;
@@ -430,15 +450,18 @@ const SupportFormForm = () => {
   };
 
   const handleAddQuestion = () => {
+    if (questionsLocked || formLoading) return;
     setQuestions((prev) => [...prev, buildQuestion()]);
   };
 
   const handleRemoveQuestion = (index) => {
+    if (questionsLocked || formLoading) return;
     setQuestions((prev) => prev.filter((_, idx) => idx !== index));
     setQuestionErrors((prev) => prev.filter((_, idx) => idx !== index));
   };
 
   const handleAddOption = (qIndex) => {
+    if (questionsLocked || formLoading) return;
     setQuestions((prev) =>
       prev.map((q, idx) =>
         idx === qIndex
@@ -455,6 +478,7 @@ const SupportFormForm = () => {
   };
 
   const handleRemoveOption = (qIndex, optIndex) => {
+    if (questionsLocked || formLoading) return;
     setQuestions((prev) =>
       prev.map((q, idx) =>
         idx === qIndex
@@ -527,6 +551,7 @@ const SupportFormForm = () => {
       }
 
       if (step === 3) {
+        if (questionsLocked) return true;
         if (!questions.length) {
           nextErrors.questions = "حداقل یک سوال اضافه کنید.";
         }
@@ -559,7 +584,7 @@ const SupportFormForm = () => {
       delete nextErrors._listErrors;
       return Object.keys(nextErrors).length === 0 && !hasQuestionErrors && !hasListErrors;
     },
-    [form, headings, id, isEdit, problems, priorities, questionHints, questions, listErrors]
+    [form, headings, id, isEdit, problems, priorities, questionHints, questions, listErrors, questionsLocked]
   );
 
   const handleNext = () => {
@@ -586,6 +611,7 @@ const SupportFormForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (formLoading) return;
     setAlert(null);
 
     if (!validateStep(1)) {
@@ -622,8 +648,7 @@ const SupportFormForm = () => {
       const payload = {
         title: form.title.trim(),
         phone_number: form.phone_number?.trim() || null,
-        start_at: toUnixSeconds(form.start_at),
-        end_at: toUnixSeconds(form.end_at),
+        ...supportFormEditableFieldsPayload(form, questions, isEdit, editCapabilities.has_calls, toUnixSeconds),
         stop_time: toNumberOrNull(form.stop_time),
         call_duration: toNumberOrNull(form.call_duration),
         headings: cleanedHeadings.length ? JSON.stringify(cleanedHeadings) : null,
@@ -645,45 +670,26 @@ const SupportFormForm = () => {
         next_support_form_id: toNumberOrNull(form.next_support_form_id),
         tag_value_ids: tagValueIds.map(Number),
         parent_tag_question_answer: JSON.stringify(cleanedParentTagQuestionAnswer),
-        questions: questions.map((q) => ({
-          ...(q.id ? { id: q.id } : {}),
-          question: q.question,
-          answer: q.answer || null,
-          score: toNumberOrNull(q.score) ?? 0,
-          required: !!q.required,
-          title: q.title || null,
-          type: toNumberOrNull(q.type) ?? 0,
-          multi_choice: !!q.multi_choice,
-          rtl: !!q.rtl,
-          options: (q.options || []).map((opt) => ({
-            ...(opt.id ? { id: opt.id } : {}),
-            answer: opt.answer,
-            is_correct: !!opt.is_correct,
-          })),
-        })),
       };
 
       if (isEdit) {
         await updateSupportForm(id, payload);
+        await loadExistingForm();
         setAlert({ type: "success", message: "فرم تماس با موفقیت ویرایش شد." });
       } else {
         await createSupportForm(payload);
         setAlert({ type: "success", message: "فرم تماس جدید با موفقیت ایجاد شد." });
+        setTimeout(() => navigate(-1), 800);
       }
-
-      setTimeout(() => {
-        navigate(-1);
-      }, 800);
     } catch (e) {
       console.error(e);
-      if ([400, 404].includes(e?.response?.status)) {
-        const message = e?.response?.data?.message;
-        setQuestionHintError(Array.isArray(message) ? message.join("، ") : message || "اطلاعات راهنمای سؤال معتبر نیست.");
-      }
+      const message = e?.response?.data?.message;
+      const errorMessage = Array.isArray(message) ? message.join("، ") : message;
       if (e?.response?.status === 422) {
         setErrors(normalizeApiErrors(e.response.data.errors));
       } else {
-        setAlert({ type: "danger", message: "خطایی رخ داد. لطفاً دوباره تلاش کنید." });
+        if (isEdit && e?.response?.status === 400) await loadExistingForm();
+        setAlert({ type: "danger", message: errorMessage || "خطایی رخ داد. لطفاً دوباره تلاش کنید." });
       }
     } finally {
       setLoading(false);
@@ -772,6 +778,7 @@ const SupportFormForm = () => {
               </CardHeader>
 
               <CardBody>
+                {formLoading && <Alert color="info" className="mb-4">در حال دریافت اطلاعات فرم تماس...</Alert>}
                 {alert && (
                   <Alert color={alert.type} className="mb-4">
                     {alert.message}
@@ -1281,20 +1288,25 @@ const SupportFormForm = () => {
 
                       <TabPane tabId={2}>
                         <Form>
+                          {scheduleLocked && !formLoading && <Alert color="info">
+                            پس از ثبت اولین تماس، سؤال‌ها، پاسخ‌ها و تاریخ شروع و پایان تماس قابل تغییر نیستند.
+                          </Alert>}
                           <Row className="g-3">
                             <Col md="4">
                               <FormGroup>
                                 <Label for="start_at">تاریخ شروع <span className="text-muted">(اختیاری)</span></Label>
                                 <DatePicker
+                                  disabled={scheduleLocked || formLoading}
                                   calendar={persian}
                                   locale={persian_fa}
                                   value={form.start_at}
-                                  onChange={(date) =>
+                                  onChange={(date) => {
+                                    if (scheduleLocked || formLoading) return;
                                     setForm((prev) => ({
                                       ...prev,
                                       start_at: date ? moment(date.toDate()).startOf("day").toDate() : null,
-                                    }))
-                                  }
+                                    }));
+                                  }}
                                   format="YYYY/MM/DD"
                                   placeholder="تاریخ شروع"
                                   className="form-control"
@@ -1308,15 +1320,17 @@ const SupportFormForm = () => {
                               <FormGroup>
                                 <Label for="end_at">تاریخ پایان <span className="text-muted">(اختیاری)</span></Label>
                                 <DatePicker
+                                  disabled={scheduleLocked || formLoading}
                                   calendar={persian}
                                   locale={persian_fa}
                                   value={form.end_at}
-                                  onChange={(date) =>
+                                  onChange={(date) => {
+                                    if (scheduleLocked || formLoading) return;
                                     setForm((prev) => ({
                                       ...prev,
                                       end_at: date ? moment(date.toDate()).endOf("day").toDate() : null,
-                                    }))
-                                  }
+                                    }));
+                                  }}
                                   format="YYYY/MM/DD"
                                   placeholder="تاریخ پایان"
                                   className="form-control"
@@ -1457,10 +1471,14 @@ const SupportFormForm = () => {
 
                       <TabPane tabId={3}>
                         <Form onSubmit={handleSubmit}>
+                          {questionsLocked && !formLoading && <Alert color="info">
+                            پس از ثبت اولین تماس، سؤال‌ها، پاسخ‌ها و تاریخ شروع و پایان تماس قابل تغییر نیستند.
+                          </Alert>}
                           {errors.questions && (
                             <Alert color="danger">{errors.questions}</Alert>
                           )}
 
+                          <fieldset disabled={questionsLocked || formLoading} className="border-0 p-0 m-0 w-100">
                           {questions.map((q, index) => (
                             <Card key={q.client_id} className="border mb-3">
                               <CardBody>
@@ -1741,6 +1759,7 @@ const SupportFormForm = () => {
                           <Button type="button" color="light" onClick={handleAddQuestion}>
                             افزودن سوال جدید
                           </Button>
+                          </fieldset>
                         </Form>
                       </TabPane>
                     </TabContent>
@@ -1773,7 +1792,7 @@ const SupportFormForm = () => {
                             type="button"
                             color="primary"
                             onClick={handleSubmit}
-                            disabled={loading}
+                            disabled={loading || formLoading}
                           >
                             {loading ? "در حال ذخیره..." : isEdit ? "ویرایش فرم" : "ثبت فرم"}
                           </Button>
