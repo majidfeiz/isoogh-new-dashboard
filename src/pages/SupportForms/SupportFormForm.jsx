@@ -28,7 +28,7 @@ import moment from "moment-jalaali";
 
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import QuestionHintSelect from "./QuestionHintSelect.jsx";
-import { supportFormQuestionPayload, supportFormSchedulePayload } from "./supportFormEditLockUtils.js";
+import { supportFormEditableFieldsPayload } from "./supportFormEditLockUtils.js";
 import {
   getSupportForm,
   getSupportForms,
@@ -157,7 +157,6 @@ const SupportFormForm = () => {
     can_edit_questions: !isEdit,
     can_edit_schedule: !isEdit,
   });
-  const [originalLockedFields, setOriginalLockedFields] = useState({ questions: [], start_at: null, end_at: null });
   const [formLoading, setFormLoading] = useState(isEdit);
   const questionsLocked = isEdit && !editCapabilities.can_edit_questions;
   const scheduleLocked = isEdit && !editCapabilities.can_edit_schedule;
@@ -221,11 +220,6 @@ const SupportFormForm = () => {
           has_calls: !!formData?.has_calls,
           can_edit_questions: formData?.can_edit_questions !== false,
           can_edit_schedule: formData?.can_edit_schedule !== false,
-        });
-        setOriginalLockedFields({
-          questions: Array.isArray(formData?.questions) ? structuredClone(formData.questions) : [],
-          start_at: formData?.start_at ?? null,
-          end_at: formData?.end_at ?? null,
         });
         const fetchedQuestions = Array.isArray(formData?.questions)
           ? formData.questions.map((q) => buildQuestion(q))
@@ -654,7 +648,7 @@ const SupportFormForm = () => {
       const payload = {
         title: form.title.trim(),
         phone_number: form.phone_number?.trim() || null,
-        ...supportFormSchedulePayload(form, originalLockedFields, scheduleLocked, toUnixSeconds),
+        ...supportFormEditableFieldsPayload(form, questions, isEdit, editCapabilities.has_calls, toUnixSeconds),
         stop_time: toNumberOrNull(form.stop_time),
         call_duration: toNumberOrNull(form.call_duration),
         headings: cleanedHeadings.length ? JSON.stringify(cleanedHeadings) : null,
@@ -676,7 +670,6 @@ const SupportFormForm = () => {
         next_support_form_id: toNumberOrNull(form.next_support_form_id),
         tag_value_ids: tagValueIds.map(Number),
         parent_tag_question_answer: JSON.stringify(cleanedParentTagQuestionAnswer),
-        questions: supportFormQuestionPayload(questionsLocked ? originalLockedFields.questions : questions),
       };
 
       if (isEdit) {
