@@ -25,6 +25,10 @@ import { normalizeJalaliDateOnly } from "../helpers/jalaliDateOnly.js";
  * @property {number|string|null} id
  * @property {OutboundDisposition} [disposition]
  * @property {number|null} [talk_duration_seconds]
+ * @property {string|null} [student_name]
+ * @property {string|null} [student_gender]
+ * @property {string|null} [student_city]
+ * @property {string|null} [student_province]
  * @property {OutboundCallHistoryFile[]} files
  */
 
@@ -43,6 +47,10 @@ const normalizeOutboundFile = (file = {}) => ({
 export const normalizeOutboundCallItem = (item = {}) => ({
   ...item,
   talk_duration_seconds: item?.talk_duration_seconds ?? null,
+  student_name: item?.student_name ?? null,
+  student_gender: item?.student_gender ?? null,
+  student_city: item?.student_city ?? null,
+  student_province: item?.student_province ?? null,
   files: Array.isArray(item?.files) ? item.files.map(normalizeOutboundFile) : [],
 });
 
@@ -159,13 +167,17 @@ export async function exportOutboundCallHistories({
   support_form_id = "",
   adviser_id = "",
   super_adviser_id = "",
+  sort_by = "",
+  sort_order = "",
   onDownloadProgress,
+  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.voip.exportOutboundCallHistories);
 
   const response = await apiGet(url, {
     responseType: "blob",
     onDownloadProgress,
+    signal,
     params: {
       type: type || undefined,
       q: q || undefined,
@@ -179,6 +191,8 @@ export async function exportOutboundCallHistories({
       support_form_id: support_form_id || undefined,
       adviser_id: adviser_id || undefined,
       super_adviser_id: super_adviser_id || undefined,
+      sort_by: sort_by || undefined,
+      sort_order: sort_order || undefined,
     },
   });
 
@@ -201,6 +215,7 @@ export async function exportOutboundCallHistoriesExcel({
   sort_by = "",
   sort_order = "",
   signal,
+  onDownloadProgress,
 } = {}) {
   const params = Object.fromEntries(Object.entries({
     type: type || undefined,
@@ -222,6 +237,7 @@ export async function exportOutboundCallHistoriesExcel({
     responseType: "blob",
     timeout: 120000,
     signal,
+    onDownloadProgress,
     params,
   });
   return {
