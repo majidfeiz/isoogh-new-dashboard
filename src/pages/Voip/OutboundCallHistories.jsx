@@ -28,17 +28,14 @@ import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
-import { exportOutboundCallHistoriesExcel, getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
+import { exportOutboundCallHistories, exportOutboundCallHistoriesExcel, getOutboundCallHistories, getOutboundCallHistoryTags } from "../../services/voipService.jsx";
 import { getSupportForms } from "../../services/supportFormService.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
-import { API_ROUTES, getApiUrl } from "../../helpers/apiRoutes.jsx";
-import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
 import { isJalaliDateRangeValid, normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
 import OutboundExportActions from "./OutboundExportActions.jsx";
 import { downloadOutboundExcel, outboundExcelFilename } from "./outboundCallHistoryExcelUtils.js";
 import {
-  buildOutboundExportParams,
   mergeOutboundTagOptions,
   isOutboundCallAdmin,
   outboundStudentSsn,
@@ -69,6 +66,11 @@ const DISPOSITION_META = {
   "NO ANSWER": { label: "بدون پاسخ", color: "warning" },
   BUSY: { label: "مشغول", color: "info" },
   FAILED: { label: "ناموفق", color: "danger" },
+};
+
+const displayStudentValue = (value) => {
+  if (value == null || String(value).trim() === "") return <span className="text-muted">-</span>;
+  return value;
 };
 
 const OutboundCallHistories = () => {
@@ -115,8 +117,6 @@ const OutboundCallHistories = () => {
   const pageLimitRef = useRef(15);
 
   const [exportState, setExportState] = useState(INITIAL_EXPORT_STATE);
-  const exportAbortRef = useRef(null);
-  const [excelLoading, setExcelLoading] = useState(false);
   const excelAbortRef = useRef(null);
 
   const [fileModalOpen, setFileModalOpen] = useState(false);
@@ -438,18 +438,6 @@ const OutboundCallHistories = () => {
     [fetchData, sort.by, sort.order]
   );
 
-  const parseTotalBytes = (headers) => {
-    const raw =
-      headers.get("X-Approx-Content-Length") ||
-      headers.get("x-approx-content-length") ||
-      headers.get("Content-Length") ||
-      headers.get("content-length");
-
-    if (!raw) return null;
-    const n = Number(String(raw).replace(/[^\d]/g, ""));
-    return Number.isFinite(n) && n > 0 ? n : null;
-  };
-
   const formatBytes = (bytes) => {
     if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
     if (bytes < 1024) return `${bytes} B`;
@@ -458,138 +446,26 @@ const OutboundCallHistories = () => {
     return `${(kb / 1024).toFixed(1)} MB`;
   };
 
-  const parseFilename = (contentDisposition) => {
-    if (!contentDisposition) return "outbound-call-histories.csv";
-
-    const utf8 = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-    if (utf8?.[1]) {
-      try {
-        return decodeURIComponent(utf8[1].trim().replace(/^"|"$/g, ""));
-      } catch {
-        return utf8[1].trim().replace(/^"|"$/g, "");
-      }
-    }
-
-    const normal = contentDisposition.match(/filename="?([^";]+)"?/i);
-    if (normal?.[1]) return normal[1].trim();
-
-    return "outbound-call-histories.csv";
-  };
-
-  const downloadBlob = (blob, filename) => {
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.setAttribute("download", filename || "outbound-call-histories.csv");
-    document.body.appendChild(link);
-    link.click();
-    if (link.parentNode) link.parentNode.removeChild(link);
-    setTimeout(() => window.URL.revokeObjectURL(url), 1200);
-  };
-
-  const handleExport = useCallback(async () => {
-    if (exportAbortRef.current) return;
-
-    if (!isJalaliDateRangeValid(startDate, endDate)) {
-      setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
-      return;
-    }
-
-    const start = normalizeJalaliDateOnly(startDate);
-    const end = normalizeJalaliDateOnly(endDate);
-    const cleanedQ = q?.trim?.() || "";
-
-    setSearchError("");
-    setExportState({ status: "preparing", receivedBytes: 0, totalBytes: null, percent: null, errorMessage: null });
-
-    try {
-      const params = buildOutboundExportParams({
-        sort_by: sort?.by, sort_order: sort?.order, type, q: cleanedQ, disposition,
-        start_date: start, end_date: end, ssn, username: usernameInput.trim(), schoolId: isAdmin ? schoolId : "", tagId: tagId ? Number(tagId) : "",
-        support_form_id: supportFormId, adviser_id: adviserId, super_adviser_id: superAdviserId,
-      });
-
-      const queryString = params.toString();
-      const url = `${getApiUrl(API_ROUTES.voip.exportOutboundCallHistories)}${queryString ? `?${queryString}` : ""}`;
-      const token = getAccessToken();
-      const controller = new AbortController();
-      exportAbortRef.current = controller;
-
-      const res = await fetch(url, {
-        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        signal: controller.signal,
-      });
-
-      if (!res.ok || !res.body) {
-        const text = await res.text();
-        let message = res.status === 403 ? "شما اجازه دریافت خروجی تماس‌های خروجی را ندارید." : "خطا در خروجی گرفتن";
-        try {
-          const parsed = JSON.parse(text);
-          message = parsed?.message || parsed?.error || message;
-        } catch {
-          if (text) message = text;
-        }
-        const error = new Error(message);
-        error.status = res.status;
-        throw error;
-      }
-
-      const totalBytes = parseTotalBytes(res.headers);
-      setExportState((prev) => ({ ...prev, status: "downloading", totalBytes, percent: totalBytes ? 0 : null }));
-
-      const reader = res.body.getReader();
-      const chunks = [];
-      let receivedBytes = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunkSize = value?.byteLength ?? value?.length ?? 0;
-        if (chunkSize > 0) {
-          chunks.push(value);
-          receivedBytes += chunkSize;
-          const percent = totalBytes ? Math.min(99, Math.floor((receivedBytes / totalBytes) * 100)) : null;
-          setExportState((prev) => ({ ...prev, status: "downloading", receivedBytes, totalBytes, percent, errorMessage: null }));
-        }
-      }
-
-      const csvBlob = new Blob(chunks, { type: "text/csv;charset=utf-8" });
-      const filename = parseFilename(res.headers.get("Content-Disposition"));
-      downloadBlob(csvBlob, filename || "outbound-call-histories.csv");
-
-      setExportState((prev) => ({ ...prev, status: "success", receivedBytes, totalBytes, percent: 100, errorMessage: null }));
-    } catch (e) {
-      if (e?.name === "AbortError") {
-        setExportState(INITIAL_EXPORT_STATE);
-        return;
-      }
-      console.error("خطا در خروجی CSV تماس خروجی", e);
-      toast.error(e?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید.");
-      setExportState((prev) => ({ ...prev, status: "error", errorMessage: e?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید." }));
-    } finally {
-      exportAbortRef.current = null;
-    }
-  }, [adviserId, disposition, endDate, q, sort.by, sort.order, ssn, usernameInput, schoolId, isAdmin, startDate, superAdviserId, supportFormId, tagId, type]);
-
   const handleCancelExport = useCallback(() => {
-    if (exportAbortRef.current) {
-      exportAbortRef.current.abort();
-      exportAbortRef.current = null;
+    if (excelAbortRef.current) {
+      excelAbortRef.current.abort();
+      excelAbortRef.current = null;
     }
     setExportState(INITIAL_EXPORT_STATE);
   }, []);
 
-  const handleExcelExport = useCallback(async () => {
-    if (excelLoading || excelAbortRef.current) return;
+  const handleExport = useCallback(async (format = "xlsx") => {
+    if (excelAbortRef.current) return;
     if (!isJalaliDateRangeValid(startDate, endDate)) {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
       return;
     }
     const controller = new AbortController();
     excelAbortRef.current = controller;
-    setExcelLoading(true);
+    setSearchError("");
+    setExportState({ status: "preparing", receivedBytes: 0, totalBytes: null, percent: null, errorMessage: null });
     try {
-      const result = await exportOutboundCallHistoriesExcel({
+      const exportParams = {
         type,
         q,
         ssn,
@@ -605,20 +481,36 @@ const OutboundCallHistories = () => {
         adviser_id: adviserId,
         super_adviser_id: superAdviserId,
         signal: controller.signal,
-      });
+        onDownloadProgress: ({ loaded = 0, total }) => {
+          const totalBytes = Number.isFinite(total) && total > 0 ? total : null;
+          const percent = totalBytes ? Math.min(99, Math.floor((loaded / totalBytes) * 100)) : null;
+          setExportState({ status: "downloading", receivedBytes: loaded, totalBytes, percent, errorMessage: null });
+        },
+      };
+      const result = format === "csv"
+        ? await exportOutboundCallHistories(exportParams)
+        : await exportOutboundCallHistoriesExcel(exportParams);
       if (controller.signal.aborted) return;
-      downloadOutboundExcel(result.blob, outboundExcelFilename(result.contentDisposition));
-      toast.success("فایل Excel با موفقیت دانلود شد.");
+      if (format === "csv") {
+        downloadOutboundExcel(result, "outbound-call-histories.csv");
+      } else {
+        downloadOutboundExcel(result.blob, outboundExcelFilename(result.contentDisposition));
+      }
+      setExportState((prev) => ({ ...prev, status: "success", percent: 100, errorMessage: null }));
+      toast.success(`فایل ${format === "csv" ? "CSV" : "Excel"} با موفقیت دانلود شد.`);
     } catch (error) {
-      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError" || controller.signal.aborted) return;
+      if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError" || controller.signal.aborted) {
+        setExportState(INITIAL_EXPORT_STATE);
+        return;
+      }
+      setExportState((prev) => ({ ...prev, status: "error", errorMessage: error?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید." }));
       // The shared HTTP client displays the standard error toast.
     } finally {
       if (excelAbortRef.current === controller) {
         excelAbortRef.current = null;
-        setExcelLoading(false);
       }
     }
-  }, [adviserId, disposition, endDate, excelLoading, q, sort.by, sort.order, ssn, usernameInput, schoolId, isAdmin, startDate, superAdviserId, supportFormId, tagId, type]);
+  }, [adviserId, disposition, endDate, q, sort.by, sort.order, ssn, usernameInput, schoolId, isAdmin, startDate, superAdviserId, supportFormId, tagId, type]);
 
   useEffect(() => () => excelAbortRef.current?.abort(), []);
 
@@ -810,15 +702,12 @@ const OutboundCallHistories = () => {
         meta: { sortKey: null },
       },
       {
-        id: "student_full_name",
-        header: "نام و نام خانوادگی دانش‌آموز",
-        accessorKey: "student_full_name",
+        id: "student_name",
+        header: "نام دانش‌آموز",
+        accessorKey: "student_name",
         enableSorting: false,
         enableColumnFilter: false,
-        cell: ({ row }) => {
-          const val = row.original?.student_full_name ?? row.original?.student_name;
-          return val ? val : <span className="text-muted">-</span>;
-        },
+        cell: ({ row }) => displayStudentValue(row.original?.student_name),
         meta: { sortKey: null },
       },
       {
@@ -846,6 +735,33 @@ const OutboundCallHistories = () => {
         enableSorting: false,
         enableColumnFilter: false,
         cell: ({ row }) => <span className="font-monospace" dir="ltr">{outboundStudentSsn(row.original?.student_ssn)}</span>,
+        meta: { sortKey: null },
+      },
+      {
+        id: "student_gender",
+        header: "جنسیت",
+        accessorKey: "student_gender",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => displayStudentValue(row.original?.student_gender),
+        meta: { sortKey: null },
+      },
+      {
+        id: "student_city",
+        header: "شهر",
+        accessorKey: "student_city",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => displayStudentValue(row.original?.student_city),
+        meta: { sortKey: null },
+      },
+      {
+        id: "student_province",
+        header: "استان",
+        accessorKey: "student_province",
+        enableSorting: false,
+        enableColumnFilter: false,
+        cell: ({ row }) => displayStudentValue(row.original?.student_province),
         meta: { sortKey: null },
       },
       {
@@ -1018,8 +934,8 @@ const OutboundCallHistories = () => {
                       </Col>
 
                       <Col md="4" className="d-flex align-items-end">
-                        <OutboundExportActions hasPermission={hasPermission} csvBusy={isExportBusy} excelLoading={excelLoading}
-                          tableLoading={loading} onCsv={handleExport} onExcel={handleExcelExport} onCancelCsv={handleCancelExport} />
+                        <OutboundExportActions hasPermission={hasPermission} exportBusy={isExportBusy}
+                          tableLoading={loading} onExport={handleExport} onCancel={handleCancelExport} />
                       </Col>
                     </Row>
 
