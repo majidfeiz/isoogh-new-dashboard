@@ -70,10 +70,24 @@ test("normalizes the new VoIP call id from snake-case call responses", async () 
 })
 
 test("uses the call-log row id as voipCallId for historical questionnaires", async () => {
-  apiGet.mockResolvedValue({ data: { data: { items: [{ id: 3521346, hasAnswers: false }], meta: {} } } })
+  apiGet.mockResolvedValue({ data: { data: { items: [{
+    id: 3521346,
+    hasAnswers: false,
+    files: [{ id: 7, code: "recording", name: null, url: "https://cdn.example.com/call.mp3", type: "audio", size: "1 MB", time: "00:20", title: null, description: null }],
+  }], meta: {} } } })
   await expect(getStudentCallLogs({ formId: 14, studentId: 20 })).resolves.toEqual(expect.objectContaining({
-    items: [expect.objectContaining({ id: 3521346, voipCallId: 3521346 })],
+    items: [expect.objectContaining({
+      id: 3521346,
+      voipCallId: 3521346,
+      files: [expect.objectContaining({ id: 7, url: "https://cdn.example.com/call.mp3", type: "audio" })],
+    })],
   }))
+})
+
+test("normalizes missing student call-log files to an empty array", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [{ id: 1 }], meta: {} } } })
+  const result = await getStudentCallLogs({ formId: 14, studentId: 20 })
+  expect(result.items[0].files).toEqual([])
 })
 
 test("deduplicates answer sessions only by voipCallId", async () => {

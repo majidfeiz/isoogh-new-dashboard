@@ -1,10 +1,20 @@
 import {
+  getAdviserStudentListPath,
   getWorkShiftName,
   nextAdviserStudentSort,
   readAdviserStudentQuery,
   readAdviserStudentSort,
   updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
+
+test("restores the exact adviser student list query when returning from a profile", () => {
+  expect(getAdviserStudentListPath(3136, "/adviser-calls/forms/3136?page=3&status=1"))
+    .toBe("/adviser-calls/forms/3136?page=3&status=1");
+  expect(getAdviserStudentListPath(3136, "/adviser-calls/forms/9999?page=3"))
+    .toBe("/adviser-calls/forms/3136");
+  expect(getAdviserStudentListPath(3136))
+    .toBe("/adviser-calls/forms/3136");
+});
 
 test("restores work shift sorting from the URL", () => {
   expect(readAdviserStudentSort(new URLSearchParams("sortBy=workShiftId&sortOrder=DESC"))).toEqual({
