@@ -42,6 +42,13 @@ export function updateAdviserStudentQuery(searchParams, changes) {
   return next;
 }
 
+export function getAdviserStudentListPath(formId, returnTo) {
+  const fallback = `/adviser-calls/forms/${formId}`;
+  if (typeof returnTo !== "string") return fallback;
+  const pathname = returnTo.split(/[?#]/, 1)[0];
+  return pathname === fallback ? returnTo : fallback;
+}
+
 export function getWorkShiftName(student) {
   return student?.workShift?.name || "شیفت ناشناخته";
 }

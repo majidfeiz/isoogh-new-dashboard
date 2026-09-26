@@ -87,6 +87,20 @@ test("submits a type-1 multi-choice selection as an answerId array", async () =>
   })));
 });
 
+test("allows clearing an accidentally selected optional radio answer", async () => {
+  getStudentAnswers.mockResolvedValue([]);
+  render(<AnswerDrawer open student={student} form={form} callContext={context(3805791)} onClose={jest.fn()} />);
+
+  const radio = await screen.findByRole("radio", { name: "اول" });
+  expect(screen.queryByRole("button", { name: /پاک کردن انتخاب/ })).not.toBeInTheDocument();
+  fireEvent.click(radio);
+  expect(radio).toBeChecked();
+
+  fireEvent.click(screen.getByRole("button", { name: /پاک کردن انتخاب/ }));
+  expect(radio).not.toBeChecked();
+  expect(screen.queryByRole("button", { name: /پاک کردن انتخاب/ })).not.toBeInTheDocument();
+});
+
 test("submits one full empty snapshot for a new call and blocks double submit", async () => {
   let resolveSubmit;
   getStudentAnswers.mockResolvedValue([]);
