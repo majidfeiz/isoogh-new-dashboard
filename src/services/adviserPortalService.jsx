@@ -150,6 +150,38 @@ const normalizeStudentProfile = (item = {}) => ({
   previousAnswers: normalizePreviousAnswers(item?.previousAnswers ?? item?.previous_answers),
 });
 
+/**
+ * @typedef {Object} StudentCallLogFile
+ * @property {number|null} id
+ * @property {string} code
+ * @property {string|null} name
+ * @property {string} url
+ * @property {string|null} type
+ * @property {string|null} size
+ * @property {string|null} time
+ * @property {string|null} title
+ * @property {string|null} description
+ */
+
+const normalizeStudentCallLogFile = (file = {}) => ({
+  id: file?.id ?? null,
+  code: file?.code ?? "",
+  name: file?.name ?? null,
+  url: file?.url ?? "",
+  type: file?.type ?? null,
+  size: file?.size ?? null,
+  time: file?.time ?? null,
+  title: file?.title ?? null,
+  description: file?.description ?? null,
+});
+
+/**
+ * @typedef {Object} StudentCallLog
+ * @property {number|null} id
+ * @property {StudentCallLogFile[]} files
+ */
+
+/** @returns {StudentCallLog} */
 const normalizeStudentCallLog = (item = {}) => ({
   id: item?.id ?? null,
   voipCallId: item?.voipCallId ?? item?.voip_call_id ?? item?.id ?? null,
@@ -164,6 +196,7 @@ const normalizeStudentCallLog = (item = {}) => ({
   callDateJalali: item?.call_date_jalali ?? item?.callStartedAtJalali ?? "",
   hasAnswers: item?.hasAnswers ?? item?.has_answers ?? false,
   createdAt: item?.createdAt ?? item?.created_at ?? null,
+  files: Array.isArray(item?.files) ? item.files.map(normalizeStudentCallLogFile) : [],
 });
 
 const normalizeCallLog = (item = {}) => ({

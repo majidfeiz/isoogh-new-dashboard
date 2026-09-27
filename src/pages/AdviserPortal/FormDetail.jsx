@@ -124,6 +124,14 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   };
 
+  const clearAnswer = (questionId) => {
+    setAnswers((prev) => {
+      const next = { ...prev };
+      delete next[questionId];
+      return next;
+    });
+  };
+
   const toggleCheckbox = (questionId, optionId) => {
     setAnswers((prev) => {
       const current = prev[questionId] || [];
@@ -288,6 +296,14 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                       </label>
                     </div>
                   ))}
+                  {!q.required && answers[q.id] != null && answers[q.id] !== "" && (
+                    <div>
+                      <Button type="button" color="secondary" outline size="sm" onClick={() => clearAnswer(q.id)}>
+                        <i className="bx bx-reset me-1" />
+                        پاک کردن انتخاب
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -963,7 +979,12 @@ const FormDetail = () => {
                               onClick={() =>
                                 navigate(
                                   `/adviser-calls/forms/${formId}/students/${student.studentId}`,
-                                  { state: { schoolId: location.state?.schoolId ?? form?.schoolId } }
+                                  {
+                                    state: {
+                                      schoolId: location.state?.schoolId ?? form?.schoolId,
+                                      returnTo: `${location.pathname}${location.search}`,
+                                    },
+                                  }
                                 )
                               }
                               title="مشاهده پروفایل دانش‌آموز"

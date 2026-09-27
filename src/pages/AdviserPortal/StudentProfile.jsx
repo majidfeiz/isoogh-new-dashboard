@@ -44,6 +44,7 @@ import {
   deleteStudentContact,
 } from "../../services/adviserPortalService.jsx";
 import { buildAnswerPayload, createAnswerCallContext, getAnswerDisplayText, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
+import { getAdviserStudentListPath } from "./formDetailSortUtils.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -155,6 +156,11 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
   }, [open, studentId, callContext?.formId, form?.questions, voipCallId]);
 
   const setAnswer = (qId, value) => setAnswers((p) => ({ ...p, [qId]: value }));
+  const clearAnswer = (qId) => setAnswers((current) => {
+    const next = { ...current };
+    delete next[qId];
+    return next;
+  });
   const toggleCheckbox = (qId, optId) =>
     setAnswers((p) => {
       const cur = p[qId] || [];
@@ -239,6 +245,14 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
                       <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`} style={{ pointerEvents: "none" }}>{opt.label}</label>
                     </div>
                   ))}
+                  {!q.required && answers[q.id] != null && answers[q.id] !== "" && (
+                    <div>
+                      <Button type="button" color="secondary" outline size="sm" onClick={() => clearAnswer(q.id)}>
+                        <i className="bx bx-reset me-1" />
+                        پاک کردن انتخاب
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
               {q.type !== 0 && q.multiChoice && (
@@ -347,13 +361,126 @@ const StudentInfoTab = ({ profile, loading }) => {
 
 // ─── Tab 2: Call Logs ─────────────────────────────────────────────────────────
 
+const isAudioCallFile = (file = {}) => {
+  const type = String(file?.type || "").trim().toLowerCase();
+  if (type === "voice" || type === "audio" || type.startsWith("audio/")) return true;
+  return /\.(wav|mp3|ogg|m4a)(?:[?#].*)?$/i.test(String(file?.url || ""));
+};
+
+const CallAudioPlayer = ({ file, index, registerAudio, onPlay }) => {
+  const [failed, setFailed] = useState(false);
+  const label = file?.title?.trim?.() || file?.name?.trim?.() || file?.code?.trim?.() || `فایل صوتی ${index + 1}`;
+
+  useEffect(() => setFailed(false), [file?.url]);
+
+  return (
+    <div className="border rounded-3 p-3 bg-white shadow-sm">
+      <div className="d-flex align-items-start justify-content-between gap-3 mb-3 flex-wrap">
+        <div className="d-flex align-items-center gap-2 overflow-hidden">
+          <div className="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center flex-shrink-0" style={{ width: 40, height: 40 }}>
+            <i className="bx bx-volume-full font-size-20" />
+          </div>
+          <div className="overflow-hidden">
+            <div className="fw-semibold text-truncate" title={label}>{label}</div>
+            {file?.description && <div className="small text-muted text-break mt-1">{file.description}</div>}
+          </div>
+        </div>
+        <div className="d-flex gap-1 flex-wrap">
+          {file?.time && <Badge color="light" className="text-dark border"><i className="bx bx-time-five me-1" />{file.time}</Badge>}
+          {file?.size && <Badge color="light" className="text-dark border">{file.size}</Badge>}
+        </div>
+      </div>
+      {!file?.url || !isAudioCallFile(file) || failed ? (
+        <Alert color="warning" className="py-2 mb-0 d-flex align-items-center gap-2">
+          <i className="bx bx-error-circle font-size-18" />
+          فایل صوتی قابل دسترس نیست
+        </Alert>
+      ) : (
+        <audio
+          ref={registerAudio}
+          controls
+          preload="metadata"
+          src={file.url}
+          className="w-100 d-block"
+          style={{ height: 44 }}
+          onPlay={onPlay}
+          onError={() => setFailed(true)}
+        >
+          مرورگر شما پخش صوت را پشتیبانی نمی‌کند.
+        </audio>
+      )}
+    </div>
+  );
+};
+
+const CallAudioFilesModal = ({ call, isOpen, toggle }) => {
+  const audioElements = useRef(new Set());
+  const files = Array.isArray(call?.files) ? call.files : [];
+
+  const stopAudio = useCallback((except = null, reset = false) => {
+    audioElements.current.forEach((audio) => {
+      if (!audio || audio === except) return;
+      audio.pause();
+      if (reset) audio.currentTime = 0;
+    });
+  }, []);
+
+  const closeModal = useCallback(() => {
+    stopAudio(null, true);
+    toggle();
+  }, [stopAudio, toggle]);
+
+  useEffect(() => {
+    if (isOpen) return;
+    stopAudio(null, true);
+    audioElements.current.clear();
+  }, [isOpen, stopAudio]);
+
+  useEffect(() => () => stopAudio(null, true), [stopAudio]);
+
+  return (
+    <Modal isOpen={isOpen} toggle={closeModal} centered size="lg" scrollable>
+      <ModalHeader toggle={closeModal} className="border-bottom">
+        <div>
+          <div className="d-flex align-items-center gap-2">
+            <i className="bx bx-headphone text-primary font-size-20" />
+            فایل‌های صوتی تماس
+          </div>
+          {call && <small className="text-muted fw-normal">{getVoipCallDateDisplay(call)} · تماس #{call.id}</small>}
+        </div>
+      </ModalHeader>
+      <ModalBody className="bg-light p-3 p-md-4">
+        <div className="d-flex align-items-center justify-content-between mb-3">
+          <span className="text-muted small">برای هر فایل امکان پخش، توقف و جابه‌جایی در صوت وجود دارد.</span>
+          <Badge color="primary" pill>{files.length.toLocaleString("fa-IR")} فایل</Badge>
+        </div>
+        <div className="d-flex flex-column gap-3">
+          {files.map((file, index) => (
+            <CallAudioPlayer
+              key={file?.id ?? file?.url ?? index}
+              file={file}
+              index={index}
+              registerAudio={(element) => {
+                if (element) audioElements.current.add(element);
+              }}
+              onPlay={(event) => stopAudio(event.currentTarget)}
+            />
+          ))}
+        </div>
+      </ModalBody>
+    </Modal>
+  );
+};
+
 const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
   const [loading, setLoading] = useState(false);
+  const [selectedAudioCall, setSelectedAudioCall] = useState(null);
 
   const fetchLogs = useCallback(
     async (page = 1) => {
+      setSelectedAudioCall(null);
       setLoading(true);
       try {
         const res = await getStudentCallLogs({ formId, studentId, page, limit: 15 });
@@ -395,6 +522,7 @@ const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
               <th>وضعیت</th>
               <th>مدت زمان</th>
               <th>شماره مقصد</th>
+              <th className="text-center">فایل صوتی</th>
               <th style={{ width: 80 }} className="text-center">پاسخنامه</th>
             </tr>
           </thead>
@@ -413,6 +541,16 @@ const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
                   </td>
                   <td className="text-muted small">{log.toPhone || "—"}</td>
                   <td className="text-center">
+                    {log.files.length === 0 ? (
+                      <span className="text-muted">-</span>
+                    ) : (
+                      <Button color="primary" outline size="sm" className="d-inline-flex align-items-center gap-1" onClick={() => setSelectedAudioCall(log)}>
+                        <i className="bx bx-play-circle font-size-16" />
+                        {log.files.length === 1 ? "پخش فایل" : `${log.files.length.toLocaleString("fa-IR")} فایل`}
+                      </Button>
+                    )}
+                  </td>
+                  <td className="text-center">
                     <Button color={log.hasAnswers ? "success" : "primary"} outline size="sm" disabled={!log.voipCallId} onClick={() => onOpenAnswers(log.voipCallId)}>
                       <i className={`bx ${log.hasAnswers ? "bx-edit" : "bx-plus"}`} />
                     </Button>
@@ -428,6 +566,7 @@ const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
           <Paginations perPageData={meta.limit} data={data} totalRecords={meta.total} currentPage={meta.page} setCurrentPage={fetchLogs} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" />
         </div>
       )}
+      <CallAudioFilesModal call={selectedAudioCall} isOpen={Boolean(selectedAudioCall)} toggle={() => setSelectedAudioCall(null)} />
     </div>
   );
 };
@@ -969,6 +1108,7 @@ const StudentProfile = () => {
 
   const breadcrumbTitle = profile?.supportFormTitle || `فرم ${formId}`;
   const initials = profile ? getInitials(profile.name) : "؟";
+  const studentListPath = getAdviserStudentListPath(formId, location.state?.returnTo);
 
   const tabs = [
     { id: "info",      label: "اطلاعات",       icon: "bx-user-circle"   },
@@ -983,7 +1123,7 @@ const StudentProfile = () => {
         <Breadcrumbs
           title={breadcrumbTitle}
           breadcrumbItem={profile?.name || "پروفایل دانش‌آموز"}
-          titleLink={`/adviser-calls/forms/${formId}`}
+          titleLink={studentListPath}
         />
 
         {/* ── Hero Card ──────────────────────────────────────────────────── */}
@@ -1022,7 +1162,7 @@ const StudentProfile = () => {
                 <Button
                   color="light"
                   size="sm"
-                  onClick={() => navigate(`/adviser-calls/forms/${formId}`)}
+                  onClick={() => navigate(studentListPath)}
                   className="d-flex align-items-center gap-1"
                 >
                   <i className="bx bx-arrow-back" />

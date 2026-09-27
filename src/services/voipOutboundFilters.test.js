@@ -96,14 +96,16 @@ test("exports the same date-only range and active filters without pagination", a
 
 test("exports Excel with every active filter, blob response and no pagination", async () => {
   const blob = new Blob(["xlsx"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const onDownloadProgress = jest.fn();
   apiGet.mockResolvedValue({ data: blob, headers: { "content-disposition": "attachment; filename=outbound.xlsx" } });
   const result = await exportOutboundCallHistoriesExcel({
     page: 9, per_page: 100, type: "StudentName", q: " علی ", ssn: " 001 ", tagId: 12,
     disposition: "ANSWERED", support_form_id: 4, adviser_id: 5, super_adviser_id: 6,
     start_date: "۱۴۰۵/۰۶/۰۱", end_date: "1405-06-10", sort_by: "id", sort_order: "DESC",
+    onDownloadProgress,
   });
   expect(apiGet.mock.calls[0][0]).toBe("http://127.0.0.1:8040/voip/outbound-call-histories/export/xlsx");
-  expect(apiGet.mock.calls[0][1]).toEqual(expect.objectContaining({ responseType: "blob", timeout: 120000 }));
+  expect(apiGet.mock.calls[0][1]).toEqual(expect.objectContaining({ responseType: "blob", timeout: 120000, onDownloadProgress }));
   expect(apiGet.mock.calls[0][1].params).toEqual({
     type: "StudentName", q: "علی", ssn: "001", tagId: 12, disposition: "ANSWERED",
     support_form_id: 4, adviser_id: 5, super_adviser_id: 6,
