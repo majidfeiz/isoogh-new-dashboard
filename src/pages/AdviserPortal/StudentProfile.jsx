@@ -78,6 +78,8 @@ const hasValidCallGroupId = (value) => {
   return normalized !== "" && normalized !== "null";
 };
 
+const CALL_COOLDOWN_SECONDS = 20;
+
 const PreviousAnswersCard = ({ items, className = "" }) => {
   if (!items?.length) return null;
   return <div className={`border rounded p-3 ${className}`} data-testid="student-previous-answers">
@@ -979,6 +981,7 @@ const StudentProfile = () => {
   const [queuedCall, setQueuedCall] = useState(null);
   const queuedTraceRequest = useRef(null);
   const [calling, setCalling] = useState(false);
+  const [callCooldownSeconds, setCallCooldownSeconds] = useState(0);
   const cooldown = useRef(false);
   const accessDeniedHandled = useRef(false);
 
@@ -1022,15 +1025,30 @@ const StudentProfile = () => {
   useEffect(() => () => queuedTraceRequest.current?.abort(), []);
 
   useEffect(() => {
+    if (callCooldownSeconds <= 0) {
+      cooldown.current = false;
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setCallCooldownSeconds((seconds) => Math.max(0, seconds - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [callCooldownSeconds]);
+
+  useEffect(() => {
     setAnswerCallContext(null);
     setDrawerOpen(false);
+    setCallCooldownSeconds(0);
+    cooldown.current = false;
   }, [formId, studentId]);
 
   const handleCall = async () => {
     if (cooldown.current || calling) return;
     cooldown.current = true;
+    setCallCooldownSeconds(CALL_COOLDOWN_SECONDS);
     setCalling(true);
-    setTimeout(() => { cooldown.current = false; }, 5000);
     try {
       const result = await makeCall({ supportFormId: Number(formId), studentId: Number(studentId) });
       if (isQueuedCallResponse(result)) {
@@ -1065,7 +1083,7 @@ const StudentProfile = () => {
       setAnswerCallContext(context);
       setDrawerOpen(true);
     } catch {
-      cooldown.current = false;
+      // The cooldown intentionally remains active after failed attempts as well.
     } finally {
       setCalling(false);
     }
@@ -1181,12 +1199,15 @@ const StudentProfile = () => {
                 <Button
                   color="success"
                   onClick={handleCall}
-                  disabled={calling || profileLoading}
+                  disabled={calling || profileLoading || callCooldownSeconds > 0}
                   className="d-flex align-items-center gap-2 px-4"
                   style={{ fontWeight: 600 }}
                 >
-                  {calling ? (
-                    <><Spinner size="sm" />در حال تماس...</>
+                  {callCooldownSeconds > 0 ? (
+                    <>
+                      {calling ? <Spinner size="sm" /> : <i className="bx bx-time-five font-size-16" />}
+                      تماس مجدد تا {callCooldownSeconds.toLocaleString("fa-IR")} ثانیه
+                    </>
                   ) : (
                     <><i className="bx bx-phone-call font-size-16" />برقراری تماس</>
                   )}
