@@ -45,6 +45,7 @@ import {
 } from "../../services/adviserPortalService.jsx";
 import { buildAnswerPayload, createAnswerCallContext, getAnswerDisplayText, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
 import { getAdviserStudentListPath } from "./formDetailSortUtils.js";
+import { closeSupportForm, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ const TagValuesCard = ({ items, className = "" }) => {
 
 // ─── Answer Drawer ────────────────────────────────────────────────────────────
 
-const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswers, form, callContext, onSubmitted }) => {
+const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswers, form, callContext, onSubmitted, canEdit = true, onFormEnded }) => {
   const { studentId, voipCallId } = callContext || {};
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -174,7 +175,7 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
   const isComplete = unansweredCount === 0;
 
   const handleSubmit = async (callSuccessful) => {
-    if (submittingRef.current) return;
+    if (!canEdit || submittingRef.current) return;
     submittingRef.current = true;
     setSubmittingAction(callSuccessful ? "success" : "incomplete");
     setSubmitting(true);
@@ -195,7 +196,12 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
       onSubmitted?.(result);
       onClose();
     } catch (error) {
-      setAnswerError(getAnswerRequestError(error));
+      if (isSupportFormEndedError(error)) {
+        onFormEnded?.(error);
+        setAnswerError(SUPPORT_FORM_READ_ONLY_MESSAGE);
+      } else {
+        setAnswerError(getAnswerRequestError(error));
+      }
       setConfirmationOpen(false);
     } finally {
       submittingRef.current = false;
@@ -217,6 +223,7 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
         </div>
       </ModalHeader>
       <ModalBody className="p-4">
+        {!canEdit ? <Alert color="warning">{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert> : null}
         {answerError ? <Alert color="danger">{answerError}</Alert> : null}
         {answersLoading ? <div className="text-center py-5"><Spinner color="primary" /><div className="text-muted mt-2">در حال دریافت پاسخنامه تماس...</div></div> : null}
         {!answersLoading && <>
@@ -229,7 +236,7 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
                 {q.required && <span className="text-danger ms-1">*</span>}
               </Label>
               {q.type === 0 && (
-                <Input type="textarea" rows={3} value={answers[q.id] || ""} onChange={(e) => setAnswer(q.id, e.target.value)} placeholder="پاسخ خود را بنویسید..." />
+                <Input type="textarea" rows={3} value={answers[q.id] || ""} disabled={!canEdit} onChange={(e) => setAnswer(q.id, e.target.value)} placeholder="پاسخ خود را بنویسید..." />
               )}
               {q.type !== 0 && !q.multiChoice && (
                 <div className="vstack gap-2 mt-1">
@@ -238,16 +245,16 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
                       key={opt.id}
                       className="form-check"
                       role="button"
-                      tabIndex={0}
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setAnswer(q.id, Number(opt.id))}
-                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setAnswer(q.id, Number(opt.id)); } }}
+                      tabIndex={canEdit ? 0 : -1}
+                      style={{ cursor: canEdit ? "pointer" : "default" }}
+                      onClick={() => canEdit && setAnswer(q.id, Number(opt.id))}
+                      onKeyDown={(e) => { if (canEdit && (e.key === " " || e.key === "Enter")) { e.preventDefault(); setAnswer(q.id, Number(opt.id)); } }}
                     >
-                      <input className="form-check-input" type="radio" name={`q-${q.id}`} id={`opt-${q.id}-${opt.id}`} value={opt.id} checked={Number(answers[q.id]) === Number(opt.id)} readOnly />
+                      <input className="form-check-input" type="radio" name={`q-${q.id}`} id={`opt-${q.id}-${opt.id}`} value={opt.id} checked={Number(answers[q.id]) === Number(opt.id)} disabled={!canEdit} readOnly />
                       <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`} style={{ pointerEvents: "none" }}>{opt.label}</label>
                     </div>
                   ))}
-                  {!q.required && answers[q.id] != null && answers[q.id] !== "" && (
+                  {canEdit && !q.required && answers[q.id] != null && answers[q.id] !== "" && (
                     <div>
                       <Button type="button" color="secondary" outline size="sm" onClick={() => clearAnswer(q.id)}>
                         <i className="bx bx-reset me-1" />
@@ -264,12 +271,12 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
                       key={opt.id}
                       className="form-check"
                       role="button"
-                      tabIndex={0}
-                      style={{ cursor: "pointer" }}
-                      onClick={() => toggleCheckbox(q.id, Number(opt.id))}
-                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCheckbox(q.id, Number(opt.id)); } }}
+                      tabIndex={canEdit ? 0 : -1}
+                      style={{ cursor: canEdit ? "pointer" : "default" }}
+                      onClick={() => canEdit && toggleCheckbox(q.id, Number(opt.id))}
+                      onKeyDown={(e) => { if (canEdit && (e.key === " " || e.key === "Enter")) { e.preventDefault(); toggleCheckbox(q.id, Number(opt.id)); } }}
                     >
-                      <input className="form-check-input" type="checkbox" id={`opt-${q.id}-${opt.id}`} checked={(answers[q.id] || []).some((id) => Number(id) === Number(opt.id))} readOnly />
+                      <input className="form-check-input" type="checkbox" id={`opt-${q.id}-${opt.id}`} checked={(answers[q.id] || []).some((id) => Number(id) === Number(opt.id))} disabled={!canEdit} readOnly />
                       <label className="form-check-label" htmlFor={`opt-${q.id}-${opt.id}`} style={{ pointerEvents: "none" }}>{opt.label}</label>
                     </div>
                   ))}
@@ -280,7 +287,7 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
         </div>
         <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
           <Button color="light" onClick={onClose} disabled={submitting}>انصراف</Button>
-          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting || !answersReady}>
+          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={!canEdit || submitting || !answersReady}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
@@ -294,11 +301,11 @@ const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previousAnswer
           <div className="alert alert-warning py-2 small">تعداد سؤال‌های بی‌پاسخ: {unansweredCount}</div>
           <div className="d-flex justify-content-end gap-2 mt-3">
             <Button color="light" onClick={() => setConfirmationOpen(false)} disabled={submitting}>انصراف</Button>
-            <Button color="danger" onClick={() => handleSubmit(false)} disabled={submitting}>
+            <Button color="danger" onClick={() => handleSubmit(false)} disabled={!canEdit || submitting}>
               {submittingAction === "incomplete" && <Spinner size="sm" className="me-2" />}
               ثبت ناموفق/ناقص
             </Button>
-            <Button color="success" onClick={() => handleSubmit(true)} disabled={submitting}>
+            <Button color="success" onClick={() => handleSubmit(true)} disabled={!canEdit || submitting}>
               {submittingAction === "success" && <Spinner size="sm" className="me-2" />}
               ثبت تماس موفق
             </Button>
@@ -575,7 +582,7 @@ const CallLogsTab = ({ formId, studentId, refreshKey, onOpenAnswers }) => {
 
 // ─── Tab 3: Answers ───────────────────────────────────────────────────────────
 
-const AnswersTab = ({ formId, studentId, form, previousAnswers, tagValues, refreshKey, onFillAnswers }) => {
+const AnswersTab = ({ formId, studentId, form, previousAnswers, tagValues, refreshKey, onFillAnswers, canEdit }) => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState({});
@@ -604,7 +611,7 @@ const AnswersTab = ({ formId, studentId, form, previousAnswers, tagValues, refre
             </div>
           </div>
           <h6 className="text-muted mb-3">هیچ پاسخنامه‌ای ثبت نشده است</h6>
-          <Button color="primary" onClick={() => onFillAnswers()}>
+          <Button color="primary" disabled={!canEdit} onClick={() => onFillAnswers()}>
             <i className="bx bx-edit me-2" />
             پر کردن پاسخنامه
           </Button>
@@ -634,7 +641,7 @@ const AnswersTab = ({ formId, studentId, form, previousAnswers, tagValues, refre
                 جلسه {idx + 1} — {formatJalali(session.sessionDate, true)}
               </span>
               <Badge color="primary" pill className="px-2">{session.answers?.length || 0} پاسخ</Badge>
-              {session.voipCallId ? <Button size="sm" color="primary" outline onClick={(event) => { event.stopPropagation(); onFillAnswers(session.voipCallId); }}>ویرایش</Button> : null}
+              {session.voipCallId ? <Button size="sm" color="primary" outline onClick={(event) => { event.stopPropagation(); onFillAnswers(session.voipCallId); }}>{canEdit ? "ویرایش" : "مشاهده"}</Button> : null}
             </div>
             <i className={`bx bx-chevron-${open[idx] ? "up" : "down"} font-size-18 text-muted`} />
           </div>
@@ -669,7 +676,7 @@ const AnswersTab = ({ formId, studentId, form, previousAnswers, tagValues, refre
 
 // ─── Tab 4: Phone Book ───────────────────────────────────────────────────────
 
-const PhoneBookTab = ({ formId, studentId, subjects }) => {
+export const PhoneBookTab = ({ formId, studentId, subjects, canEdit, onFormEnded }) => {
   const [contacts, setContacts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -688,9 +695,16 @@ const PhoneBookTab = ({ formId, studentId, subjects }) => {
   }, [formId, studentId]);
 
   useEffect(() => { fetchContacts(); }, [fetchContacts]);
+  useEffect(() => {
+    if (!canEdit) {
+      setShowForm(false);
+      setConfirmDelete(null);
+    }
+  }, [canEdit]);
 
   const handleAdd = async (e) => {
     e.preventDefault();
+    if (!canEdit) return;
     if (!form.phoneNumber.trim()) { toast.error("شماره تلفن الزامی است"); return; }
     if (!form.subjectId) { toast.error("نوع تماس را انتخاب کنید"); return; }
     setSubmitting(true);
@@ -704,34 +718,36 @@ const PhoneBookTab = ({ formId, studentId, subjects }) => {
       setForm({ phoneNumber: "", subjectId: "", setAsDefault: false });
       setShowForm(false);
       fetchContacts();
-    } catch {
-      // handled by httpClient
+    } catch (error) {
+      onFormEnded?.(error);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleSetDefault = async (contactId) => {
+    if (!canEdit) return;
     setSettingDefaultId(contactId);
     try {
       await setDefaultContact(formId, studentId, contactId);
       toast.success("شماره پیش‌فرض تغییر کرد");
       fetchContacts();
-    } catch {
-      // handled
+    } catch (error) {
+      onFormEnded?.(error);
     } finally {
       setSettingDefaultId(null);
     }
   };
 
   const handleDelete = async (contactId) => {
+    if (!canEdit) return;
     setDeletingId(contactId);
     try {
       await deleteStudentContact(formId, studentId, contactId);
       toast.success("شماره حذف شد");
       fetchContacts();
-    } catch {
-      // handled
+    } catch (error) {
+      onFormEnded?.(error);
     } finally {
       setDeletingId(null);
       setConfirmDelete(null);
@@ -752,6 +768,7 @@ const PhoneBookTab = ({ formId, studentId, subjects }) => {
         <Button
           color={showForm ? "light" : "primary"}
           size="sm"
+          disabled={!canEdit}
           onClick={() => setShowForm((v) => !v)}
           className="d-flex align-items-center gap-1"
         >
@@ -831,7 +848,7 @@ const PhoneBookTab = ({ formId, studentId, subjects }) => {
           </div>
           <h6 className="text-muted">هنوز شماره‌ای اضافه نشده</h6>
           {!showForm && (
-            <Button color="primary" size="sm" className="mt-2" onClick={() => setShowForm(true)}>
+            <Button color="primary" size="sm" className="mt-2" disabled={!canEdit} onClick={() => setShowForm(true)}>
               <i className="bx bx-plus me-1" />افزودن اولین شماره
             </Button>
           )}
@@ -886,7 +903,7 @@ const PhoneBookTab = ({ formId, studentId, subjects }) => {
                           color="warning"
                           size="sm"
                           outline
-                          disabled={settingDefaultId === c.id}
+                          disabled={!canEdit || settingDefaultId === c.id}
                           onClick={() => handleSetDefault(c.id)}
                           title="تنظیم به عنوان پیش‌فرض"
                         >
@@ -899,7 +916,7 @@ const PhoneBookTab = ({ formId, studentId, subjects }) => {
                         color="danger"
                         size="sm"
                         outline
-                        disabled={deletingId === c.id}
+                        disabled={!canEdit || deletingId === c.id}
                         onClick={() => setConfirmDelete(c)}
                         title="حذف شماره"
                       >
@@ -929,7 +946,7 @@ const PhoneBookTab = ({ formId, studentId, subjects }) => {
             <Button color="light" onClick={() => setConfirmDelete(null)}>انصراف</Button>
             <Button
               color="danger"
-              disabled={deletingId === confirmDelete?.id}
+              disabled={!canEdit || deletingId === confirmDelete?.id}
               onClick={() => handleDelete(confirmDelete.id)}
             >
               {deletingId === confirmDelete?.id ? <Spinner size="sm" className="me-1" /> : <i className="bx bx-trash me-1" />}
@@ -985,6 +1002,16 @@ const StudentProfile = () => {
   const cooldown = useRef(false);
   const accessDeniedHandled = useRef(false);
 
+  const canEdit = form?.canEdit === true;
+  const canCall = form?.canCall === true;
+  const isReadOnly = Boolean(form) && (form.isClosed === true || !canEdit);
+
+  const handleFormEnded = useCallback((error) => {
+    if (!isSupportFormEndedError(error)) return false;
+    setForm((current) => closeSupportForm(current, error));
+    return true;
+  }, []);
+
   document.title = "پروفایل دانش‌آموز | داشبورد آیسوق";
 
   const fetchProfile = useCallback(() => {
@@ -1008,6 +1035,10 @@ const StudentProfile = () => {
   useEffect(() => {
     fetchProfile();
     getAdviserSupportFormDetail(formId).then(setForm).catch((error) => {
+      if (isSupportFormEndedError(error)) {
+        setForm((current) => closeSupportForm(current, error));
+        return;
+      }
       if (error?.response?.status === 403 && !accessDeniedHandled.current) {
         accessDeniedHandled.current = true;
         setProfile(null);
@@ -1045,7 +1076,7 @@ const StudentProfile = () => {
   }, [formId, studentId]);
 
   const handleCall = async () => {
-    if (cooldown.current || calling) return;
+    if (!canCall || cooldown.current || calling) return;
     cooldown.current = true;
     setCallCooldownSeconds(CALL_COOLDOWN_SECONDS);
     setCalling(true);
@@ -1082,7 +1113,8 @@ const StudentProfile = () => {
       if (!context) throw new Error("voipCallId is required");
       setAnswerCallContext(context);
       setDrawerOpen(true);
-    } catch {
+    } catch (error) {
+      handleFormEnded(error);
       // The cooldown intentionally remains active after failed attempts as well.
     } finally {
       setCalling(false);
@@ -1144,6 +1176,8 @@ const StudentProfile = () => {
           titleLink={studentListPath}
         />
 
+        {isReadOnly && <Alert color="warning" className="d-flex align-items-center gap-2"><i className="bx bx-lock-alt font-size-18" />{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert>}
+
         {/* ── Hero Card ──────────────────────────────────────────────────── */}
         <Card className="border-0 shadow-sm mb-4 overflow-hidden">
           <div style={{ background: "linear-gradient(135deg, #3b5de7 0%, #45b3e0 100%)", padding: "28px 28px 0" }}>
@@ -1193,13 +1227,13 @@ const StudentProfile = () => {
                   disabled={profileLoading}
                   className="d-flex align-items-center gap-1"
                 >
-                  <i className="bx bx-edit" />
-                  پاسخنامه
+                  <i className={`bx ${canEdit ? "bx-edit" : "bx-show"}`} />
+                  {canEdit ? "پاسخنامه" : "مشاهده پاسخنامه"}
                 </Button>
                 <Button
                   color="success"
                   onClick={handleCall}
-                  disabled={calling || profileLoading || callCooldownSeconds > 0}
+                  disabled={!canCall || calling || profileLoading || callCooldownSeconds > 0}
                   className="d-flex align-items-center gap-2 px-4"
                   style={{ fontWeight: 600 }}
                 >
@@ -1266,6 +1300,7 @@ const StudentProfile = () => {
                     tagValues={profile?.tagValues}
                     refreshKey={refreshKey}
                     onFillAnswers={handleFillAnswers}
+                    canEdit={canEdit}
                   />
                 )}
               </TabPane>
@@ -1275,6 +1310,8 @@ const StudentProfile = () => {
                     formId={formId}
                     studentId={studentId}
                     subjects={subjects}
+                    canEdit={canEdit}
+                    onFormEnded={handleFormEnded}
                   />
                 )}
               </TabPane>
@@ -1294,6 +1331,8 @@ const StudentProfile = () => {
         form={form}
         callContext={answerCallContext}
         onSubmitted={handleAnswerSubmitted}
+        canEdit={canEdit}
+        onFormEnded={handleFormEnded}
       />
       <CallTrackingWarningModal
         open={callTrackingWarningOpen}

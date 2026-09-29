@@ -91,7 +91,9 @@ http.interceptors.response.use(
       "خطای نامشخص از سرور";
 
     // config.silent = true باعث می‌شود toast نمایش داده نشود (مثلاً در فرم لاگین)
-    if (!error.config?.silent) {
+    const errorPayload = error?.response?.data?.data ?? error?.response?.data;
+    const isSupportFormEnded = status === 403 && errorPayload?.code === "SUPPORT_FORM_ENDED";
+    if (!error.config?.silent && !isSupportFormEnded) {
       toast.error(msg, { autoClose: 4000 });
     }
 

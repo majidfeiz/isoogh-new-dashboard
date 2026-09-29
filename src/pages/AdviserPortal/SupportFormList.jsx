@@ -264,6 +264,12 @@ const SupportFormList = () => {
                       </div>
 
                       <div className="d-flex flex-wrap gap-2 mb-3">
+                        {form.isClosed && (
+                          <Badge color="secondary">
+                            <i className="bx bx-lock-alt me-1" />
+                            پایان‌یافته
+                          </Badge>
+                        )}
                         {form.grade?.name && (
                           <Badge color="light" className="text-dark border">
                             <i className="bx bx-book me-1" />
@@ -317,6 +323,12 @@ const SupportFormList = () => {
                           <span className="text-danger small">
                             <i className="bx bx-x-circle me-1" />
                             {total - called} باقی‌مانده
+                          </span>
+                        </div>
+                        <div className="d-flex justify-content-end mt-3">
+                          <span className={`btn btn-sm ${form.isClosed ? "btn-outline-secondary" : "btn-outline-primary"}`}>
+                            <i className={`bx ${form.isClosed ? "bx-show" : "bx-log-in"} me-1`} />
+                            {form.isClosed ? "مشاهده" : "ورود"}
                           </span>
                         </div>
                       </div>

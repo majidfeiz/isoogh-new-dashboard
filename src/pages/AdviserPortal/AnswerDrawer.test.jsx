@@ -175,3 +175,27 @@ test.each([
   expect(await screen.findByText(message)).toBeInTheDocument();
   expect(text).toHaveValue("پاسخ باقی بماند");
 });
+
+test("renders an ended form read-only and disables questionnaire mutations", async () => {
+  getStudentAnswers.mockResolvedValue([{ voipCallId: 900, answers: [{ questionId: 1, answerText: "ثبت‌شده" }] }]);
+  render(<AnswerDrawer open student={student} form={form} callContext={context(900)} canEdit={false} onClose={jest.fn()} />);
+
+  expect(await screen.findByText("تاریخ پایان این فرم تماس گذشته است؛ فرم فقط قابل مشاهده است.")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("ثبت‌شده")).toBeDisabled();
+  expect(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ })).toBeDisabled();
+});
+
+test("turns the open form read-only when submit returns SUPPORT_FORM_ENDED", async () => {
+  const onFormEnded = jest.fn();
+  const endedError = { response: { status: 403, data: { code: "SUPPORT_FORM_ENDED", endAt: 1817169010 } } };
+  getStudentAnswers.mockResolvedValue([]);
+  submitAnswers.mockRejectedValue(endedError);
+  render(<AnswerDrawer open student={student} form={form} callContext={context(901)} onFormEnded={onFormEnded} onClose={jest.fn()} />);
+
+  await waitFor(() => expect(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+  fireEvent.click(screen.getByRole("button", { name: /ثبت تماس موفق/ }));
+
+  await waitFor(() => expect(onFormEnded).toHaveBeenCalledWith(endedError));
+  expect(screen.getByText("تاریخ پایان این فرم تماس گذشته است؛ فرم فقط قابل مشاهده است.")).toBeInTheDocument();
+});
