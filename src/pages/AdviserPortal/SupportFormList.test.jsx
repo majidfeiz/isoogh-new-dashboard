@@ -7,6 +7,7 @@ import { getGrades } from "../../services/gradeService.jsx";
 
 jest.mock("../../services/adviserPortalService.jsx", () => ({ getAdviserSchoolDetail: jest.fn(), getAdviserSupportForms: jest.fn() }));
 jest.mock("../../services/gradeService.jsx", () => ({ getGrades: jest.fn() }));
+jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ user: { id: 1 } }) }));
 jest.mock("../../components/Common/Paginations.jsx", () => function Pagination({ currentPage, totalRecords, setCurrentPage }) {
   return <div><span>صفحه {currentPage} از {totalRecords}</span><button onClick={() => setCurrentPage(3)}>صفحه سوم</button></div>;
 });
@@ -68,4 +69,17 @@ test("shows API error state", async () => {
   getAdviserSupportForms.mockRejectedValue({ response: { data: { message: "خطای فرم‌ها" } } });
   renderPage();
   expect(await screen.findByText("خطای فرم‌ها")).toBeInTheDocument();
+});
+
+test("keeps ended forms visible and labels their action as view-only", async () => {
+  getAdviserSupportForms.mockResolvedValue({
+    items: [{ id: 12, title: "فرم پایان‌یافته", isClosed: true, canEdit: false, canCall: false, stats: {} }],
+    pagination: { page: 1, limit: 15, total: 1, lastPage: 1 },
+  });
+
+  renderPage();
+
+  expect(await screen.findByText("فرم پایان‌یافته")).toBeInTheDocument();
+  expect(screen.getByText("پایان‌یافته")).toBeInTheDocument();
+  expect(screen.getByText("مشاهده")).toBeInTheDocument();
 });
