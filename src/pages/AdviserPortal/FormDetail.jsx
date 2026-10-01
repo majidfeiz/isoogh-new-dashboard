@@ -44,6 +44,7 @@ import {
   updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
 import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers, isMultiChoiceQuestion } from "./answerFormUtils.js";
+import { closeSupportForm, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
 
 const formatJalali = (value, withTime = false) => {
   if (!value) return "—";
@@ -76,7 +77,7 @@ const hasValidCallGroupId = (value) => {
 
 // ─── Answer Form Drawer ───────────────────────────────────────────────────────
 
-export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubmitted }) => {
+export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubmitted, canEdit = true, onFormEnded }) => {
   const { studentId, voipCallId } = callContext || {};
   const [answers, setAnswers] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -149,7 +150,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
   const isComplete = unansweredCount === 0;
 
   const handleSubmit = async (callSuccessful) => {
-    if (submittingRef.current) return;
+    if (!canEdit || submittingRef.current) return;
     submittingRef.current = true;
     setSubmittingAction(callSuccessful ? "success" : "incomplete");
     setSubmitting(true);
@@ -170,7 +171,12 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
       onSubmitted?.(result);
       onClose();
     } catch (error) {
-      setAnswerError(getAnswerRequestError(error));
+      if (isSupportFormEndedError(error)) {
+        onFormEnded?.(error);
+        setAnswerError(SUPPORT_FORM_READ_ONLY_MESSAGE);
+      } else {
+        setAnswerError(getAnswerRequestError(error));
+      }
       setConfirmationOpen(false);
     } finally {
       submittingRef.current = false;
@@ -194,6 +200,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
         </div>
       </ModalHeader>
       <ModalBody className="p-4">
+        {!canEdit ? <Alert color="warning">{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert> : null}
         {answerError ? <Alert color="danger">{answerError}</Alert> : null}
         {answersLoading ? <div className="text-center py-5"><Spinner color="primary" /><div className="text-muted mt-2">در حال دریافت پاسخنامه تماس...</div></div> : null}
         {!answersLoading && <>
@@ -261,6 +268,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                   type="textarea"
                   rows={3}
                   value={answers[q.id] || ""}
+                  disabled={!canEdit}
                   onChange={(e) => setAnswer(q.id, e.target.value)}
                   placeholder="پاسخ خود را بنویسید..."
                 />
@@ -273,10 +281,10 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                       key={opt.id}
                       className="form-check"
                       role="button"
-                      tabIndex={0}
-                      style={{ cursor: "pointer" }}
-                      onClick={() => setAnswer(q.id, opt.id)}
-                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setAnswer(q.id, opt.id); } }}
+                      tabIndex={canEdit ? 0 : -1}
+                      style={{ cursor: canEdit ? "pointer" : "default" }}
+                      onClick={() => canEdit && setAnswer(q.id, opt.id)}
+                      onKeyDown={(e) => { if (canEdit && (e.key === " " || e.key === "Enter")) { e.preventDefault(); setAnswer(q.id, opt.id); } }}
                     >
                       <input
                         className="form-check-input"
@@ -285,6 +293,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                         id={`opt-${q.id}-${opt.id}`}
                         value={opt.id}
                         checked={answers[q.id] === opt.id}
+                        disabled={!canEdit}
                         readOnly
                       />
                       <label
@@ -296,7 +305,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                       </label>
                     </div>
                   ))}
-                  {!q.required && answers[q.id] != null && answers[q.id] !== "" && (
+                  {canEdit && !q.required && answers[q.id] != null && answers[q.id] !== "" && (
                     <div>
                       <Button type="button" color="secondary" outline size="sm" onClick={() => clearAnswer(q.id)}>
                         <i className="bx bx-reset me-1" />
@@ -314,16 +323,17 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                       key={opt.id}
                       className="form-check"
                       role="button"
-                      tabIndex={0}
-                      style={{ cursor: "pointer" }}
-                      onClick={() => toggleCheckbox(q.id, opt.id)}
-                      onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleCheckbox(q.id, opt.id); } }}
+                      tabIndex={canEdit ? 0 : -1}
+                      style={{ cursor: canEdit ? "pointer" : "default" }}
+                      onClick={() => canEdit && toggleCheckbox(q.id, opt.id)}
+                      onKeyDown={(e) => { if (canEdit && (e.key === " " || e.key === "Enter")) { e.preventDefault(); toggleCheckbox(q.id, opt.id); } }}
                     >
                       <input
                         className="form-check-input"
                         type="checkbox"
                         id={`opt-${q.id}-${opt.id}`}
                         checked={(answers[q.id] || []).includes(opt.id)}
+                        disabled={!canEdit}
                         readOnly
                       />
                       <label
@@ -342,6 +352,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                 <Input
                   type="number"
                   value={answers[q.id] ?? ""}
+                  disabled={!canEdit}
                   onChange={(e) => setAnswer(q.id, e.target.value)}
                   placeholder="عدد را وارد کنید..."
                 />
@@ -354,7 +365,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
           <Button color="light" onClick={onClose} disabled={submitting}>
             انصراف
           </Button>
-          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={submitting || !answersReady}>
+          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={!canEdit || submitting || !answersReady}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
@@ -368,11 +379,11 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
           <div className="alert alert-warning py-2 small">تعداد سؤال‌های بی‌پاسخ: {unansweredCount}</div>
           <div className="d-flex justify-content-end gap-2 mt-3">
             <Button color="light" onClick={() => setConfirmationOpen(false)} disabled={submitting}>انصراف</Button>
-            <Button color="danger" onClick={() => handleSubmit(false)} disabled={submitting}>
+            <Button color="danger" onClick={() => handleSubmit(false)} disabled={!canEdit || submitting}>
               {submittingAction === "incomplete" && <Spinner size="sm" className="me-2" />}
               ثبت ناموفق/ناقص
             </Button>
-            <Button color="success" onClick={() => handleSubmit(true)} disabled={submitting}>
+            <Button color="success" onClick={() => handleSubmit(true)} disabled={!canEdit || submitting}>
               {submittingAction === "success" && <Spinner size="sm" className="me-2" />}
               ثبت تماس موفق
             </Button>
@@ -477,6 +488,16 @@ const FormDetail = () => {
   const accessDeniedHandled = useRef(false);
   const [callingIds, setCallingIds] = useState({});
 
+  const canEdit = form?.canEdit === true;
+  const canCall = form?.canCall === true;
+  const isReadOnly = Boolean(form) && (form.isClosed === true || !canEdit);
+
+  const handleFormEnded = useCallback((error) => {
+    if (!isSupportFormEndedError(error)) return false;
+    setForm((current) => closeSupportForm(current, error));
+    return true;
+  }, []);
+
   document.title = `فرم تماس | داشبورد آیسوق`;
 
   const fetchForm = useCallback(async () => {
@@ -485,6 +506,10 @@ const FormDetail = () => {
       const f = await getAdviserSupportFormDetail(formId);
       setForm(f);
     } catch (error) {
+      if (isSupportFormEndedError(error)) {
+        setForm((current) => closeSupportForm(current, error));
+        return;
+      }
       setForm(null);
       if (error?.response?.status === 403 && !accessDeniedHandled.current) {
         accessDeniedHandled.current = true;
@@ -582,6 +607,7 @@ const FormDetail = () => {
   }, [search, searchParams, setSearchParams]);
 
   const handleCallClick = async (student) => {
+    if (!canCall) return;
     const id = student.studentId ?? student.id;
     if (callCooldown.current[id]) return;
 
@@ -628,8 +654,8 @@ const FormDetail = () => {
       setDrawerOpen(true);
       fetchStudents(meta.page, search, callStatus, workShiftId, sort);
       fetchStats();
-    } catch {
-      // handled by httpClient
+    } catch (error) {
+      handleFormEnded(error);
       callCooldown.current[id] = false;
       setCallingIds((p) => ({ ...p, [id]: false }));
     }
@@ -696,6 +722,7 @@ const FormDetail = () => {
   };
 
   const handleWorkShiftChange = async (student, selectedWorkShiftId) => {
+    if (!canEdit) return;
     const studentId = student.studentId;
     if (updatingShiftIds[studentId]) return;
 
@@ -718,6 +745,7 @@ const FormDetail = () => {
       toast.success("شیفت دانش‌آموز به‌روزرسانی شد");
     } catch (error) {
       if (shiftRequestVersions.current[studentId] !== requestVersion) return;
+      if (handleFormEnded(error)) return;
       const status = error?.response?.status;
       if (status === 403) {
         toast.error("اجازه تغییر شیفت این دانش‌آموز را ندارید یا دانش‌آموز به شما تخصیص داده نشده است");
@@ -747,6 +775,8 @@ const FormDetail = () => {
           breadcrumbItem={formTitle}
           titleLink="/adviser-calls"
         />
+
+        {isReadOnly && <Alert color="warning" className="d-flex align-items-center gap-2"><i className="bx bx-lock-alt font-size-18" />{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert>}
 
         {/* Form Info Panel */}
         {form && (
@@ -944,7 +974,7 @@ const FormDetail = () => {
                               type="select"
                               bsSize="sm"
                               value={student.workShiftId ?? ""}
-                              disabled={workShiftsLoading || workShiftsError || updatingShiftIds[student.studentId]}
+                              disabled={!canEdit || workShiftsLoading || workShiftsError || updatingShiftIds[student.studentId]}
                               onChange={(event) => handleWorkShiftChange(student, event.target.value)}
                             >
                               {workShiftsLoading && <option value="">در حال دریافت شیفت‌ها...</option>}
@@ -963,7 +993,7 @@ const FormDetail = () => {
                             <Button
                               color="primary"
                               size="sm"
-                              disabled={callingIds[student.studentId ?? student.id]}
+                              disabled={!canCall || callingIds[student.studentId ?? student.id]}
                               onClick={() => handleCallClick(student)}
                               title="برقراری تماس"
                             >
@@ -1036,6 +1066,8 @@ const FormDetail = () => {
         form={form}
         callContext={answerCallContext}
         onSubmitted={handleAnswerSubmitted}
+        canEdit={canEdit}
+        onFormEnded={handleFormEnded}
       />
       <CallTrackingWarningModal
         open={callTrackingWarningOpen}

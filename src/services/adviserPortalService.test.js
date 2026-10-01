@@ -194,6 +194,20 @@ test("normalizes support-form question and option ids at the API boundary", asyn
   }))
 })
 
+test("normalizes server-owned support-form availability without deriving it from endAt", async () => {
+  apiGet.mockResolvedValue({
+    data: { data: { id: 3069, endAt: 1817169010, isClosed: true, canEdit: false, canCall: false, closedReason: "end_at_reached" } },
+  })
+
+  await expect(getAdviserSupportFormDetail(3069)).resolves.toEqual(expect.objectContaining({
+    endAt: 1817169010,
+    isClosed: true,
+    canEdit: false,
+    canCall: false,
+    closedReason: "end_at_reached",
+  }))
+})
+
 test("sends server-side work shift sorting with filters, pagination and abort signal", async () => {
   const controller = new AbortController()
   apiGet.mockResolvedValue({
