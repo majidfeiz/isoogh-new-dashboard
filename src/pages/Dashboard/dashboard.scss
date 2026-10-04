@@ -1,7 +1,8 @@
-// @import "../../assets/scss/theme.scss";
-
-// .apexcharts-canvas {
-//   text {
-//     fill: $text-muted !important;
-//   }
-// }
+.dashboard-grid {
+  .react-grid-item.react-grid-placeholder {
+    background: var(--bs-primary);
+    border: 2px dashed var(--bs-primary);
+    border-radius: 8px;
+    opacity: 0.14;
+  }
+}

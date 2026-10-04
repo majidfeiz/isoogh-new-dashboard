@@ -1,7 +1,8 @@
 // src/pages/Dashboard/widgets/ChartWidget.jsx
 import React from "react";
-import { Card, CardBody, CardHeader, Spinner } from "reactstrap";
+import { Button, Card, CardBody, CardHeader, Spinner } from "reactstrap";
 import ReactApexChart from "react-apexcharts";
+import { isDashboardChartEmpty, toDashboardChartSeries } from "../dashboardChartAdapter.js";
 
 const toJalali = (dateStr) => {
   if (!dateStr) return "";
@@ -37,7 +38,7 @@ const LOG_STATUS_COLORS = {
 // ─────────────────────────────────────────────
 // Chart config factory per widget key
 // ─────────────────────────────────────────────
-const buildChart = (key, data, stats) => {
+export const buildChart = (key, data, stats) => {
   // ─── Donut helpers ────────────────────────
   const makeDonut = (labels, series, colors) => ({
     type: "donut",
@@ -103,50 +104,38 @@ const buildChart = (key, data, stats) => {
     series,
   });
 
-  if (!data && key !== "support_forms_by_status") return null;
+  const model = toDashboardChartSeries(key, key === "support_forms_by_status" ? stats : data);
 
   switch (key) {
     // ─── Standard ChartDataDto widgets ──────
     case "students_by_grade":
     case "support_forms_by_grade": {
-      const cats = data.data?.map((d) => d.label) ?? [];
-      const vals = data.data?.map((d) => d.value) ?? [];
-      return makeBar(cats, [{ name: "تعداد", data: vals }]);
+      return makeBar(model.labels, [{ name: "تعداد", data: model.series }]);
     }
 
     case "students_by_province": {
-      const items = (data.data ?? []).slice(0, 12);
-      const cats = items.map((d) => d.label);
-      const vals = items.map((d) => d.value);
+      const cats = model.labels.slice(0, 12);
+      const vals = model.series.slice(0, 12);
       return makeBar(cats, [{ name: "دانش‌آموزان", data: vals }], true);
     }
 
     case "students_by_shift": {
-      const labels = data.data?.map((d) => d.label) ?? [];
-      const series = data.data?.map((d) => d.value) ?? [];
-      return makeDonut(labels, series);
+      return makeDonut(model.labels, model.series);
     }
 
     case "voip_calls_by_disposition": {
-      const labels = data.data?.map((d) => d.label) ?? [];
-      const series = data.data?.map((d) => d.value) ?? [];
-      const colors = labels.map((l) => DISPOSITION_COLORS[l] || "#adb5bd");
-      return makeDonut(labels, series, colors);
+      const colors = model.labels.map((label) => DISPOSITION_COLORS[label] || "#adb5bd");
+      return makeDonut(model.labels, model.series, colors);
     }
 
     case "import_logs_by_status": {
-      const labels = data.data?.map((d) => d.label) ?? [];
-      const series = data.data?.map((d) => d.value) ?? [];
-      const colors = labels.map((l) => LOG_STATUS_COLORS[l] || "#adb5bd");
-      return makeDonut(labels, series, colors);
+      const colors = model.labels.map((label) => LOG_STATUS_COLORS[label] || "#adb5bd");
+      return makeDonut(model.labels, model.series, colors);
     }
 
     // ─── WeeklyCallsDto — two series ────────
     case "voip_calls_weekly": {
-      const items = data.data ?? [];
-      const cats = items.map((d) => toJalali(d.date));
-      const countSeries = items.map((d) => d.count);
-      const answeredSeries = items.map((d) => d.answered);
+      const cats = model.categories.map(toJalali);
       return {
         type: "line",
         options: {
@@ -166,8 +155,7 @@ const buildChart = (key, data, stats) => {
           grid: { borderColor: "#f1f1f1" },
         },
         series: [
-          { name: "کل تماس‌ها", data: countSeries },
-          { name: "پاسخ‌داده‌شده", data: answeredSeries },
+          ...model.series,
         ],
       };
     }
@@ -219,12 +207,9 @@ const buildChart = (key, data, stats) => {
 
     // ─── Uses stats data (no chart endpoint) ─
     case "support_forms_by_status": {
-      if (!stats?.supportForms) return null;
-      const { active = 0, pendingAssignments = 0, total = 0 } = stats.supportForms;
-      const other = Math.max(0, total - active - pendingAssignments);
       return makeDonut(
-        ["در حال اجرا", "تخصیص نیافته", "سایر"],
-        [active, pendingAssignments, other],
+        model.labels,
+        model.series,
         ["#34c38f", "#f46a6a", "#adb5bd"]
       );
     }
@@ -249,16 +234,27 @@ const CHART_ICONS = {
   sa_calls_by_disposition: "bx-pie-chart",
 };
 
-const ChartWidget = ({ widgetKey, widgetName, chartData, stats, loading: externalLoading }) => {
-  const cfg = buildChart(widgetKey, chartData, stats);
+const ChartWidget = ({ widgetKey, widgetName, chartData, stats, loading: externalLoading, onRetry }) => {
+  let cfg = null;
+  let model = null;
+  let transformError = false;
 
   const isDataReady = widgetKey === "support_forms_by_status"
     ? stats !== undefined
     : chartData !== undefined;
 
+  if (isDataReady && !externalLoading) {
+    try {
+      model = toDashboardChartSeries(widgetKey, widgetKey === "support_forms_by_status" ? stats : chartData);
+      cfg = buildChart(widgetKey, chartData, stats);
+    } catch {
+      transformError = true;
+    }
+  }
+
   const icon = CHART_ICONS[widgetKey] || "bx-line-chart";
 
-  const showError = isDataReady && !cfg;
+  const showEmpty = isDataReady && !transformError && isDashboardChartEmpty(model);
 
   return (
     <Card className="h-100 mb-0">
@@ -271,10 +267,16 @@ const ChartWidget = ({ widgetKey, widgetName, chartData, stats, loading: externa
           <div className="d-flex align-items-center justify-content-center" style={{ height: 220 }}>
             <Spinner color="primary" />
           </div>
-        ) : showError ? (
+        ) : transformError ? (
           <div className="d-flex flex-column align-items-center justify-content-center text-muted" style={{ height: 220 }}>
-            <i className="bx bx-error-circle font-size-32 d-block mb-2 text-warning" />
-            <p className="font-size-13 mb-0">داده‌ای دریافت نشد</p>
+            <i className="bx bx-error-circle font-size-32 d-block mb-2 text-danger" />
+            <p className="font-size-13 mb-2">خطا در پردازش داده نمودار</p>
+            {onRetry && <Button size="sm" color="primary" outline onClick={onRetry}>تلاش دوباره</Button>}
+          </div>
+        ) : showEmpty ? (
+          <div className="d-flex flex-column align-items-center justify-content-center text-muted" style={{ height: 220 }}>
+            <i className="bx bx-bar-chart-alt-2 font-size-32 d-block mb-2" />
+            <p className="font-size-13 mb-0">داده‌ای برای نمایش وجود ندارد</p>
           </div>
         ) : (
           <ReactApexChart
