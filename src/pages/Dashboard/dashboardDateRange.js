@@ -17,10 +17,9 @@ export const getDateRangeKey = (userConfig = {}) => {
   return `${from}|${to}`;
 };
 
-export const getWidgetRequestKey = (endpoint, type, userConfig = {}, userIdentity = "anonymous", variant = "") => {
+export const getWidgetRequestKey = (endpoint, type, userConfig = {}) => {
   const { from = "", to = "" } = getWidgetDateRange(userConfig);
-  const base = `${userIdentity}|${endpoint}|${type || ""}|${from}|${to}`;
-  return variant === "" ? base : `${base}|${variant}`;
+  return `${endpoint}|${type || ""}|${from}|${to}`;
 };
 
 const pad = (value) => String(value).padStart(2, "0");
