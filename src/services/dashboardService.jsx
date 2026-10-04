@@ -1,8 +1,24 @@
 // src/services/dashboardService.jsx
 import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
+import { unwrapDashboardPayload } from "../pages/Dashboard/dashboardChartAdapter.js";
 
 const BASE = "/dashboard";
+
+const normalizeDashboardWidgets = (payload) => {
+  const raw = payload?.data ?? payload;
+  if (Array.isArray(raw)) return raw;
+  return Array.isArray(raw?.widgets) ? raw.widgets : [];
+};
+
+const normalizePersonalDashboard = (response) => {
+  const payload = unwrapDashboardPayload(response, { axiosResponse: true });
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.widgets)) return payload.widgets;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.widgets)) return payload.data.widgets;
+  throw new Error("Invalid personal dashboard response");
+};
 
 export const getDefaultDashboard = async () => {
   const res = await apiGet(getApiUrl(`${BASE}/default`));
@@ -18,14 +34,12 @@ export const getWidgetCatalog = async () => {
 
 export const getMyDashboard = async () => {
   const res = await apiGet(getApiUrl(`${BASE}/my`));
-  const raw = res.data?.data ?? res.data;
-  return Array.isArray(raw) ? raw : [];
+  return normalizePersonalDashboard(res);
 };
 
 export const saveDashboardLayout = async (widgets) => {
   const res = await apiPut(getApiUrl(API_ROUTES.dashboard.myLayout), { widgets });
-  const raw = res.data?.data ?? res.data;
-  return Array.isArray(raw) ? raw : (raw?.widgets ?? []);
+  return normalizeDashboardWidgets(res.data);
 };
 
 export const addWidgetToDashboard = async (body) => {
@@ -73,16 +87,32 @@ export const toggleWidgetStatus = async (widgetId, isActive) => {
 };
 
 export const getDashboardStats = async ({ from, to } = {}) => {
-  const res = await apiGet(getApiUrl(`${BASE}/stats`), { params: { from, to } });
-  return res.data?.data ?? res.data;
+  const params = new URLSearchParams();
+  if (from && to) {
+    params.set("from", from);
+    params.set("to", to);
+  }
+  const res = await apiGet(getApiUrl(`${BASE}/stats`), { params });
+  return unwrapDashboardPayload(res, { axiosResponse: true });
 };
 
-export const getDashboardChart = async (type, { from, to } = {}) => {
-  const res = await apiGet(getApiUrl(`${BASE}/chart/${type}`), { params: { from, to } });
-  return res.data?.data ?? res.data;
+export const getDashboardChart = async (type, { from, to } = {}, config = {}) => {
+  const params = new URLSearchParams();
+  if (from && to) {
+    params.set("from", from);
+    params.set("to", to);
+  }
+  const res = await apiGet(getApiUrl(`${BASE}/chart/${type}`), { ...config, params });
+  return unwrapDashboardPayload(res, { axiosResponse: true });
 };
 
 export const getDashboardRecent = async (type, limit = 5, { from, to } = {}) => {
-  const res = await apiGet(getApiUrl(`${BASE}/recent/${type}`), { params: { limit, from, to } });
-  return res.data?.data ?? res.data;
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  if (from && to) {
+    params.set("from", from);
+    params.set("to", to);
+  }
+  const res = await apiGet(getApiUrl(`${BASE}/recent/${type}`), { params });
+  return unwrapDashboardPayload(res, { axiosResponse: true });
 };

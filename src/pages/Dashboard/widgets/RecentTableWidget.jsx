@@ -14,6 +14,15 @@ const fUnixDate = (ts) => {
   try { return new Date(ts * 1000).toLocaleDateString("fa-IR"); } catch { return "—"; }
 };
 
+const getRowKey = (widgetKey, row) => String(
+  row.id
+  ?? row.adviserId
+  ?? row.code
+  ?? row.callId
+  ?? row.uuid
+  ?? `${widgetKey}-${JSON.stringify(row)}`
+);
+
 const DISPOSITION_BADGE = {
   ANSWERED: "success",
   "NO ANSWER": "danger",
@@ -154,7 +163,7 @@ const TABLES_CONFIG = {
         label: "تماس امروز",
         render: (r) => (
           <Badge color={r.callsToday > 0 ? "success" : "secondary"} pill className="font-size-10">
-            {r.callsToday > 0 ? r.callsToday : "—"}
+            {Number(r.callsToday ?? 0).toLocaleString("fa-IR")}
           </Badge>
         ),
       },
@@ -162,18 +171,18 @@ const TABLES_CONFIG = {
         label: "تماس موفق",
         render: (r) => (
           <span className="fw-semibold text-success">
-            {Number(r.successfulCalls || 0).toLocaleString("fa-IR")}
+            {Number(r.successfulCalls ?? 0).toLocaleString("fa-IR")}
           </span>
         ),
       },
       {
         label: "کل تماس",
-        render: (r) => Number(r.totalCalls || 0).toLocaleString("fa-IR"),
+        render: (r) => Number(r.totalCalls ?? 0).toLocaleString("fa-IR"),
       },
       {
         label: "مدت تماس ماه",
         render: (r) => {
-          const total = r.totalDurationSeconds || 0;
+          const total = r.totalDurationSeconds ?? 0;
           const h = Math.floor(total / 3600);
           const m = Math.floor((total % 3600) / 60);
           const s = total % 60;
@@ -198,7 +207,7 @@ const RecentTableWidget = ({ widgetKey, widgetName, data }) => {
   const error = data === null;
 
   return (
-    <Card className="h-100 mb-0">
+    <Card className="h-100 mb-0 dashboard-widget-card">
       <CardHeader className="bg-transparent border-bottom-0 pb-0 d-flex align-items-center justify-content-between">
         <h6 className="mb-0 fw-semibold d-flex align-items-center gap-2">
           <i className={`bx ${cfg.icon} text-primary font-size-18`} />
@@ -224,13 +233,13 @@ const RecentTableWidget = ({ widgetKey, widgetName, data }) => {
             <span className="font-size-13">داده‌ای موجود نیست</span>
           </div>
         ) : (
-          <div className="table-responsive">
+          <div className="table-responsive dashboard-widget-table">
             <Table className="table-sm align-middle mb-0" hover>
               <thead>
                 <tr>
-                  {cfg.columns.map((col, i) => (
+                  {cfg.columns.map((col) => (
                     <th
-                      key={i}
+                      key={col.label}
                       className="text-muted fw-medium font-size-12 border-0"
                       style={col.width ? { width: col.width } : {}}
                     >
@@ -241,9 +250,9 @@ const RecentTableWidget = ({ widgetKey, widgetName, data }) => {
               </thead>
               <tbody>
                 {rows.map((row, rowIdx) => (
-                  <tr key={rowIdx} style={cfg.rowStyle ? cfg.rowStyle(row) : {}}>
-                    {cfg.columns.map((col, colIdx) => (
-                      <td key={colIdx} className="font-size-13 border-0 py-2">
+                  <tr key={getRowKey(widgetKey, row)} style={cfg.rowStyle ? cfg.rowStyle(row) : {}}>
+                    {cfg.columns.map((col) => (
+                      <td key={col.label} className="font-size-13 border-0 py-2">
                         {col.render(row, rowIdx)}
                       </td>
                     ))}
