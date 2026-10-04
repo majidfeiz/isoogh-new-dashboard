@@ -6,9 +6,19 @@ export const DASHBOARD_CHART_TYPES = Object.freeze({
   voip_calls_by_disposition: "voip-by-disposition",
   support_forms_by_grade: "support-forms-by-grade",
   import_logs_by_status: "import-logs-by-status",
+  sa_calls_weekly: "sa-calls-weekly",
+  sa_adviser_activity: "sa-adviser-activity",
+  sa_calls_by_disposition: "sa-calls-by-disposition",
 });
 
-const EXTRA_CHART_KEYS = new Set(["sa_calls_weekly", "sa_adviser_activity", "sa_calls_by_disposition"]);
+export const DASHBOARD_RECENT_TYPES = Object.freeze({
+  recent_students: "students",
+  recent_voip_calls: "voip-calls",
+  recent_support_forms: "support-forms",
+  import_logs_recent: "import-logs",
+  advisers_top_by_students: "advisers-by-students",
+  sa_top_advisers: "sa-top-advisers",
+});
 
 export const unwrapDashboardPayload = (input, { axiosResponse = false } = {}) => {
   let value = axiosResponse ? input?.data : input;
@@ -43,7 +53,7 @@ export const toDashboardChartSeries = (widgetKey, payload) => {
     };
   }
 
-  if (!DASHBOARD_CHART_TYPES[widgetKey] && !EXTRA_CHART_KEYS.has(widgetKey)) {
+  if (!DASHBOARD_CHART_TYPES[widgetKey]) {
     throw new Error(`Unknown dashboard chart: ${widgetKey}`);
   }
   if (!payload || !Array.isArray(payload.data)) throw new Error("Invalid dashboard chart payload");

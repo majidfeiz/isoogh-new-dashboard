@@ -5,4 +5,14 @@
     border-radius: 8px;
     opacity: 0.14;
   }
+
+  .dashboard-widget-card {
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .dashboard-widget-table {
+    max-height: 100%;
+    overflow: auto;
+  }
 }

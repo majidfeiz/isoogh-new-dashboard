@@ -1,5 +1,6 @@
 import {
   DASHBOARD_CHART_TYPES,
+  DASHBOARD_RECENT_TYPES,
   isDashboardChartEmpty,
   toDashboardChartSeries,
   unwrapDashboardPayload,
@@ -21,7 +22,11 @@ test("maps every manager chart widget to its explicit endpoint type", () => {
     voip_calls_by_disposition: "voip-by-disposition",
     support_forms_by_grade: "support-forms-by-grade",
     import_logs_by_status: "import-logs-by-status",
+    sa_calls_weekly: "sa-calls-weekly",
+    sa_adviser_activity: "sa-adviser-activity",
+    sa_calls_by_disposition: "sa-calls-by-disposition",
   });
+  expect(DASHBOARD_RECENT_TYPES.sa_top_advisers).toBe("sa-top-advisers");
 });
 
 test("normalizes standard chart values including zero", () => {
@@ -41,6 +46,12 @@ test("builds two aligned weekly series", () => {
     { name: "کل تماس‌ها", data: [8] },
     { name: "پاسخ‌داده‌شده", data: [0] },
   ]);
+});
+
+test("normalizes adviser activity and disposition without client-side scope filtering", () => {
+  const payload = { data: [{ label: "مشاور الف", value: "3" }, { label: "مشاور ب", value: 0 }] };
+  expect(toDashboardChartSeries("sa_adviser_activity", payload).series).toEqual([3, 0]);
+  expect(toDashboardChartSeries("sa_calls_by_disposition", payload).labels).toEqual(["مشاور الف", "مشاور ب"]);
 });
 
 test("separates empty all-zero data from invalid payloads", () => {

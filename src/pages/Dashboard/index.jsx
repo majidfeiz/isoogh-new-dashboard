@@ -43,8 +43,8 @@ import {
   getWidgetDateRange,
   getWidgetRequestKey,
 } from "./dashboardDateRange.js";
-import { DASHBOARD_CHART_TYPES } from "./dashboardChartAdapter.js";
-import { selectDashboardLayout } from "./dashboardLayout.js";
+import { DASHBOARD_CHART_TYPES, DASHBOARD_RECENT_TYPES } from "./dashboardChartAdapter.js";
+import { selectDashboardLayout, toDashboardLayoutPayload } from "./dashboardLayout.js";
 
 // ─────────────────────────────────────────────
 // Custom width hook: measures actual offsetWidth
@@ -92,21 +92,9 @@ const STATS_KEYS = new Set([
 
 const CHART_KEY_TO_TYPE = {
   ...DASHBOARD_CHART_TYPES,
-  // Super Adviser charts
-  sa_calls_weekly:            "sa-calls-weekly",
-  sa_adviser_activity:        "sa-adviser-activity",
-  sa_calls_by_disposition:    "sa-calls-by-disposition",
 };
 
-const RECENT_KEY_TO_TYPE = {
-  recent_students:          "students",
-  recent_voip_calls:        "voip-calls",
-  recent_support_forms:     "support-forms",
-  import_logs_recent:       "import-logs",
-  advisers_top_by_students: "advisers-by-students",
-  // Super Adviser
-  sa_top_advisers:          "sa-top-advisers",
-};
+const RECENT_KEY_TO_TYPE = DASHBOARD_RECENT_TYPES;
 
 const CHART_KEYS = new Set([...Object.keys(CHART_KEY_TO_TYPE), "support_forms_by_status"]);
 const TABLE_KEYS = new Set(Object.keys(RECENT_KEY_TO_TYPE));
@@ -482,16 +470,7 @@ const DashboardPage = () => {
     };
   };
 
-  const toLayoutPayload = useCallback((widgets) => widgets.map((w, index) => ({
-    widgetId: Number(w.widgetId ?? w.widget?.id),
-    posX: w.posX ?? 0,
-    posY: w.posY ?? 0,
-    w: w.w ?? 3,
-    h: w.h ?? 2,
-    sortOrder: w.sortOrder ?? index,
-    isVisible: w.isVisible !== false,
-    userConfig: w.userConfig ?? {},
-  })), []);
+  const toLayoutPayload = useCallback(toDashboardLayoutPayload, []);
 
   const flushLayoutSave = useCallback(async () => {
     if (saveInFlightRef.current) return;
@@ -516,8 +495,6 @@ const DashboardPage = () => {
             const server = saved.find((item) => Number(item.widgetId ?? item.widget?.id) === Number(local.widgetId ?? local.widget?.id));
             return server ? {
               ...local,
-              ...server,
-              userConfig: server.userConfig ?? local.userConfig,
               id: server.id ?? local.id,
               widget: server.widget ?? local.widget,
             } : local;
