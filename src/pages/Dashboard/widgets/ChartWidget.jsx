@@ -162,10 +162,7 @@ export const buildChart = (key, data, stats) => {
 
     // ─── Super Adviser charts ─────────────────
     case "sa_calls_weekly": {
-      const items = data.data ?? [];
-      const cats = items.map((d) => toJalali(d.date));
-      const countSeries = items.map((d) => d.count);
-      const answeredSeries = items.map((d) => d.answered);
+      const cats = model.categories.map(toJalali);
       return {
         type: "line",
         options: {
@@ -185,24 +182,23 @@ export const buildChart = (key, data, stats) => {
           grid: { borderColor: "#f1f1f1" },
         },
         series: [
-          { name: "کل تماس", data: countSeries },
-          { name: "پاسخ داده‌شده", data: answeredSeries },
+          { name: "کل تماس", data: model.series[0].data },
+          { name: "پاسخ داده‌شده", data: model.series[1].data },
         ],
       };
     }
 
     case "sa_adviser_activity": {
-      const items = (data.data ?? []).slice().sort((a, b) => b.value - a.value);
-      const cats = items.map((d) => d.label);
-      const vals = items.map((d) => d.value);
+      const items = model.labels.map((label, index) => ({ label, value: model.series[index] }))
+        .sort((a, b) => b.value - a.value);
+      const cats = items.map((item) => item.label);
+      const vals = items.map((item) => item.value);
       return makeBar(cats, [{ name: "تعداد تماس", data: vals }], true);
     }
 
     case "sa_calls_by_disposition": {
-      const labels = data.data?.map((d) => d.label) ?? [];
-      const series = data.data?.map((d) => d.value) ?? [];
-      const colors = labels.map((l) => SA_DISPOSITION_COLORS[l] || "#6b7280");
-      return makeDonut(labels, series, colors);
+      const colors = model.labels.map((label) => SA_DISPOSITION_COLORS[label] || "#6b7280");
+      return makeDonut(model.labels, model.series, colors);
     }
 
     // ─── Uses stats data (no chart endpoint) ─
@@ -257,7 +253,7 @@ const ChartWidget = ({ widgetKey, widgetName, chartData, stats, loading: externa
   const showEmpty = isDataReady && !transformError && isDashboardChartEmpty(model);
 
   return (
-    <Card className="h-100 mb-0">
+    <Card className="h-100 mb-0 dashboard-widget-card">
       <CardHeader className="bg-transparent border-bottom-0 pb-0 d-flex align-items-center gap-2">
         <i className={`bx ${icon} text-primary font-size-18`} />
         <h6 className="mb-0 fw-semibold">{widgetName}</h6>

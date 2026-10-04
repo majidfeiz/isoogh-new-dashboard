@@ -1,4 +1,4 @@
-import { buildDefaultDashboardLayout, selectDashboardLayout } from "./dashboardLayout.js";
+import { buildDefaultDashboardLayout, selectDashboardLayout, toDashboardLayoutPayload } from "./dashboardLayout.js";
 
 test("keeps a non-empty personal layout and sorts it deterministically", () => {
   const personalWidgets = [
@@ -41,4 +41,29 @@ test("builds a non-overlapping twelve-column default layout", () => {
 
 test("rejects an invalid personal response instead of falling back", () => {
   expect(() => selectDashboardLayout({ personalWidgets: null, defaultDashboard: { widgets: [] } })).toThrow();
+});
+
+test("sanitizes bulk layout coordinates while preserving config and other breakpoints", () => {
+  const [payload] = toDashboardLayoutPayload([{
+    widgetId: 12,
+    posX: 11,
+    posY: -1,
+    w: 4,
+    h: 25,
+    sortOrder: 9,
+    isVisible: false,
+    userConfig: {
+      limit: 5,
+      dateRangeFrom: "2026-10-04T00:00:00+03:30",
+      responsiveLayouts: {
+        lg: { posX: 11, posY: 0, w: 4, h: 2 },
+        sm: { posX: 5, posY: 2, w: 4, h: 2 },
+      },
+    },
+  }]);
+  expect(payload).toMatchObject({ widgetId: 12, posX: 8, posY: 0, w: 4, h: 20, sortOrder: 9, isVisible: false });
+  expect(payload.userConfig.limit).toBe(5);
+  expect(payload.userConfig.dateRangeFrom).toContain("+03:30");
+  expect(payload.userConfig.responsiveLayouts.lg).toEqual({ posX: 8, posY: 0, w: 4, h: 2 });
+  expect(payload.userConfig.responsiveLayouts.sm).toEqual({ posX: 2, posY: 2, w: 4, h: 2 });
 });
