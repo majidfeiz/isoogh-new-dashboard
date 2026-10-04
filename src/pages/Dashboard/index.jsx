@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { ResponsiveGridLayout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+import "./dashboard.scss";
 import {
   Button,
   Card,
@@ -42,6 +43,8 @@ import {
   getWidgetDateRange,
   getWidgetRequestKey,
 } from "./dashboardDateRange.js";
+import { DASHBOARD_CHART_TYPES } from "./dashboardChartAdapter.js";
+import { selectDashboardLayout } from "./dashboardLayout.js";
 
 // ─────────────────────────────────────────────
 // Custom width hook: measures actual offsetWidth
@@ -88,13 +91,7 @@ const STATS_KEYS = new Set([
 ]);
 
 const CHART_KEY_TO_TYPE = {
-  students_by_province:      "students-by-province",
-  students_by_shift:         "students-by-shift",
-  students_by_grade:         "support-forms-by-grade",
-  support_forms_by_grade:    "support-forms-by-grade",
-  voip_calls_weekly:         "voip-calls-weekly",
-  voip_calls_by_disposition: "voip-by-disposition",
-  import_logs_by_status:     "import-logs-by-status",
+  ...DASHBOARD_CHART_TYPES,
   // Super Adviser charts
   sa_calls_weekly:            "sa-calls-weekly",
   sa_adviser_activity:        "sa-adviser-activity",
@@ -141,12 +138,14 @@ const WidgetRenderer = ({
   chartDataMap,
   recentDataMap,
   onRetry,
+  userIdentity,
 }) => {
   const { widget, userConfig, isVisible, id } = userWidget;
   const key = widget?.key;
-  const statsRequestKey = getWidgetRequestKey("stats", "", userConfig);
-  const chartRequestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], userConfig);
-  const recentRequestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], userConfig);
+  const statsRequestKey = getWidgetRequestKey("stats", "", userConfig, userIdentity);
+  const chartRequestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], userConfig, userIdentity);
+  const recentLimit = userConfig?.limit ?? widget?.configSchema?.find((field) => field.key === "limit")?.default ?? 5;
+  const recentRequestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], userConfig, userIdentity, recentLimit);
   const requestValue = STATS_ENDPOINT_KEYS.has(key)
     ? statsData[statsRequestKey]
     : CHART_KEY_TO_TYPE[key]
@@ -187,6 +186,7 @@ const WidgetRenderer = ({
           widgetName={widget?.name}
           chartData={chartDataMap[chartRequestKey]}
           stats={statsData[statsRequestKey]}
+          onRetry={onRetry}
         />
       );
 
@@ -320,6 +320,7 @@ const DashboardPage = () => {
   const [recentDataMap, setRecentDataMap] = useState({});
   const [isDefaultView, setIsDefaultView] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [configWidget, setConfigWidget] = useState(null);
@@ -330,6 +331,7 @@ const DashboardPage = () => {
   const loadGenerationRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const pendingSnapshotRef = useRef(null);
+  const saveGenerationRef = useRef(0);
 
   const userIdentity = String(user?.id ?? user?.userId ?? "anonymous");
 
@@ -337,37 +339,26 @@ const DashboardPage = () => {
   const loadDashboard = useCallback(async () => {
     const generation = ++loadGenerationRef.current;
     setLoading(true);
+    setDashboardError(null);
     try {
       const myData = await getMyDashboard();
       if (generation !== loadGenerationRef.current) return;
-      let widgets;
-      let defaultView = false;
-
-      if (Array.isArray(myData) && myData.length > 0) {
-        widgets = myData;
-      } else {
-        const def = await getDefaultDashboard();
+      let defaultDashboard;
+      if (myData.length === 0) {
+        defaultDashboard = await getDefaultDashboard();
         if (generation !== loadGenerationRef.current) return;
-        const rawWidgets = def?.widgets ?? [];
-        widgets = rawWidgets.map((w, idx) => {
-          const ww = w.defaultW || 3;
-          const wh = w.defaultH || 2;
-          const colsPerRow = Math.max(1, Math.floor(12 / ww));
-          return {
-            id: `default-${w.id}`,
-            widgetId: w.id,
-            posX: (idx % colsPerRow) * ww,
-            posY: Math.floor(idx / colsPerRow) * wh,
-            w: ww,
-            h: wh,
-            sortOrder: idx,
-            isVisible: true,
-            userConfig: null,
-            widget: w,
-          };
-        });
-        defaultView = true;
       }
+      const { widgets, isDefaultView: defaultView } = selectDashboardLayout({
+        personalWidgets: myData,
+        defaultDashboard,
+      });
+
+      setMyWidgets(widgets);
+      setIsDefaultView(defaultView);
+      setStatsData({});
+      setChartDataMap({});
+      setRecentDataMap({});
+      setLoading(false);
 
       // Only fetch data for visible widgets
       const visibleOnly = (w) => w.isVisible !== false;
@@ -381,36 +372,27 @@ const DashboardPage = () => {
         getWidgetDateRange(w.userConfig),
       ])).values()];
 
-      const [statsResults, chartResults, recentResults] = await Promise.all([
-        Promise.all(statsRangeGroups.map((range) => getDashboardStats(range).catch(() => ({ __dashboardError: true })))),
-        Promise.all(chartWidgets.map((w) => getDashboardChart(CHART_KEY_TO_TYPE[w.widget.key], getWidgetDateRange(w.userConfig)).catch(() => ({ __dashboardError: true })))),
-        Promise.all(tableWidgets.map((w) => {
-          const limit = w.userConfig?.limit ?? w.widget?.configSchema?.find((f) => f.key === "limit")?.default ?? 5;
-          return getDashboardRecent(RECENT_KEY_TO_TYPE[w.widget.key], limit, getWidgetDateRange(w.userConfig)).catch(() => ({ __dashboardError: true }));
-        })),
-      ]);
-      if (generation !== loadGenerationRef.current) return;
-
-      const newStats = {};
-      statsRangeGroups.forEach((range, i) => {
-        newStats[getWidgetRequestKey("stats", "", { dateRangeFrom: range.from, dateRangeTo: range.to })] = statsResults[i];
+      statsRangeGroups.forEach((range) => {
+        const key = getWidgetRequestKey("stats", "", { dateRangeFrom: range.from, dateRangeTo: range.to }, userIdentity);
+        getDashboardStats(range)
+          .then((data) => { if (generation === loadGenerationRef.current) setStatsData((prev) => ({ ...prev, [key]: data })); })
+          .catch(() => { if (generation === loadGenerationRef.current) setStatsData((prev) => ({ ...prev, [key]: { __dashboardError: true } })); });
       });
-      const newChartMap = {};
-      chartWidgets.forEach((w, i) => {
-        newChartMap[getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[w.widget.key], w.userConfig)] = chartResults[i];
+      chartWidgets.forEach((widget) => {
+        const key = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[widget.widget.key], widget.userConfig, userIdentity);
+        getDashboardChart(CHART_KEY_TO_TYPE[widget.widget.key], getWidgetDateRange(widget.userConfig))
+          .then((data) => { if (generation === loadGenerationRef.current) setChartDataMap((prev) => ({ ...prev, [key]: data })); })
+          .catch(() => { if (generation === loadGenerationRef.current) setChartDataMap((prev) => ({ ...prev, [key]: { __dashboardError: true } })); });
       });
-      const newRecentMap = {};
-      tableWidgets.forEach((w, i) => {
-        newRecentMap[getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[w.widget.key], w.userConfig)] = recentResults[i];
+      tableWidgets.forEach((widget) => {
+        const limit = widget.userConfig?.limit ?? widget.widget?.configSchema?.find((field) => field.key === "limit")?.default ?? 5;
+        const key = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[widget.widget.key], widget.userConfig, userIdentity, limit);
+        getDashboardRecent(RECENT_KEY_TO_TYPE[widget.widget.key], limit, getWidgetDateRange(widget.userConfig))
+          .then((data) => { if (generation === loadGenerationRef.current) setRecentDataMap((prev) => ({ ...prev, [key]: data })); })
+          .catch(() => { if (generation === loadGenerationRef.current) setRecentDataMap((prev) => ({ ...prev, [key]: { __dashboardError: true } })); });
       });
-
-      setMyWidgets(widgets);
-      setIsDefaultView(defaultView);
-      setStatsData(newStats);
-      setChartDataMap(newChartMap);
-      setRecentDataMap(newRecentMap);
-    } catch {
-      toast.error("خطا در بارگذاری داشبورد");
+    } catch (error) {
+      setDashboardError(error);
     } finally {
       if (generation === loadGenerationRef.current) setLoading(false);
     }
@@ -422,10 +404,12 @@ const DashboardPage = () => {
 
   useEffect(() => () => {
     loadGenerationRef.current += 1;
+    saveGenerationRef.current += 1;
     pendingSnapshotRef.current = null;
   }, [userIdentity]);
 
   useEffect(() => {
+    setMyWidgets([]);
     setStatsData({});
     setChartDataMap({});
     setRecentDataMap({});
@@ -440,7 +424,7 @@ const DashboardPage = () => {
       const rangeGroups = [...new Map(statsWidgets.map((w) => [getDateRangeKey(w.userConfig), getWidgetDateRange(w.userConfig)])).values()];
       rangeGroups.forEach((range) => {
         getDashboardStats(range).then((data) => {
-          const requestKey = getWidgetRequestKey("stats", "", { dateRangeFrom: range.from, dateRangeTo: range.to });
+          const requestKey = getWidgetRequestKey("stats", "", { dateRangeFrom: range.from, dateRangeTo: range.to }, userIdentity);
           setStatsData((prev) => ({ ...prev, [requestKey]: data }));
         }).catch(() => {});
       });
@@ -463,7 +447,7 @@ const DashboardPage = () => {
         const updates = {};
         chartWidgets.forEach((w, i) => {
           if (results[i] !== null) {
-            updates[getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[w.widget.key], w.userConfig)] = results[i];
+            updates[getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[w.widget.key], w.userConfig, userIdentity)] = results[i];
           }
         });
         if (Object.keys(updates).length > 0) {
@@ -512,6 +496,7 @@ const DashboardPage = () => {
   const flushLayoutSave = useCallback(async () => {
     if (saveInFlightRef.current) return;
     saveInFlightRef.current = true;
+    const saveGeneration = saveGenerationRef.current;
     while (pendingSnapshotRef.current) {
       const snapshot = pendingSnapshotRef.current;
       pendingSnapshotRef.current = null;
@@ -525,21 +510,31 @@ const DashboardPage = () => {
           saved = await saveDashboardLayout(pendingSnapshotRef.current ?? snapshot);
           pendingSnapshotRef.current = null;
         }
+        if (saveGeneration !== saveGenerationRef.current) break;
         if (Array.isArray(saved) && saved.length > 0) {
           setMyWidgets((current) => current.map((local) => {
             const server = saved.find((item) => Number(item.widgetId ?? item.widget?.id) === Number(local.widgetId ?? local.widget?.id));
-            return server ? { ...server, ...local, id: server.id, widget: server.widget ?? local.widget } : local;
+            return server ? {
+              ...local,
+              ...server,
+              userConfig: server.userConfig ?? local.userConfig,
+              id: server.id ?? local.id,
+              widget: server.widget ?? local.widget,
+            } : local;
           }));
         }
         toast.success("چیدمان ذخیره شد", { toastId: "dashboard-layout-saved" });
       } catch (error) {
-        if (error?.response?.status !== 400 && error?.response?.status !== 403) {
-          toast.error("ذخیره چیدمان انجام نشد؛ دوباره تلاش کنید", { toastId: "dashboard-layout-error" });
-        }
+        if (saveGeneration !== saveGenerationRef.current) break;
+        toast.error("ذخیره چیدمان انجام نشد؛ موقعیت قبلی بازیابی شد", { toastId: "dashboard-layout-error" });
+        void loadDashboard();
       }
     }
     saveInFlightRef.current = false;
-  }, []);
+    if (pendingSnapshotRef.current) {
+      queueMicrotask(() => { void flushLayoutSave(); });
+    }
+  }, [loadDashboard]);
 
   const queueLayoutSave = useCallback((widgets) => {
     pendingSnapshotRef.current = toLayoutPayload(widgets);
@@ -552,7 +547,7 @@ const DashboardPage = () => {
       if (!isEditMode || isDefaultView) return;
       const breakpoint = activeBreakpointRef.current;
       const byWidgetId = new Map(currentLayout.map((item, index) => [item.i, { ...item, sortOrder: index }]));
-      const next = myWidgets.map((widget) => {
+      const next = myWidgetsRef.current.map((widget) => {
         const item = byWidgetId.get(String(widget.widgetId ?? widget.widget?.id));
         if (!item) return widget;
         const responsiveLayouts = { ...(widget.userConfig?.responsiveLayouts ?? {}), [breakpoint]: {
@@ -564,10 +559,11 @@ const DashboardPage = () => {
           userConfig: { ...(widget.userConfig ?? {}), responsiveLayouts },
         };
       });
+      myWidgetsRef.current = next;
       setMyWidgets(next);
       queueLayoutSave(next);
     },
-    [isEditMode, isDefaultView, myWidgets, queueLayoutSave]
+    [isEditMode, isDefaultView, queueLayoutSave]
   );
 
   // Called by toolbar delete button — just opens confirmation modal
@@ -632,21 +628,23 @@ const DashboardPage = () => {
         const target = myWidgets.find((w) => w.id === id);
         const key = target?.widget?.key;
         const range = getWidgetDateRange(target?.userConfig);
-        const chartRequestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], target?.userConfig);
-        const recentRequestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], target?.userConfig);
+        const chartRequestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], target?.userConfig, userIdentity);
+        const recentLimit = target?.userConfig?.limit ?? target?.widget?.configSchema?.find((field) => field.key === "limit")?.default ?? 5;
+        const recentRequestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], target?.userConfig, userIdentity, recentLimit);
         if (key && CHART_KEY_TO_TYPE[key] && !(chartRequestKey in chartDataMap)) {
           getDashboardChart(CHART_KEY_TO_TYPE[key], range)
             .then((d) => setChartDataMap((prev) => ({ ...prev, [chartRequestKey]: d })))
-            .catch(() => {});
+            .catch(() => setChartDataMap((prev) => ({ ...prev, [chartRequestKey]: { __dashboardError: true } })));
         } else if (key && RECENT_KEY_TO_TYPE[key] && !(recentRequestKey in recentDataMap)) {
-          const limit = target?.userConfig?.limit ?? target?.widget?.configSchema?.find((f) => f.key === "limit")?.default ?? 5;
-          getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit, range)
+          getDashboardRecent(RECENT_KEY_TO_TYPE[key], recentLimit, range)
             .then((d) => setRecentDataMap((prev) => ({ ...prev, [recentRequestKey]: d })))
-            .catch(() => {});
+            .catch(() => setRecentDataMap((prev) => ({ ...prev, [recentRequestKey]: { __dashboardError: true } })));
         } else if (key && STATS_ENDPOINT_KEYS.has(key)) {
-          const statsRequestKey = getWidgetRequestKey("stats", "", target?.userConfig);
+          const statsRequestKey = getWidgetRequestKey("stats", "", target?.userConfig, userIdentity);
           if (!(statsRequestKey in statsData)) {
-            getDashboardStats(range).then((d) => setStatsData((prev) => ({ ...prev, [statsRequestKey]: d }))).catch(() => {});
+            getDashboardStats(range)
+              .then((d) => setStatsData((prev) => ({ ...prev, [statsRequestKey]: d })))
+              .catch(() => setStatsData((prev) => ({ ...prev, [statsRequestKey]: { __dashboardError: true } })));
           }
         }
       }
@@ -666,20 +664,20 @@ const DashboardPage = () => {
       const range = getWidgetDateRange(newConfig);
       if (key && RECENT_KEY_TO_TYPE[key]) {
         const limit = newConfig?.limit ?? 5;
-        const requestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], newConfig);
+        const requestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], newConfig, userIdentity, limit);
         getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit, range)
           .then((data) => setRecentDataMap((prev) => ({ ...prev, [requestKey]: data })))
-          .catch(() => {});
+          .catch(() => setRecentDataMap((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
       } else if (key && CHART_KEY_TO_TYPE[key]) {
-        const requestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], newConfig);
+        const requestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], newConfig, userIdentity);
         getDashboardChart(CHART_KEY_TO_TYPE[key], range)
           .then((data) => setChartDataMap((prev) => ({ ...prev, [requestKey]: data })))
-          .catch(() => {});
+          .catch(() => setChartDataMap((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
       } else if (key && STATS_ENDPOINT_KEYS.has(key)) {
-        const requestKey = getWidgetRequestKey("stats", "", newConfig);
+        const requestKey = getWidgetRequestKey("stats", "", newConfig, userIdentity);
         getDashboardStats(range)
           .then((data) => setStatsData((prev) => ({ ...prev, [requestKey]: data })))
-          .catch(() => {});
+          .catch(() => setStatsData((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
       }
     },
     [myWidgets, queueLayoutSave]
@@ -711,20 +709,22 @@ const DashboardPage = () => {
         // Fetch data for new widget
         const key = widget.key;
         if (CHART_KEY_TO_TYPE[key]) {
-          const requestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key]);
+          const requestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], {}, userIdentity);
           getDashboardChart(CHART_KEY_TO_TYPE[key])
             .then((d) => setChartDataMap((prev) => ({ ...prev, [requestKey]: d })))
-            .catch(() => {});
+            .catch(() => setChartDataMap((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
         } else if (RECENT_KEY_TO_TYPE[key]) {
           const limit = widget.configSchema?.find((f) => f.key === "limit")?.default ?? 5;
-          const requestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key]);
+          const requestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], {}, userIdentity, limit);
           getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit)
             .then((d) => setRecentDataMap((prev) => ({ ...prev, [requestKey]: d })))
-            .catch(() => {});
+            .catch(() => setRecentDataMap((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
         } else if (STATS_ENDPOINT_KEYS.has(key)) {
-          const requestKey = getWidgetRequestKey("stats", "");
+          const requestKey = getWidgetRequestKey("stats", "", {}, userIdentity);
           if (!(requestKey in statsData)) {
-            getDashboardStats().then((d) => setStatsData((prev) => ({ ...prev, [requestKey]: d }))).catch(() => {});
+            getDashboardStats()
+              .then((d) => setStatsData((prev) => ({ ...prev, [requestKey]: d })))
+              .catch(() => setStatsData((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
           }
         }
       } catch (e) {
@@ -739,6 +739,35 @@ const DashboardPage = () => {
   const handleReset = useCallback(() => {
     setDeleteTargetId("__reset__");
   }, []);
+
+  const handleRetryWidget = useCallback((userWidget) => {
+    const key = userWidget?.widget?.key;
+    const range = getWidgetDateRange(userWidget?.userConfig);
+    if (CHART_KEY_TO_TYPE[key]) {
+      const requestKey = getWidgetRequestKey("chart", CHART_KEY_TO_TYPE[key], userWidget.userConfig, userIdentity);
+      setChartDataMap((prev) => { const next = { ...prev }; delete next[requestKey]; return next; });
+      getDashboardChart(CHART_KEY_TO_TYPE[key], range)
+        .then((data) => setChartDataMap((prev) => ({ ...prev, [requestKey]: data })))
+        .catch(() => setChartDataMap((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
+      return;
+    }
+    if (RECENT_KEY_TO_TYPE[key]) {
+      const limit = userWidget.userConfig?.limit ?? userWidget.widget?.configSchema?.find((field) => field.key === "limit")?.default ?? 5;
+      const requestKey = getWidgetRequestKey("recent", RECENT_KEY_TO_TYPE[key], userWidget.userConfig, userIdentity, limit);
+      setRecentDataMap((prev) => { const next = { ...prev }; delete next[requestKey]; return next; });
+      getDashboardRecent(RECENT_KEY_TO_TYPE[key], limit, range)
+        .then((data) => setRecentDataMap((prev) => ({ ...prev, [requestKey]: data })))
+        .catch(() => setRecentDataMap((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
+      return;
+    }
+    if (STATS_ENDPOINT_KEYS.has(key)) {
+      const requestKey = getWidgetRequestKey("stats", "", userWidget.userConfig, userIdentity);
+      setStatsData((prev) => { const next = { ...prev }; delete next[requestKey]; return next; });
+      getDashboardStats(range)
+        .then((data) => setStatsData((prev) => ({ ...prev, [requestKey]: data })))
+        .catch(() => setStatsData((prev) => ({ ...prev, [requestKey]: { __dashboardError: true } })));
+    }
+  }, [userIdentity]);
 
   // ── Enter edit mode ───────────────────────
   // The first customization is one atomic snapshot, including every default widget.
@@ -772,6 +801,8 @@ const DashboardPage = () => {
     rowHeight: 72,
     margin: [14, 14],
     containerPadding: [0, 0],
+    // Preserve intentional gaps instead of moving widgets upward after drop.
+    compactType: null,
     // CRITICAL: prevents grid from intercepting clicks on toolbar buttons
     draggableCancel: ".widget-toolbar, .widget-toolbar *",
     draggableHandle: ".drag-handle",
@@ -783,6 +814,13 @@ const DashboardPage = () => {
       <div className="page-content">
         <Container fluid>
           <Breadcrumbs title="داشبورد" breadcrumbItem="داشبورد شخصی" />
+
+          {dashboardError && (
+            <Alert color="danger" className="d-flex align-items-center justify-content-between gap-3">
+              <span>بارگذاری چیدمان داشبورد ناموفق بود.</span>
+              <Button color="danger" outline size="sm" onClick={loadDashboard}>تلاش دوباره</Button>
+            </Alert>
+          )}
 
           {isDefaultView && !isEditMode && (
             <Alert color="info" className="d-flex align-items-center gap-3 mb-4">
@@ -844,7 +882,7 @@ const DashboardPage = () => {
             ref={gridRef}
             style={{ direction: "ltr", width: "100%", minHeight: 200 }}
           >
-            {loading ? (
+            {dashboardError ? null : loading ? (
               <ResponsiveGridLayout
                 {...gridProps}
                 width={gridWidth}
@@ -879,6 +917,7 @@ const DashboardPage = () => {
 
             ) : (
               <div
+                className="dashboard-grid"
                 style={{
                   background: isEditMode
                     ? "repeating-linear-gradient(90deg, rgba(85,110,230,0.05) 0, rgba(85,110,230,0.05) 1px, transparent 1px, transparent calc(8.33% - 1px))"
@@ -918,7 +957,8 @@ const DashboardPage = () => {
                         statsData={statsData}
                         chartDataMap={chartDataMap}
                         recentDataMap={recentDataMap}
-                        onRetry={loadDashboard}
+                        onRetry={() => handleRetryWidget(userWidget)}
+                        userIdentity={userIdentity}
                       />
                     </div>
                   ))}
