@@ -19,6 +19,8 @@ const formatHMS = (seconds) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
 };
 
+const getPersonalStats = (stats) => stats?.adviser ?? stats?.superAdviser;
+
 const STATS_CONFIG = {
   students_total: {
     icon: "bx-user-circle",
@@ -117,7 +119,7 @@ const STATS_CONFIG = {
     bgClass: "bg-success",
     label: "فعالیت تماس امروز من",
     adviserLabel: "فعالیت تماس امروز من",
-    getValue: (s) => s?.adviser?.onlineToday ?? s?.superAdviser?.onlineToday,
+    getValue: (s) => getPersonalStats(s)?.onlineToday,
     suffix: (val) =>
       val > 0 ? (
         <span
@@ -131,14 +133,14 @@ const STATS_CONFIG = {
     bgClass: "bg-primary",
     label: "تماس‌های من",
     adviserLabel: "تماس‌های من",
-    getValue: (s) => s?.adviser?.totalCallsToday ?? s?.superAdviser?.totalCallsToday,
+    getValue: (s) => getPersonalStats(s)?.totalCallsToday,
   },
   sa_successful_calls_today: {
     icon: "bx-phone-call",
     bgClass: "bg-success",
     label: "تماس موفق امروز",
     adviserLabel: "تماس‌های موفق من",
-    getValue: (s) => s?.adviser?.successfulCallsToday ?? s?.superAdviser?.successfulCallsToday,
+    getValue: (s) => getPersonalStats(s)?.successfulCallsToday,
   },
   sa_students_total: {
     icon: "bx-user-circle",
@@ -159,17 +161,19 @@ const STATS_CONFIG = {
     bgClass: "bg-info",
     label: "مدت تماس من در این ماه",
     adviserLabel: "مدت تماس من در این ماه",
-    getValue: (s) => s?.adviser?.monthlyDurationSeconds ?? s?.superAdviser?.monthlyDurationSeconds,
+    getValue: (s) => getPersonalStats(s)?.monthlyDurationSeconds,
     format: formatHMS,
     unit: "ساعت:دقیقه:ثانیه",
   },
 };
 
+export const getStatsWidgetValue = (widgetKey, stats) => STATS_CONFIG[widgetKey]?.getValue(stats);
+
 const StatsWidget = ({ widgetKey, widgetName, stats }) => {
   const cfg = STATS_CONFIG[widgetKey];
   if (!cfg) return null;
 
-  const rawVal = cfg.getValue(stats);
+  const rawVal = getStatsWidgetValue(widgetKey, stats);
   const displayVal = cfg.format ? cfg.format(rawVal) : (rawVal !== null && rawVal !== undefined ? Number(rawVal).toLocaleString("fa-IR") : null);
   const bgClass = cfg.dynamicColor ? cfg.dynamicColor(rawVal) : cfg.bgClass;
   const loading = stats === null || stats === undefined;
