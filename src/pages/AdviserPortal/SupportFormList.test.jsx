@@ -83,3 +83,26 @@ test("keeps ended forms visible and labels their action as view-only", async () 
   expect(screen.getByText("پایان‌یافته")).toBeInTheDocument();
   expect(screen.getByText("مشاهده")).toBeInTheDocument();
 });
+
+test("renders JSON headings as readable form fields instead of raw API data", async () => {
+  getAdviserSupportForms.mockResolvedValue({
+    items: [{
+      id: 15,
+      title: "فرم پیگیری",
+      headings: JSON.stringify([
+        { headings_title: "وضعیت مطالعه", headings_body: "بررسی برنامه هفتگی" },
+        { headings_title: "نتیجه آزمون", headings_body: "نتیجه آزمون" },
+      ]),
+      stats: {},
+    }],
+    pagination: { page: 1, limit: 15, total: 1, lastPage: 1 },
+  });
+
+  renderPage();
+
+  expect(await screen.findByText("سرفصل‌های فرم")).toBeInTheDocument();
+  expect(screen.getByText("وضعیت مطالعه")).toBeInTheDocument();
+  expect(screen.getByText("بررسی برنامه هفتگی")).toBeInTheDocument();
+  expect(screen.getByText("نتیجه آزمون")).toBeInTheDocument();
+  expect(screen.queryByText(/headings_title/)).not.toBeInTheDocument();
+});

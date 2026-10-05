@@ -24,6 +24,8 @@ import {
 import { getGrades } from "../../services/gradeService.jsx";
 import { parseAdviserSupportFormQuery, serializeAdviserSupportFormQuery } from "./supportFormListQuery.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { parseFormHeadings } from "./supportFormHeadings.js";
+import "./support-form-list.scss";
 
 const formatJalali = (value) => {
   if (!value) return "—";
@@ -164,50 +166,54 @@ const SupportFormList = () => {
           </Col>
         </Row>
 
-        <Row className="mb-3 align-items-center g-2">
-          <Col md={5} lg={4}>
-            <form onSubmit={handleSearch}>
-              <InputGroup>
-                <InputGroupText>
-                  <i className="bx bx-search" />
-                </InputGroupText>
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="جستجو بر اساس عنوان..."
-                />
-                <Button color="primary" type="submit" disabled={loading}>
-                  جستجو
+        <Card className="support-form-toolbar border-0 shadow-sm mb-4">
+          <CardBody>
+            <Row className="align-items-end g-3">
+              <Col md={7} lg={5}>
+                <label className="form-label" htmlFor="adviser-support-form-search">جستجو در فرم‌ها</label>
+                <form onSubmit={handleSearch}>
+                  <InputGroup>
+                    <InputGroupText>
+                      <i className="bx bx-search" />
+                    </InputGroupText>
+                    <Input
+                      id="adviser-support-form-search"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="جستجو بر اساس عنوان..."
+                    />
+                    <Button color="primary" type="submit" disabled={loading}>
+                      جستجو
+                    </Button>
+                  </InputGroup>
+                </form>
+              </Col>
+              <Col md={5} lg={3}>
+                <label className="form-label" htmlFor="adviser-support-form-grade">پایه</label>
+                <Input id="adviser-support-form-grade" type="select" value={query.gradeId} onChange={handleGradeChange} disabled={gradesLoading || loading}>
+                  <option value="">همه پایه‌ها</option>
+                  {grades.map((grade) => <option key={grade.id} value={String(grade.id)}>{grade.name}</option>)}
+                </Input>
+              </Col>
+              <Col lg={4} className="d-flex flex-wrap gap-2 justify-content-lg-end">
+                <Button
+                  color={query.sortOrder === "DESC" ? "primary" : "light"}
+                  onClick={() => handleSortChange("DESC")}
+                >
+                  <i className="bx bx-sort-down me-1" />
+                  جدیدترین
                 </Button>
-              </InputGroup>
-            </form>
-          </Col>
-          <Col md={3} lg={2}>
-            <label className="form-label" htmlFor="adviser-support-form-grade">پایه</label>
-            <Input id="adviser-support-form-grade" type="select" value={query.gradeId} onChange={handleGradeChange} disabled={gradesLoading || loading}>
-              <option value="">همه پایه‌ها</option>
-              {grades.map((grade) => <option key={grade.id} value={String(grade.id)}>{grade.name}</option>)}
-            </Input>
-          </Col>
-          <Col xs="auto" className="ms-auto d-flex gap-2 align-self-end">
-            <Button
-              size="sm"
-              color={query.sortOrder === "DESC" ? "primary" : "light"}
-              onClick={() => handleSortChange("DESC")}
-            >
-              <i className="bx bx-sort-down me-1" />
-              جدیدترین
-            </Button>
-            <Button
-              size="sm"
-              color={query.sortOrder === "ASC" ? "primary" : "light"}
-              onClick={() => handleSortChange("ASC")}
-            >
-              <i className="bx bx-sort-up me-1" />
-              قدیمی‌ترین
-            </Button>
-          </Col>
-        </Row>
+                <Button
+                  color={query.sortOrder === "ASC" ? "primary" : "light"}
+                  onClick={() => handleSortChange("ASC")}
+                >
+                  <i className="bx bx-sort-up me-1" />
+                  قدیمی‌ترین
+                </Button>
+              </Col>
+            </Row>
+          </CardBody>
+        </Card>
 
         {error && <Alert color="danger">{error}</Alert>}
 
@@ -227,15 +233,13 @@ const SupportFormList = () => {
               const total = stats.total || form.totalStudents || 0;
               const called = stats.called || 0;
               const pct = total > 0 ? Math.round((called / total) * 100) : 0;
+              const headings = parseFormHeadings(form.headings);
 
               return (
                 <Col key={form.id} xl={4} lg={6} md={6} className="mb-4">
                   <Card
-                    className="h-100 shadow-sm border-0"
-                    style={{ cursor: "pointer", transition: "transform 0.15s" }}
+                    className="support-form-card h-100 shadow-sm border-0"
                     onClick={() => navigate(`/adviser-calls/forms/${form.id}`, { state: { schoolId: Number(schoolId) } })}
-                    onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-3px)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.transform = "translateY(0)")}
                   >
                     <CardBody className="d-flex flex-column">
                       <div className="d-flex align-items-start gap-2 mb-2">
@@ -245,23 +249,34 @@ const SupportFormList = () => {
                         >
                           <i className="bx bx-support text-primary font-size-18" />
                         </div>
-                        <div className="flex-grow-1">
-                          <h6 className="mb-1 fw-semibold">{form.title || "—"}</h6>
-                          {form.headings && (
-                            <p
-                              className="text-muted small mb-0"
-                              style={{
-                                overflow: "hidden",
-                                display: "-webkit-box",
-                                WebkitLineClamp: 2,
-                                WebkitBoxOrient: "vertical",
-                              }}
-                            >
-                              {form.headings}
-                            </p>
-                          )}
+                        <div className="flex-grow-1 support-form-card__title">
+                          <h6 className="mb-0 fw-semibold lh-base">{form.title || "بدون عنوان"}</h6>
                         </div>
                       </div>
+
+                      {headings.length > 0 && (
+                        <div className="support-form-headings mb-3">
+                          <div className="support-form-headings__label">
+                            <i className="bx bx-list-ul" />
+                            سرفصل‌های فرم
+                          </div>
+                          {headings.slice(0, 3).map((heading, index) => {
+                            const showBody = heading.body && heading.body !== heading.title;
+                            return (
+                              <div className="support-form-heading" key={`${heading.title}-${index}`}>
+                                <span className="support-form-heading__index">{index + 1}</span>
+                                <div className="text-truncate">
+                                  <span className="support-form-heading__title">{heading.title || heading.body}</span>
+                                  {showBody && <span className="support-form-heading__body">{heading.body}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {headings.length > 3 && (
+                            <span className="support-form-headings__more">+{headings.length - 3} سرفصل دیگر</span>
+                          )}
+                        </div>
+                      )}
 
                       <div className="d-flex flex-wrap gap-2 mb-3">
                         {form.isClosed && (
