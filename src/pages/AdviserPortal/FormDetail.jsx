@@ -45,6 +45,8 @@ import {
 } from "./formDetailSortUtils.js";
 import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers, isMultiChoiceQuestion } from "./answerFormUtils.js";
 import { closeSupportForm, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
+import { parseFormHeadings } from "./supportFormHeadings.js";
+import "./support-form-list.scss";
 
 const formatJalali = (value, withTime = false) => {
   if (!value) return "—";
@@ -766,6 +768,7 @@ const FormDetail = () => {
   };
 
   const formTitle = form?.title || `فرم ${formId}`;
+  const formHeadings = parseFormHeadings(form?.headings);
 
   return (
     <div className="page-content">
@@ -780,14 +783,44 @@ const FormDetail = () => {
 
         {/* Form Info Panel */}
         {form && (
-          <Card className="mb-4 border-0 shadow-sm">
-            <CardBody>
-              <Row className="align-items-center">
-                <Col>
-                  <h4 className="mb-1 fw-semibold">{form.title}</h4>
-                  {form.headings && <p className="text-muted mb-0">{form.headings}</p>}
+          <Card className="support-form-detail-hero mb-4 border-0 shadow-sm">
+            <CardBody className="p-4">
+              <Row className="align-items-center g-4">
+                <Col lg>
+                  <div className="d-flex align-items-start gap-3">
+                    <div className="support-form-detail-hero__icon">
+                      <i className="bx bx-support" />
+                    </div>
+                    <div className="flex-grow-1 overflow-hidden">
+                      <h4 className="mb-3 fw-semibold lh-base">{form.title || "بدون عنوان"}</h4>
+                      {formHeadings.length > 0 && (
+                        <div className="support-form-headings support-form-headings--detail mb-0">
+                          <div className="support-form-headings__label">
+                            <i className="bx bx-list-ul" />
+                            سرفصل‌های فرم تماس
+                          </div>
+                          <div className="row g-2">
+                            {formHeadings.map((heading, index) => {
+                              const showBody = heading.body && heading.body !== heading.title;
+                              return (
+                                <div className="col-md-6" key={`${heading.title}-${index}`}>
+                                  <div className="support-form-heading support-form-heading--detail">
+                                    <span className="support-form-heading__index">{index + 1}</span>
+                                    <div className="overflow-hidden">
+                                      <span className="support-form-heading__title">{heading.title || heading.body}</span>
+                                      {showBody && <span className="support-form-heading__body">{heading.body}</span>}
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </Col>
-                <Col xs="auto" className="d-flex gap-3 text-muted small">
+                <Col lg="auto" className="support-form-detail-meta d-flex flex-wrap gap-3 text-muted small">
                   {form.callDuration > 0 && (
                     <span>
                       <i className="bx bx-time me-1 text-primary" />

@@ -71,3 +71,21 @@ test("handles SUPPORT_FORM_ENDED from an in-flight call without removing existin
   expect(callButton).toBeDisabled();
   expect(screen.getByText("دانش‌آموز")).toBeInTheDocument();
 });
+
+test("renders contact-form headings as readable fields instead of raw JSON", async () => {
+  getAdviserSupportFormDetail.mockResolvedValue({
+    id: 10,
+    title: "فرم توانمندسازی",
+    headings: JSON.stringify([{ headings_title: "تماس پایانی", headings_body: "جمع‌بندی وضعیت دانش‌آموز" }]),
+    isClosed: false,
+    canEdit: true,
+    canCall: true,
+    questions: [],
+  });
+  renderPage();
+
+  expect(await screen.findByText("سرفصل‌های فرم تماس")).toBeInTheDocument();
+  expect(screen.getByText("تماس پایانی")).toBeInTheDocument();
+  expect(screen.getByText("جمع‌بندی وضعیت دانش‌آموز")).toBeInTheDocument();
+  expect(screen.queryByText(/headings_title/)).not.toBeInTheDocument();
+});
