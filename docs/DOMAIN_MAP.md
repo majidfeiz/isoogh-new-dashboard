@@ -17,6 +17,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Support forms | `pages/SupportForms` | `supportFormService` | `supportForms` | `/support-forms*` |
 | Answer sheets | `pages/AnswerSheets` | `answerSheetService` | `answerSheets` | `/answer-sheets` |
 | Files | `pages/Files` | `fileService` | `files` | `/files*` |
+| Tickets | `pages/Tickets` | `ticketService` | `tickets` | `/tickets*` |
 | School chat | `pages/Chat` | `chatService` | `chat` | `/chat` |
 | Notifications | `pages/Notifications` | `notificationService` | `notifications` | `/notifications*` |
 | Audit logs | `pages/AuditLogs` | `auditLogService` | `auditLogs` | `/audit-logs` |
