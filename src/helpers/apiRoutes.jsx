@@ -371,6 +371,20 @@ export const API_ROUTES = {
     widgetRoles: (widgetId) => `/dashboard/widgets/${widgetId}/roles`,
     widgetRole: (widgetId, roleId) => `/dashboard/widgets/${widgetId}/roles/${roleId}`,
   },
+  tickets: {
+    list: "/tickets",
+    create: "/tickets",
+    detail: (id) => `/tickets/${id}`,
+    messages: (id) => `/tickets/${id}/messages`,
+    upload: (id) => `/tickets/${id}/attachments/upload`,
+    download: (attachmentId) => `/tickets/attachments/${attachmentId}/download`,
+    status: (id) => `/tickets/${id}/status`,
+    category: (id) => `/tickets/${id}/category`,
+    result: (id) => `/tickets/${id}/result`,
+    categories: "/tickets/categories",
+    results: "/tickets/results",
+    dashboard: "/tickets/dashboard",
+  },
   // ------------------------
   // 🔑 External API Clients
   // ------------------------

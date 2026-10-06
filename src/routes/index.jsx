@@ -234,6 +234,12 @@ import NotificationComposePage from "../pages/Notifications/NotificationComposeP
 import FileList from "../pages/Files/FileList.jsx";
 import FileForm from "../pages/Files/FileForm.jsx";
 
+// tickets
+import TicketList from "../pages/Tickets/TicketList.jsx";
+import TicketCreate from "../pages/Tickets/TicketCreate.jsx";
+import TicketDetail from "../pages/Tickets/TicketDetail.jsx";
+import TicketDashboard from "../pages/Tickets/TicketDashboard.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -420,6 +426,12 @@ const authProtectedRoutes = [
   { path: "/files", component: <FileList /> },
   { path: "/files/create", component: <FileForm /> },
   { path: "/files/:id/edit", component: <FileForm /> },
+
+  // tickets
+  { path: "/tickets", component: <ProtectedRoute permission="tickets.index"><TicketList /></ProtectedRoute> },
+  { path: "/tickets/create", component: <ProtectedRoute permission="tickets.create"><TicketCreate /></ProtectedRoute> },
+  { path: "/tickets/dashboard", component: <ProtectedRoute permission="tickets.dashboard"><TicketDashboard /></ProtectedRoute> },
+  { path: "/tickets/:id", component: <ProtectedRoute permission="tickets.show"><TicketDetail /></ProtectedRoute> },
 
   // voip
   { path: "/voip/outbound-call-histories", component: <ProtectedRoute permission="voip.outbound.index"><OutboundCallHistories /></ProtectedRoute> },

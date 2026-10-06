@@ -200,6 +200,17 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "پشتیبانی و تیکت‌ها",
+        icon: "bx bx-support",
+        permissionAny: ["tickets.index", "tickets.create", "tickets.dashboard"],
+        children: [
+          { label: "تیکت‌ها", to: "/tickets", permission: "tickets.index" },
+          { label: "ثبت تیکت", to: "/tickets/create", permission: "tickets.create" },
+          { label: "داشبورد تیکت‌ها", to: "/tickets/dashboard", permission: "tickets.dashboard" },
+        ],
+      },
+      {
+        type: "group",
         label: "یکپارچه‌سازی بله",
         icon: "bx bx-message-rounded-dots",
         permissionAny: ["bale.admin.settings.show", "bale.admin.global-settings.show", "bale.admin.connections.index", "bale.admin.health.show", "bale.admin.messages.index", "bale.logs.index"],
