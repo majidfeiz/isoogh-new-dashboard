@@ -22,11 +22,28 @@ export const isGlobalTicketRole = (user) => {
 
 export const validateTicketFile = (file) => !file || file.size <= MAX_TICKET_FILE_SIZE;
 
+const persianDateTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "Asia/Tehran",
+});
+
 export const formatTicketDate = (value) => {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return moment(date).format("jYYYY/jMM/jDD HH:mm");
+  return persianDateTime.format(date).replace(",", "،");
+};
+
+export const formatTicketChartDate = (value) => {
+  if (!value) return "—";
+  const parsed = moment(String(value).slice(0, 10), "YYYY-MM-DD", true);
+  if (!parsed.isValid()) return String(value);
+  return parsed.format("jYYYY/jMM/jDD").replace(/\d/g, (digit) => "۰۱۲۳۴۵۶۷۸۹"[digit]);
 };
 
 export const taxonomyName = (value) => (typeof value === "string" ? value : value?.name) || "تعیین نشده";
