@@ -505,6 +505,19 @@ const SidebarContent = (props) => {
         ],
       },
       {
+        type: "group",
+        label: "تماس‌های ورودی",
+        icon: "bx bx-phone-incoming",
+        permissionAny: ["incoming-calls.index", "incoming-calls.settings.show", "incoming-calls.supporters.index", "incoming-calls.availability.update", "incoming-calls.students.index"],
+        children: [
+          { label: "لیست تماس‌ها", to: "/incoming-calls", permission: "incoming-calls.index" },
+          { label: "پنل پشتیبان", to: "/incoming-calls/panel", permission: "incoming-calls.availability.update" },
+          { label: "دانش‌آموزان", to: "/incoming-calls/students", permission: "incoming-calls.students.index" },
+          { label: "مدیریت پشتیبان‌ها", to: "/incoming-calls/supporters", permission: "incoming-calls.supporters.index" },
+          { label: "تنظیمات", to: "/incoming-calls/settings", permission: "incoming-calls.settings.show" },
+        ],
+      },
+      {
         type: "item",
         label: "لاگ فعالیت‌ها",
         icon: "bx bx-history",
