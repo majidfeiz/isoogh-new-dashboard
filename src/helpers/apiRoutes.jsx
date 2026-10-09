@@ -202,6 +202,17 @@ export const API_ROUTES = {
     durationProcessingSettings: "/voip/duration-processing/settings",
     durationProcessingExecute: "/voip/duration-processing/execute",
   },
+  incomingCalls: {
+    list: "/incoming-calls",
+    settings: "/incoming-calls/settings",
+    supporters: "/incoming-calls/supporters",
+    supporter: (id) => `/incoming-calls/supporters/${id}`,
+    availability: "/incoming-calls/availability",
+    result: (id) => `/incoming-calls/${id}/result`,
+    students: "/incoming-calls/students",
+    studentProfile: (id) => `/incoming-calls/students/${id}/profile`,
+    studentTimeline: (id) => `/incoming-calls/students/${id}/timeline`,
+  },
   voipAnalytics: {
     summary: "/voip/analytics/summary",
     durationMismatch: "/voip/analytics/duration-mismatch",

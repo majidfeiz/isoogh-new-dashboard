@@ -315,6 +315,12 @@ import AdviserPortalCallLogs from "../pages/AdviserPortal/CallLogs.jsx";
 import AdviserPortalStats from "../pages/AdviserPortal/Stats.jsx";
 import AdviserPortalStudentProfile from "../pages/AdviserPortal/StudentProfile.jsx";
 import AdviserPortalInterruptedCalls from "../pages/AdviserPortal/InterruptedCalls.jsx";
+import IncomingCallSettings from "../pages/IncomingCalls/IncomingCallSettings.jsx";
+import IncomingSupporters from "../pages/IncomingCalls/IncomingSupporters.jsx";
+import IncomingSupporterPanel from "../pages/IncomingCalls/IncomingSupporterPanel.jsx";
+import IncomingCallList from "../pages/IncomingCalls/IncomingCallList.jsx";
+import IncomingStudents from "../pages/IncomingCalls/IncomingStudents.jsx";
+import IncomingStudentProfile from "../pages/IncomingCalls/IncomingStudentProfile.jsx";
 
 
 const authProtectedRoutes = [
@@ -447,6 +453,12 @@ const authProtectedRoutes = [
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
   { path: "/voip/duration-processing", component: <ProtectedRoute permission="voip.duration-processing.index"><DurationProcessing /></ProtectedRoute> },
+  { path: "/incoming-calls/settings", component: <ProtectedRoute permission="incoming-calls.settings.show"><IncomingCallSettings /></ProtectedRoute> },
+  { path: "/incoming-calls/supporters", component: <ProtectedRoute permission="incoming-calls.supporters.index"><IncomingSupporters /></ProtectedRoute> },
+  { path: "/incoming-calls/panel", component: <ProtectedRoute permission="incoming-calls.availability.update"><IncomingSupporterPanel /></ProtectedRoute> },
+  { path: "/incoming-calls", component: <ProtectedRoute permission="incoming-calls.index"><IncomingCallList /></ProtectedRoute> },
+  { path: "/incoming-calls/students", component: <ProtectedRoute permission="incoming-calls.students.index"><IncomingStudents /></ProtectedRoute> },
+  { path: "/incoming-calls/students/:id", component: <ProtectedRoute permission="incoming-calls.students.show"><IncomingStudentProfile /></ProtectedRoute> },
   { path: "/audit-logs", component: <ProtectedRoute permission="audit-logs.index"><AuditLogs /></ProtectedRoute> },
   { path: "/import-logs", component: <ProtectedRoute permission="import-logs.index"><ImportLogList /></ProtectedRoute> },
   { path: "/import-logs/:id", component: <ProtectedRoute permission="import-logs.show"><ImportLogDetail /></ProtectedRoute> },
