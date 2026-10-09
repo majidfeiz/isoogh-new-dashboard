@@ -15,9 +15,14 @@ const keys = ["schoolId", "search", "status", "categoryId", "resultId", "from", 
 export default function TicketList() {
   document.title = "تیکت‌ها | داشبورد آیسوق";
   const [params, setParams] = useSearchParams();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const allowAllSchools = isGlobalTicketRole(user);
-  const filters = useMemo(() => Object.fromEntries(keys.map((key) => [key, key === "status" ? sanitizeTicketStatus(params.get(key)) : params.get(key) || ""])), [params]);
+  const canManage = hasPermission("tickets.manage");
+  const filters = useMemo(() => Object.fromEntries(keys.map((key) => {
+    if (key === "status") return [key, sanitizeTicketStatus(params.get(key))];
+    if (key === "resultId" && !canManage) return [key, ""];
+    return [key, params.get(key) || ""];
+  })), [params, canManage]);
   const page = Number(params.get("page")) || 1;
   const limit = Number(params.get("limit")) || 10;
   const [state, setState] = useState({ items: [], meta: { page, limit, total: 0, lastPage: 1 }, loading: true, error: "" });
@@ -25,7 +30,7 @@ export default function TicketList() {
   const { schools, loading: schoolsLoading, validSavedSchoolId, rememberSchool } = useTicketSchools();
   const update = useCallback((changes) => setParams((current) => { const next = new URLSearchParams(current); Object.entries(changes).forEach(([key, value]) => value ? next.set(key, value) : next.delete(key)); return next; }), [setParams]);
 
-  useEffect(() => { Promise.all([getTicketTaxonomy("categories"), getTicketTaxonomy("results")]).then(([categories, results]) => setTaxonomy({ categories, results })).catch(() => {}); }, []);
+  useEffect(() => { Promise.all([getTicketTaxonomy("categories"), canManage ? getTicketTaxonomy("results") : Promise.resolve([])]).then(([categories, results]) => setTaxonomy({ categories, results })).catch(() => {}); }, [canManage]);
   useEffect(() => { if (schoolsLoading || allowAllSchools || filters.schoolId) return; const schoolId = validSavedSchoolId() || schools[0]?.id; if (schoolId) update({ schoolId: String(schoolId), page: "1" }); }, [schoolsLoading, schools, filters.schoolId, allowAllSchools, validSavedSchoolId, update]);
   useEffect(() => { if (!allowAllSchools && !filters.schoolId) return; const timer = setTimeout(async () => { setState((s) => ({ ...s, loading: true, error: "" })); try { const data = await getTickets({ ...filters, page, limit }); setState({ ...data, loading: false, error: "" }); } catch { setState((s) => ({ ...s, items: [], loading: false, error: "دریافت تیکت‌ها ناموفق بود. دوباره تلاش کنید." })); } }, 350); return () => clearTimeout(timer); }, [filters, page, limit, allowAllSchools]);
   const change = (key, value) => { if (key === "schoolId" && value) rememberSchool(value); update({ [key]: value, page: "1" }); };

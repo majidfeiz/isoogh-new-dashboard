@@ -10,6 +10,6 @@ export interface Ticket {
   resolvedAt?: string; createdAt: string; messages?: TicketMessage[]; attachments?: TicketAttachment[];
 }
 export interface TicketListRequest { schoolId?: number | string; search?: string; status?: TicketStatus; categoryId?: number | string; resultId?: number | string; from?: string; to?: string; page?: number; limit?: number }
-export interface TicketCreateRequest { schoolId: number | string; title: string; description: string }
+export interface TicketCreateRequest { schoolId: number | string; categoryId: number | string; title: string; description: string }
 export interface TicketPage { items: Ticket[]; meta: { page: number; limit: number; total: number; lastPage: number } }
 export interface TicketDashboardData { total: number; byStatus: Record<TicketStatus, number>; byCategory: Array<{ name: string; count: number }>; byResult: Array<{ name: string; count: number }>; trend: Array<{ date: string; count: number }> }
