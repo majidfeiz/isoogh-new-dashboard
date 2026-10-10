@@ -51,7 +51,7 @@ const StudentCallSummary = () => {
     const controller = new AbortController()
     setSchoolsLoading(true)
     setSchoolsError("")
-    getSchools({ page: 1, limit: 100, sortBy: "title", sortOrder: "ASC", signal: controller.signal })
+    getSchools({ page: 1, limit: 100, sortBy: "name", sortOrder: "ASC", signal: controller.signal })
       .then((result) => {
         const items = result.items || []
         setSchools(items)
