@@ -34,6 +34,7 @@ const renderPage = (entry = "/reports/student-call-summary") => render(<MemoryRo
 test("requires a school and does not request the report before selection", async () => {
   renderPage()
   expect(await screen.findByText("ابتدا مجموعه را انتخاب کنید.")).toBeInTheDocument()
+  expect(getSchools).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 100, sortBy: "name", sortOrder: "ASC" }))
   expect(reportService.getStudentCallSummary).not.toHaveBeenCalled()
   fireEvent.change(screen.getByLabelText(/مجموعه/), { target: { value: "1" } })
   await waitFor(() => expect(reportService.getStudentCallSummary).toHaveBeenCalledWith(expect.objectContaining({ schoolId: "1", page: 1 }), expect.any(AbortSignal)))
