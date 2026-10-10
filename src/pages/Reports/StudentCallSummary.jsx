@@ -10,11 +10,12 @@ import Breadcrumbs from "../../components/Common/Breadcrumb"
 import Paginations from "../../components/Common/Paginations.jsx"
 import TableContainer from "../../components/Common/TableContainer.jsx"
 import { useAuth } from "../../context/AuthContext.jsx"
+import { AUTH_CLEARED_EVENT } from "../../helpers/authStorage.jsx"
 import { getSchools } from "../../services/schoolService.jsx"
-import { exportStudentCallSummary, getStudentCallSummary } from "../../services/studentCallSummaryService.jsx"
+import { getStudentCallSummary, streamStudentCallSummaryExport } from "../../services/studentCallSummaryService.jsx"
 import {
   buildStudentCallSummaryRange, formatStudentCallDuration, logInconsistentCallTotals,
-  parseStudentCallSummaryQuery, rowNumber, saveStudentCallSummaryBlob,
+  parseStudentCallSummaryQuery, rowNumber,
   serializeStudentCallSummaryQuery, studentCallSummaryErrorMessage,
 } from "./studentCallSummaryUtils.js"
 
@@ -35,13 +36,14 @@ const StudentCallSummary = () => {
   const [schoolsError, setSchoolsError] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [exporting, setExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState({ status: "idle", loadedBytes: 0, totalBytes: null, filename: "" })
   const [retrySchools, setRetrySchools] = useState(0)
   const [retryReport, setRetryReport] = useState(0)
   const [search, setSearch] = useState(query.search)
   const [fromDate, setFromDate] = useState(() => dateFromIso(query.from))
   const [toDate, setToDate] = useState(() => query.to ? dateFromIso(new Date(Date.parse(query.to) - 86400000).toISOString()) : null)
   const [filterError, setFilterError] = useState("")
+  const exportControllerRef = React.useRef(null)
 
   const updateQuery = useCallback((updates) => {
     setSearchParams(serializeStudentCallSummaryQuery({ ...query, ...updates }))
@@ -87,6 +89,11 @@ const StudentCallSummary = () => {
     setToDate(query.to ? dateFromIso(new Date(Date.parse(query.to) - 86400000).toISOString()) : null)
   }, [query.from, query.to])
   useEffect(() => {
+    const cancelExport = () => exportControllerRef.current?.abort()
+    window.addEventListener(AUTH_CLEARED_EVENT, cancelExport)
+    return () => { window.removeEventListener(AUTH_CLEARED_EVENT, cancelExport); cancelExport() }
+  }, [])
+  useEffect(() => {
     if (search === query.search) return
     const timer = setTimeout(() => updateQuery({ search: search.trim(), page: 1 }), 400)
     return () => clearTimeout(timer)
@@ -102,10 +109,17 @@ const StudentCallSummary = () => {
     setSearchParams(serializeStudentCallSummaryQuery({ ...query, from: "", to: "", search: "", page: 1 }))
   }
   const handleExport = async () => {
-    if (!query.schoolId || exporting) return
-    setExporting(true)
-    try { saveStudentCallSummaryBlob(await exportStudentCallSummary(query)) } catch { /* shared HTTP toast */ }
-    finally { setExporting(false) }
+    if (!query.schoolId || ["connecting", "streaming"].includes(exportProgress.status)) return
+    const controller = new AbortController()
+    exportControllerRef.current = controller
+    try {
+      await streamStudentCallSummaryExport(query, { signal: controller.signal, onProgress: setExportProgress })
+    } catch (requestError) {
+      const cancelled = controller.signal.aborted || requestError?.name === "AbortError"
+      setExportProgress((current) => ({ ...current, status: cancelled ? "cancelled" : "failed", error: cancelled ? "دانلود لغو شد." : studentCallSummaryErrorMessage(requestError) }))
+    } finally {
+      if (exportControllerRef.current === controller) exportControllerRef.current = null
+    }
   }
   const changeSort = (next) => {
     const field = next?.[0]?.id || query.sortBy
@@ -125,6 +139,9 @@ const StudentCallSummary = () => {
   ], [query.limit, query.page])
 
   const state = !query.schoolId ? "guide" : loading ? "loading" : error ? "error" : data.items.length ? "ready" : "empty"
+  const exporting = ["connecting", "streaming"].includes(exportProgress.status)
+  const exportPercent = exportProgress.totalBytes ? Math.min(100, Math.round((exportProgress.loadedBytes / exportProgress.totalBytes) * 100)) : null
+  const formatBytes = (bytes = 0) => bytes < 1024 ? `${bytes} بایت` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} کیلوبایت` : `${(bytes / 1048576).toFixed(1)} مگابایت`
   return <div className="page-content" dir="rtl"><div className="container-fluid">
     <Breadcrumbs title="گزارشات" breadcrumbItem="گزارش تجمیعی تماس دانش‌آموزان" />
     <Card className="mb-4"><CardHeader className="bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -144,7 +161,21 @@ const StudentCallSummary = () => {
       <Col xl="2" md="4"><Button color="primary" outline className="w-100" onClick={applyRange}>اعمال بازه</Button></Col>
       <Col xl="3" md="6"><Label for="summary-search">جستجو</Label><Input id="summary-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="نام دانش‌آموز، نام کاربری یا مشاور" /></Col>
       <Col xs="12"><Button color="secondary" outline onClick={clearFilters} disabled={!query.from && !query.search}>پاک‌کردن فیلترها</Button></Col>
-    </Row>{filterError && <div className="alert alert-danger py-2 mt-3 mb-0">{filterError}</div>}</CardBody></Card>
+    </Row>{filterError && <div className="alert alert-danger py-2 mt-3 mb-0">{filterError}</div>}
+      {exportProgress.status !== "idle" && <div className="border rounded p-3 mt-3" data-testid="export-progress">
+        <div className="d-flex justify-content-between align-items-center mb-2"><strong>در حال آماده‌سازی خروجی</strong>
+          {exporting && <Button size="sm" color="danger" outline onClick={() => exportControllerRef.current?.abort()}>لغو</Button>}
+        </div>
+        <div className="progress mb-2" role="progressbar" aria-valuenow={exportPercent == null ? undefined : exportPercent}>
+          <div className={`progress-bar ${exportPercent == null && exporting ? "progress-bar-striped progress-bar-animated" : ""}`} style={{ width: exportPercent == null ? (exporting ? "100%" : "0%") : `${exportPercent}%` }}>{exportPercent == null ? "" : `${exportPercent}٪`}</div>
+        </div>
+        <div className="small text-muted">حجم دریافت‌شده: {formatBytes(exportProgress.loadedBytes)}{exportProgress.totalBytes ? ` از ${formatBytes(exportProgress.totalBytes)}` : ""}</div>
+        {exportProgress.memoryFallback && <div className="alert alert-warning py-2 mt-2 mb-0">مرورگر شما ذخیره مستقیم فایل را پشتیبانی نمی‌کند؛ فایل تا پایان دانلود در حافظه نگهداری می‌شود.</div>}
+        {exportProgress.status === "completed" && <div className="text-success mt-2">دانلود با موفقیت کامل شد.</div>}
+        {exportProgress.status === "cancelled" && <div className="text-warning mt-2">دانلود لغو شد.</div>}
+        {exportProgress.status === "failed" && <div className="text-danger mt-2">{exportProgress.error}<Button size="sm" color="link" onClick={handleExport}>تلاش مجدد</Button></div>}
+      </div>}
+    </CardBody></Card>
 
     {state === "guide" && <Card><CardBody className="text-center text-muted py-5">ابتدا مجموعه را انتخاب کنید.</CardBody></Card>}
     {state === "error" && <div className="alert alert-danger text-center py-4">{error}<div className="mt-2"><Button color="danger" outline onClick={() => setRetryReport((value) => value + 1)}>تلاش مجدد</Button></div></div>}
