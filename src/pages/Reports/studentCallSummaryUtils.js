@@ -64,7 +64,7 @@ export function formatStudentCallDuration(value) {
 }
 
 export const studentCallSummaryErrorMessage = (error) => {
-  const status = error?.response?.status
+  const status = error?.response?.status ?? error?.status
   if (status === 403) return "شما اجازه مشاهده این گزارش را ندارید."
   if (status === 400) return "بازه زمانی یا ورودی‌های گزارش معتبر نیستند."
   return "دریافت گزارش با خطا مواجه شد. لطفاً دوباره تلاش کنید."
@@ -79,15 +79,4 @@ export function logInconsistentCallTotals(items = [], logger = console.error) {
     }
   })
   return items
-}
-
-export function saveStudentCallSummaryBlob(blob, documentRef = document, urlApi = window.URL) {
-  const url = urlApi.createObjectURL(blob)
-  const link = documentRef.createElement("a")
-  link.href = url
-  link.download = "student-call-summary.xlsx"
-  documentRef.body.appendChild(link)
-  link.click()
-  link.remove()
-  urlApi.revokeObjectURL(url)
 }

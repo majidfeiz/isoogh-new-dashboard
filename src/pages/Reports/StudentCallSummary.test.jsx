@@ -7,7 +7,7 @@ import { getSchools } from "../../services/schoolService.jsx"
 
 let mockCanExport = true
 jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ hasPermission: () => mockCanExport }) }))
-jest.mock("../../services/studentCallSummaryService.jsx", () => ({ getStudentCallSummary: jest.fn(), exportStudentCallSummary: jest.fn() }))
+jest.mock("../../services/studentCallSummaryService.jsx", () => ({ getStudentCallSummary: jest.fn(), streamStudentCallSummaryExport: jest.fn() }))
 jest.mock("../../services/schoolService.jsx", () => ({ getSchools: jest.fn() }))
 jest.mock("../../components/Common/Breadcrumb", () => () => null)
 jest.mock("react-multi-date-picker", () => () => <input aria-label="date-picker" />)
@@ -24,7 +24,7 @@ beforeEach(() => {
   jest.clearAllMocks(); mockCanExport = true
   getSchools.mockResolvedValue({ items: [{ id: 1, title: "مجموعه یک" }, { id: 2, title: "مجموعه دو" }] })
   reportService.getStudentCallSummary.mockResolvedValue({ items: [row], meta: { page: 1, limit: 10, total: 1, lastPage: 1 } })
-  reportService.exportStudentCallSummary.mockResolvedValue(new Blob(["xlsx"]))
+  reportService.streamStudentCallSummaryExport.mockResolvedValue({ filename: "student-call-summary.xlsx", loadedBytes: 4 })
   window.URL.createObjectURL = jest.fn(() => "blob:test")
   window.URL.revokeObjectURL = jest.fn()
 })
@@ -69,6 +69,34 @@ test("hides export without permission", async () => {
   renderPage()
   await screen.findByLabelText(/مجموعه/)
   expect(screen.queryByTestId("export-button")).not.toBeInTheDocument()
+})
+
+test("shows real export progress and forwards active filters without pagination handling in the page", async () => {
+  reportService.streamStudentCallSummaryExport.mockImplementationOnce(async (params, options) => {
+    options.onProgress({ status: "connecting", loadedBytes: 0, totalBytes: null, filename: "report.xlsx" })
+    options.onProgress({ status: "streaming", loadedBytes: 5, totalBytes: 10, filename: "report.xlsx", memoryFallback: true })
+    options.onProgress({ status: "completed", loadedBytes: 10, totalBytes: 10, filename: "report.xlsx", memoryFallback: true })
+  })
+  renderPage("/reports/student-call-summary?schoolId=1&search=ali&sortBy=totalCalls&sortOrder=DESC&page=3&limit=25")
+  fireEvent.click(await screen.findByTestId("export-button"))
+  await waitFor(() => expect(reportService.streamStudentCallSummaryExport).toHaveBeenCalledWith(
+    expect.objectContaining({ schoolId: "1", search: "ali", sortBy: "totalCalls", sortOrder: "DESC" }),
+    expect.objectContaining({ signal: expect.any(AbortSignal), onProgress: expect.any(Function) }),
+  ))
+  expect(await screen.findByText("دانلود با موفقیت کامل شد.")).toBeInTheDocument()
+  expect(screen.getByText(/10 بایت/)).toBeInTheDocument()
+  expect(screen.getByText(/در حافظه نگهداری/)).toBeInTheDocument()
+})
+
+test("cancel button aborts the active export", async () => {
+  reportService.streamStudentCallSummaryExport.mockImplementationOnce((params, options) => {
+    options.onProgress({ status: "streaming", loadedBytes: 2, totalBytes: null, filename: "report.xlsx" })
+    return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError"))))
+  })
+  renderPage("/reports/student-call-summary?schoolId=1")
+  fireEvent.click(await screen.findByTestId("export-button"))
+  fireEvent.click(await screen.findByRole("button", { name: "لغو" }))
+  expect(await screen.findByText("دانلود لغو شد.")).toBeInTheDocument()
 })
 
 test("shows loading skeleton, empty state and mapped validation error", async () => {
