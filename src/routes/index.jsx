@@ -234,6 +234,12 @@ import NotificationComposePage from "../pages/Notifications/NotificationComposeP
 import FileList from "../pages/Files/FileList.jsx";
 import FileForm from "../pages/Files/FileForm.jsx";
 
+// tickets
+import TicketList from "../pages/Tickets/TicketList.jsx";
+import TicketCreate from "../pages/Tickets/TicketCreate.jsx";
+import TicketDetail from "../pages/Tickets/TicketDetail.jsx";
+import TicketDashboard from "../pages/Tickets/TicketDashboard.jsx";
+
 // voip
 import OutboundCallHistories from "../pages/Voip/OutboundCallHistories.jsx";
 import OutboundCallHistoriesLive from "../pages/Voip/OutboundCallHistoriesLive.jsx";
@@ -265,6 +271,7 @@ import AdviserFormPerformanceReport from "../pages/Reports/AdviserFormPerformanc
 import ContactFormsComprehensive from "../pages/Reports/ContactFormsComprehensive.jsx";
 import ContactFormsOnline from "../pages/Reports/ContactFormsOnline.jsx";
 import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.jsx";
+import StudentCallSummary from "../pages/Reports/StudentCallSummary.jsx";
 import InactiveAdvisers from "../pages/Reports/InactiveAdvisers.jsx";
 import StudentContactRecords from "../pages/Reports/StudentContactRecords.jsx";
 import StudentContactRecordDetail from "../pages/Reports/StudentContactRecordDetail.jsx";
@@ -309,6 +316,12 @@ import AdviserPortalCallLogs from "../pages/AdviserPortal/CallLogs.jsx";
 import AdviserPortalStats from "../pages/AdviserPortal/Stats.jsx";
 import AdviserPortalStudentProfile from "../pages/AdviserPortal/StudentProfile.jsx";
 import AdviserPortalInterruptedCalls from "../pages/AdviserPortal/InterruptedCalls.jsx";
+import IncomingCallSettings from "../pages/IncomingCalls/IncomingCallSettings.jsx";
+import IncomingSupporters from "../pages/IncomingCalls/IncomingSupporters.jsx";
+import IncomingSupporterPanel from "../pages/IncomingCalls/IncomingSupporterPanel.jsx";
+import IncomingCallList from "../pages/IncomingCalls/IncomingCallList.jsx";
+import IncomingStudents from "../pages/IncomingCalls/IncomingStudents.jsx";
+import IncomingStudentProfile from "../pages/IncomingCalls/IncomingStudentProfile.jsx";
 
 
 const authProtectedRoutes = [
@@ -421,6 +434,12 @@ const authProtectedRoutes = [
   { path: "/files/create", component: <FileForm /> },
   { path: "/files/:id/edit", component: <FileForm /> },
 
+  // tickets
+  { path: "/tickets", component: <ProtectedRoute permission="tickets.index"><TicketList /></ProtectedRoute> },
+  { path: "/tickets/create", component: <ProtectedRoute permission="tickets.create"><TicketCreate /></ProtectedRoute> },
+  { path: "/tickets/dashboard", component: <ProtectedRoute permission="tickets.dashboard"><TicketDashboard /></ProtectedRoute> },
+  { path: "/tickets/:id", component: <ProtectedRoute permission="tickets.show"><TicketDetail /></ProtectedRoute> },
+
   // voip
   { path: "/voip/outbound-call-histories", component: <ProtectedRoute permission="voip.outbound.index"><OutboundCallHistories /></ProtectedRoute> },
   { path: "/voip/outbound-call-histories/online", component: <OutboundCallHistoriesLive /> },
@@ -435,6 +454,12 @@ const authProtectedRoutes = [
   { path: "/answer-sheets", component: <AnswerSheetList /> },
   { path: "/voip/analytics", component: <VoipAnalytics /> },
   { path: "/voip/duration-processing", component: <ProtectedRoute permission="voip.duration-processing.index"><DurationProcessing /></ProtectedRoute> },
+  { path: "/incoming-calls/settings", component: <ProtectedRoute permission="incoming-calls.settings.show"><IncomingCallSettings /></ProtectedRoute> },
+  { path: "/incoming-calls/supporters", component: <ProtectedRoute permission="incoming-calls.supporters.index"><IncomingSupporters /></ProtectedRoute> },
+  { path: "/incoming-calls/panel", component: <ProtectedRoute permission="incoming-calls.availability.update"><IncomingSupporterPanel /></ProtectedRoute> },
+  { path: "/incoming-calls", component: <ProtectedRoute permission="incoming-calls.index"><IncomingCallList /></ProtectedRoute> },
+  { path: "/incoming-calls/students", component: <ProtectedRoute permission="incoming-calls.students.index"><IncomingStudents /></ProtectedRoute> },
+  { path: "/incoming-calls/students/:id", component: <ProtectedRoute permission="incoming-calls.students.show"><IncomingStudentProfile /></ProtectedRoute> },
   { path: "/audit-logs", component: <ProtectedRoute permission="audit-logs.index"><AuditLogs /></ProtectedRoute> },
   { path: "/import-logs", component: <ProtectedRoute permission="import-logs.index"><ImportLogList /></ProtectedRoute> },
   { path: "/import-logs/:id", component: <ProtectedRoute permission="import-logs.show"><ImportLogDetail /></ProtectedRoute> },
@@ -460,6 +485,7 @@ const authProtectedRoutes = [
   { path: "/reports/contact-forms-comprehensive", component: <ContactFormsComprehensive /> },
   { path: "/reports/contact-forms-online", component: <ContactFormsOnline /> },
   { path: "/reports/student-voip-comprehensive", component: <StudentVoipComprehensive /> },
+  { path: "/reports/student-call-summary", component: <ProtectedRoute permission="reports.student-call-summary.index"><StudentCallSummary /></ProtectedRoute> },
   { path: "/reports/student-contact-records", component: <StudentContactRecords /> },
   { path: "/reports/student-contact-records/:studentId", component: <StudentContactRecordDetail /> },
   { path: "/reports/inactive-advisers", component: <InactiveAdvisers /> },

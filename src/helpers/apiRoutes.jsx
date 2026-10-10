@@ -202,6 +202,17 @@ export const API_ROUTES = {
     durationProcessingSettings: "/voip/duration-processing/settings",
     durationProcessingExecute: "/voip/duration-processing/execute",
   },
+  incomingCalls: {
+    list: "/incoming-calls",
+    settings: "/incoming-calls/settings",
+    supporters: "/incoming-calls/supporters",
+    supporter: (id) => `/incoming-calls/supporters/${id}`,
+    availability: "/incoming-calls/availability",
+    result: (id) => `/incoming-calls/${id}/result`,
+    students: "/incoming-calls/students",
+    studentProfile: (id) => `/incoming-calls/students/${id}/profile`,
+    studentTimeline: (id) => `/incoming-calls/students/${id}/timeline`,
+  },
   voipAnalytics: {
     summary: "/voip/analytics/summary",
     durationMismatch: "/voip/analytics/duration-mismatch",
@@ -371,6 +382,20 @@ export const API_ROUTES = {
     widgetRoles: (widgetId) => `/dashboard/widgets/${widgetId}/roles`,
     widgetRole: (widgetId, roleId) => `/dashboard/widgets/${widgetId}/roles/${roleId}`,
   },
+  tickets: {
+    list: "/tickets",
+    create: "/tickets",
+    detail: (id) => `/tickets/${id}`,
+    messages: (id) => `/tickets/${id}/messages`,
+    upload: (id) => `/tickets/${id}/attachments/upload`,
+    download: (attachmentId) => `/tickets/attachments/${attachmentId}/download`,
+    status: (id) => `/tickets/${id}/status`,
+    category: (id) => `/tickets/${id}/category`,
+    result: (id) => `/tickets/${id}/result`,
+    categories: "/tickets/categories",
+    results: "/tickets/results",
+    dashboard: "/tickets/dashboard",
+  },
   // ------------------------
   // 🔑 External API Clients
   // ------------------------
@@ -412,6 +437,8 @@ export const API_ROUTES = {
     contactFormsOnlineExport: "/reports/contact-forms-online/export",
     studentVoipComprehensive: "/reports/student-voip-comprehensive",
     studentVoipComprehensiveExport: "/reports/student-voip-comprehensive/export",
+    studentCallSummary: "/reports/student-call-summary",
+    studentCallSummaryExport: "/reports/student-call-summary/export",
     studentContactRecords: "/reports/student-contact-records",
     studentContactRecordsExport: "/reports/student-contact-records/export",
     studentContactRecord: (studentId) => `/reports/student-contact-records/${studentId}`,

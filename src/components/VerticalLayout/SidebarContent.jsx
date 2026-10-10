@@ -200,6 +200,17 @@ const SidebarContent = (props) => {
       },
       {
         type: "group",
+        label: "پشتیبانی و تیکت‌ها",
+        icon: "bx bx-support",
+        permissionAny: ["tickets.index", "tickets.create", "tickets.dashboard"],
+        children: [
+          { label: "تیکت‌ها", to: "/tickets", permission: "tickets.index" },
+          { label: "ثبت تیکت", to: "/tickets/create", permission: "tickets.create" },
+          { label: "داشبورد تیکت‌ها", to: "/tickets/dashboard", permission: "tickets.dashboard" },
+        ],
+      },
+      {
+        type: "group",
         label: "یکپارچه‌سازی بله",
         icon: "bx bx-message-rounded-dots",
         permissionAny: ["bale.admin.settings.show", "bale.admin.global-settings.show", "bale.admin.connections.index", "bale.admin.health.show", "bale.admin.messages.index", "bale.logs.index"],
@@ -436,6 +447,7 @@ const SidebarContent = (props) => {
           "reports.contact-forms-comprehensive.index",
           "reports.contact-forms-online.index",
           "reports.student-voip-comprehensive.index",
+          "reports.student-call-summary.index",
           "reports.student-contact-records.index",
           "reports.inactive-advisers.index",
           "reports.support-form-answers.index",
@@ -477,6 +489,11 @@ const SidebarContent = (props) => {
             permission: "reports.student-voip-comprehensive.index",
           },
           {
+            label: "گزارش تجمیعی تماس دانش‌آموزان",
+            to: "/reports/student-call-summary",
+            permission: "reports.student-call-summary.index",
+          },
+          {
             label: "لیست دانش‌آموزان و پرونده تماس",
             to: "/reports/student-contact-records",
             permission: "reports.student-contact-records.index",
@@ -491,6 +508,19 @@ const SidebarContent = (props) => {
             to: "/reports/support-form-answers",
             permission: "reports.support-form-answers.index",
           },
+        ],
+      },
+      {
+        type: "group",
+        label: "تماس‌های ورودی",
+        icon: "bx bx-phone-incoming",
+        permissionAny: ["incoming-calls.index", "incoming-calls.settings.show", "incoming-calls.supporters.index", "incoming-calls.availability.update", "incoming-calls.students.index"],
+        children: [
+          { label: "لیست تماس‌ها", to: "/incoming-calls", permission: "incoming-calls.index" },
+          { label: "پنل پشتیبان", to: "/incoming-calls/panel", permission: "incoming-calls.availability.update" },
+          { label: "دانش‌آموزان", to: "/incoming-calls/students", permission: "incoming-calls.students.index" },
+          { label: "مدیریت پشتیبان‌ها", to: "/incoming-calls/supporters", permission: "incoming-calls.supporters.index" },
+          { label: "تنظیمات", to: "/incoming-calls/settings", permission: "incoming-calls.settings.show" },
         ],
       },
       {

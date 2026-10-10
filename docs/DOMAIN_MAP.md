@@ -17,6 +17,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Support forms | `pages/SupportForms` | `supportFormService` | `supportForms` | `/support-forms*` |
 | Answer sheets | `pages/AnswerSheets` | `answerSheetService` | `answerSheets` | `/answer-sheets` |
 | Files | `pages/Files` | `fileService` | `files` | `/files*` |
+| Tickets | `pages/Tickets` | `ticketService` | `tickets` | `/tickets*` |
 | School chat | `pages/Chat` | `chatService` | `chat` | `/chat` |
 | Notifications | `pages/Notifications` | `notificationService` | `notifications` | `/notifications*` |
 | Audit logs | `pages/AuditLogs` | `auditLogService` | `auditLogs` | `/audit-logs` |
@@ -25,8 +26,9 @@ Compact locator for active product features. Routes not listed here are mostly i
 | VoIP history/live/traces/call queue/duration processing | `pages/Voip` | `voipService`, `callQueueService`, `voipDurationProcessingService` | `voip` | `/voip/outbound-call-histories*`, `/voip/call-traces`, `/voip/call-queue`, `/voip/duration-processing` |
 | VoIP analytics | `pages/Voip/Analytics` | `voipAnalyticsService` | `voipAnalytics` | `/voip/analytics` |
 | VoIP webhooks | `pages/VoipWebhooks` | `voipWebhookService` | `voipWebhooks` | `/voip-webhooks*` |
+| Incoming calls | `pages/IncomingCalls` | `incomingCallService` | `incomingCalls` | `/incoming-calls*` |
 | External API clients | `pages/ExternalApi` | `externalApiService` | `externalApiClients` | `/external-api-clients*` |
-| Reports | `pages/Reports` | `reportService`, `adviserFormPerformanceReportService`, `studentContactRecordService` | `reports`, `adviserFormPerformanceReports` | `/reports`, `/reports/adviser-call-performance`, `/reports/adviser-performance`, `/reports/adviser-form-performance`, `/reports/contact-forms-comprehensive`, `/reports/contact-forms-online`, `/reports/student-voip-comprehensive`, `/reports/student-contact-records*`, `/reports/inactive-advisers`, `/reports/support-form-answers` |
+| Reports | `pages/Reports` | `reportService`, `adviserFormPerformanceReportService`, `studentCallSummaryService`, `studentContactRecordService` | `reports`, `adviserFormPerformanceReports` | `/reports`, `/reports/adviser-call-performance`, `/reports/adviser-performance`, `/reports/adviser-form-performance`, `/reports/contact-forms-comprehensive`, `/reports/contact-forms-online`, `/reports/student-voip-comprehensive`, `/reports/student-call-summary`, `/reports/student-contact-records*`, `/reports/inactive-advisers`, `/reports/support-form-answers` |
 | Dynamic reports | `pages/DynamicReports` | `dynamicReportService` | `dynamicReports` | `/dynamic-reports*` |
 | Adviser portal | `pages/AdviserPortal` | `adviserPortalService` | `adviserPortal` | `/adviser-calls*` |
 | Super-adviser portal | `pages/SuperAdviserPortal` | `superAdviserPortalService` | `superAdviserPortal` | `/super-adviser-portal*` |
