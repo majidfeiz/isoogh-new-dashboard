@@ -271,6 +271,7 @@ import AdviserFormPerformanceReport from "../pages/Reports/AdviserFormPerformanc
 import ContactFormsComprehensive from "../pages/Reports/ContactFormsComprehensive.jsx";
 import ContactFormsOnline from "../pages/Reports/ContactFormsOnline.jsx";
 import StudentVoipComprehensive from "../pages/Reports/StudentVoipComprehensive.jsx";
+import StudentCallSummary from "../pages/Reports/StudentCallSummary.jsx";
 import InactiveAdvisers from "../pages/Reports/InactiveAdvisers.jsx";
 import StudentContactRecords from "../pages/Reports/StudentContactRecords.jsx";
 import StudentContactRecordDetail from "../pages/Reports/StudentContactRecordDetail.jsx";
@@ -484,6 +485,7 @@ const authProtectedRoutes = [
   { path: "/reports/contact-forms-comprehensive", component: <ContactFormsComprehensive /> },
   { path: "/reports/contact-forms-online", component: <ContactFormsOnline /> },
   { path: "/reports/student-voip-comprehensive", component: <StudentVoipComprehensive /> },
+  { path: "/reports/student-call-summary", component: <ProtectedRoute permission="reports.student-call-summary.index"><StudentCallSummary /></ProtectedRoute> },
   { path: "/reports/student-contact-records", component: <StudentContactRecords /> },
   { path: "/reports/student-contact-records/:studentId", component: <StudentContactRecordDetail /> },
   { path: "/reports/inactive-advisers", component: <InactiveAdvisers /> },

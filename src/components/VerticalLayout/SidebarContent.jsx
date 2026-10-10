@@ -447,6 +447,7 @@ const SidebarContent = (props) => {
           "reports.contact-forms-comprehensive.index",
           "reports.contact-forms-online.index",
           "reports.student-voip-comprehensive.index",
+          "reports.student-call-summary.index",
           "reports.student-contact-records.index",
           "reports.inactive-advisers.index",
           "reports.support-form-answers.index",
@@ -486,6 +487,11 @@ const SidebarContent = (props) => {
             label: "گزارش جامع VoIP دانش‌آموزی",
             to: "/reports/student-voip-comprehensive",
             permission: "reports.student-voip-comprehensive.index",
+          },
+          {
+            label: "گزارش تجمیعی تماس دانش‌آموزان",
+            to: "/reports/student-call-summary",
+            permission: "reports.student-call-summary.index",
           },
           {
             label: "لیست دانش‌آموزان و پرونده تماس",
