@@ -43,13 +43,14 @@ import { toast } from "react-toastify";
 import AdviserRowActions from "./AdviserRowActions.jsx";
 import AdviserSubordinatesModal from "./AdviserSubordinatesModal.jsx";
 
-const formatDateTime = (value) => {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  const iso = date.toISOString();
-  return iso.replace("T", " ").slice(0, 16);
-};
+/**
+ * @typedef {Object} AdviserListItem
+ * @property {string|null} created_at
+ * @property {string|null} created_at_jalali
+ */
+
+/** @param {AdviserListItem} adviser */
+export const renderAdviserCreatedAt = (adviser) => adviser?.created_at_jalali?.trim() || "—";
 
 const AdviserList = () => {
   document.title = "مشاوران | داشبورد آیسوق";
@@ -529,7 +530,7 @@ const AdviserList = () => {
         accessorKey: "created_at",
         enableColumnFilter: false,
         enableSorting: true,
-        cell: (info) => formatDateTime(info.getValue()),
+        cell: ({ row }) => renderAdviserCreatedAt(row.original),
       },
       {
         id: "actions",
