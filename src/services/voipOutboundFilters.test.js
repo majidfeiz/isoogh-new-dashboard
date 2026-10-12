@@ -10,6 +10,7 @@ import {
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn() }));
 
 beforeEach(() => apiGet.mockReset());
+const requiredRange = { start_date: "1405/06/01", end_date: "1405/07/01" };
 
 test("loads searchable forms for the selected school with cancellation", async () => {
   apiGet.mockResolvedValue({ data: { data: { items: [{ id: 3113, title: "فرم تماس" }], meta: { page: 1, lastPage: 2 } } } });
@@ -24,7 +25,7 @@ test("loads searchable forms for the selected school with cancellation", async (
 
 test("combines username, school and form with existing list filters", async () => {
   apiGet.mockResolvedValue({ data: { data: { data: [{ student_ssn: "0012345678" }], meta: { total: 1 } } } });
-  const result = await getOutboundCallHistories({ page: 1, per_page: 15, schoolId: 8,
+  const result = await getOutboundCallHistories({ ...requiredRange, page: 1, per_page: 15, schoolId: 8,
     support_form_id: 3113, username: "student", ssn: "001", tagId: 4, disposition: "ANSWERED" });
   expect(result.items[0].student_ssn).toBe("0012345678");
   expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining({
@@ -34,7 +35,7 @@ test("combines username, school and form with existing list filters", async () =
 
 test("combines username, school and form in both export services", async () => {
   apiGet.mockResolvedValue({ data: new Blob(["export"]), headers: {} });
-  const filters = { schoolId: 8, support_form_id: 3113, username: "student", ssn: "001" };
+  const filters = { ...requiredRange, schoolId: 8, support_form_id: 3113, username: "student", ssn: "001" };
   await exportOutboundCallHistories(filters);
   await exportOutboundCallHistoriesExcel(filters);
   for (const [, config] of apiGet.mock.calls) {
@@ -72,7 +73,7 @@ test("loads paginated scoped tag options", async () => {
 
 test("exports SSN and tag without page or per_page", async () => {
   apiGet.mockResolvedValue({ data: new Blob(["csv"]) });
-  await exportOutboundCallHistories({ ssn: " 001 ", tagId: 12, page: 5, per_page: 100 });
+  await exportOutboundCallHistories({ ...requiredRange, ssn: " 001 ", tagId: 12, page: 5, per_page: 100 });
   const params = apiGet.mock.calls[0][1].params;
   expect(params.ssn).toBe("001");
   expect(params.tagId).toBe(12);
@@ -117,8 +118,15 @@ test("exports Excel with every active filter, blob response and no pagination", 
   expect(result.blob.type).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 });
 
-test("omits empty and ALL filters from Excel export", async () => {
+test("omits empty and ALL filters from Excel export while preserving the required range", async () => {
   apiGet.mockResolvedValue({ data: new Blob(["xlsx"]), headers: {} });
-  await exportOutboundCallHistoriesExcel({ disposition: "ALL", q: "  ", start_date: null, end_date: undefined });
-  expect(apiGet.mock.calls[0][1].params).toEqual({});
+  await exportOutboundCallHistoriesExcel({ ...requiredRange, disposition: "ALL", q: "  " });
+  expect(apiGet.mock.calls[0][1].params).toEqual(requiredRange);
+});
+
+test("never sends list or export requests without both dates", async () => {
+  await expect(getOutboundCallHistories({ start_date: "1405/06/01" })).rejects.toThrow("بازه تاریخ")
+  await expect(exportOutboundCallHistories({ end_date: "1405/07/01" })).rejects.toThrow("بازه تاریخ")
+  await expect(exportOutboundCallHistoriesExcel({})).rejects.toThrow("بازه تاریخ")
+  expect(apiGet).not.toHaveBeenCalled()
 });
