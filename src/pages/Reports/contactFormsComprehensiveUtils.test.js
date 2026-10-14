@@ -6,11 +6,13 @@ import {
   formatReportDuration,
   normalizeFormIds,
   parseComprehensiveQuery,
+  pickerDateFromBoundary,
   progressValue,
   scheduleDebouncedSearch,
   saveComprehensiveReportBlob,
   serializeComprehensiveQuery,
   toggleSort,
+  toTehranIsoRange,
   withDebouncedSearch,
 } from "./contactFormsComprehensiveUtils.js"
 
@@ -37,14 +39,30 @@ test("saves the report blob with the required Excel filename", () => {
 })
 
 test("serializes multiple form ids and keeps selected date", () => {
+  const range = toTehranIsoRange("2026-07-01", "2026-07-08")
   const params = serializeComprehensiveQuery({
-    from: "2026-07-01",
+    ...range,
     formIds: normalizeFormIds([12, 18, 21]),
     page: 2,
   })
   expect(params.get("formIds")).toBe("12,18,21")
-  expect(params.get("from")).toBe("2026-07-01")
+  expect(params.get("from")).toBe("2026-07-01T00:00:00.000+03:30")
+  expect(params.get("to")).toBe("2026-07-09T00:00:00.000+03:30")
+  expect(params.toString()).toContain("%2B03%3A30")
   expect(parseComprehensiveQuery(params).page).toBe(2)
+})
+
+test("normalizes legacy date-only filters to a Tehran half-open range", () => {
+  const query = parseComprehensiveQuery(new URLSearchParams("from=2026-07-01&to=2026-07-08"))
+  expect(query.from).toBe("2026-07-01T00:00:00.000+03:30")
+  expect(query.to).toBe("2026-07-09T00:00:00.000+03:30")
+  expect(pickerDateFromBoundary(query.to, true)).toBe("2026-07-08")
+
+  const mixed = parseComprehensiveQuery(new URLSearchParams(
+    "from=2026-07-01&to=2026-07-09T00%3A00%3A00.000%2B03%3A30"
+  ))
+  expect(mixed.from).toBe("2026-07-01T00:00:00.000+03:30")
+  expect(mixed.to).toBe("2026-07-09T00:00:00.000+03:30")
 })
 
 test("search and sort reset the forms page", () => {

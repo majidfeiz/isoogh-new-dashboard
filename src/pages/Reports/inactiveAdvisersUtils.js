@@ -57,7 +57,7 @@ export function scheduleInactiveAdvisersSearch(callback, value) {
 
 export function isAdminUser(user) {
   return (user?.roles || []).some((role) => {
-    const name = String(role?.name || role?.slug || role?.label || "").toLowerCase()
+    const name = String(typeof role === "string" ? role : role?.name || role?.slug || role?.label || "").toLowerCase()
     return ["admin", "super_admin", "super-admin", "super admin"].includes(name)
   })
 }

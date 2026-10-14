@@ -38,7 +38,8 @@ test("maps comprehensive KPI, statuses, chart, forms and pagination", async () =
   }
   apiGet.mockResolvedValue({ data: { data } })
   const result = await getContactFormsComprehensiveReport({
-    from: "2026-07-01",
+    from: "2026-07-01T00:00:00.000+03:30",
+    to: "2026-07-09T00:00:00.000+03:30",
     formIds: "12,18",
     page: 1,
   })
@@ -46,7 +47,8 @@ test("maps comprehensive KPI, statuses, chart, forms and pagination", async () =
   expect(result.meta).toEqual({ page: 1, limit: 10, total: 1, lastPage: 1 })
   expect(result.statuses[0].label).toBe("سایر: FAILED")
   expect(result.chart[0]).toEqual(expect.objectContaining({ value: 4, percent: 80 }))
-  expect(apiGet.mock.calls[0][1].params.get("from")).toBe("2026-07-01")
+  expect(apiGet.mock.calls[0][1].params.get("from")).toBe("2026-07-01T00:00:00.000+03:30")
+  expect(apiGet.mock.calls[0][1].params.toString()).toContain("%2B03%3A30")
   expect(apiGet.mock.calls[0][1].params.get("formIds")).toBe("12,18")
 })
 

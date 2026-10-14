@@ -9,11 +9,35 @@ export const STATUS_SORT_FIELDS = [
   "label", "totalDurationSeconds", "avgDurationSeconds", "uniqueStudents", "totalCalls", "percent",
 ]
 export const SEARCH_DEBOUNCE_MS = 400
+const TEHRAN_OFFSET = "+03:30"
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+
+const addUtcDays = (date, days) => {
+  const value = new Date(`${date}T00:00:00.000Z`)
+  value.setUTCDate(value.getUTCDate() + days)
+  return value.toISOString().slice(0, 10)
+}
+
+export function toTehranIsoRange(fromDate, toDate) {
+  return {
+    from: `${fromDate}T00:00:00.000${TEHRAN_OFFSET}`,
+    to: `${addUtcDays(toDate, 1)}T00:00:00.000${TEHRAN_OFFSET}`,
+  }
+}
+
+export function pickerDateFromBoundary(value, isExclusiveEnd = false) {
+  const date = String(value || "").slice(0, 10)
+  if (!DATE_ONLY_PATTERN.test(date)) return date
+  return isExclusiveEnd && !DATE_ONLY_PATTERN.test(String(value)) ? addUtcDays(date, -1) : date
+}
 
 export function defaultComprehensiveQuery() {
+  const range = toTehranIsoRange(
+    moment().startOf("jMonth").format("YYYY-MM-DD"),
+    moment().endOf("jMonth").format("YYYY-MM-DD")
+  )
   return {
-    from: moment().startOf("jMonth").format("YYYY-MM-DD"),
-    to: moment().endOf("jMonth").format("YYYY-MM-DD"),
+    ...range,
     formIds: "",
     schoolId: "",
     search: "",
@@ -35,10 +59,19 @@ export function parseComprehensiveQuery(params) {
   const statusSortBy = params.get("statusSortBy")
   const sortOrder = params.get("sortOrder")
   const statusSortOrder = params.get("statusSortOrder")
+  const rawFrom = params.get("from") || defaults.from
+  const rawTo = params.get("to") || defaults.to
+  const normalizedRange = {
+    from: DATE_ONLY_PATTERN.test(rawFrom)
+      ? `${rawFrom}T00:00:00.000${TEHRAN_OFFSET}`
+      : rawFrom,
+    to: DATE_ONLY_PATTERN.test(rawTo)
+      ? `${addUtcDays(rawTo, 1)}T00:00:00.000${TEHRAN_OFFSET}`
+      : rawTo,
+  }
   return {
     ...defaults,
-    from: params.get("from") || defaults.from,
-    to: params.get("to") || defaults.to,
+    ...normalizedRange,
     formIds: params.get("formIds") || "",
     schoolId: params.get("schoolId") || "",
     search: params.get("search") || "",
