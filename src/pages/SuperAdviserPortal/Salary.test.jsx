@@ -63,7 +63,12 @@ test("uses the newly applied filters for both table and Excel", async () => {
   fireEvent.change(container.querySelector('select[name="adviserId"]'), { target: { value: "2" } });
   fireEvent.change(container.querySelector('select[name="supportFormId"]'), { target: { value: "10" } });
   fireEvent.click(screen.getByText("اعمال"));
-  await waitFor(() => expect(getSuperAdviserSalary).toHaveBeenLastCalledWith(expect.objectContaining({ month: 5, adviserId: "2", supportFormId: "10" })));
+  const initialSignal = getSuperAdviserSalary.mock.calls[0][1];
+  await waitFor(() => expect(getSuperAdviserSalary).toHaveBeenLastCalledWith(
+    expect.objectContaining({ month: 5, adviserId: "2", supportFormId: "10" }),
+    expect.any(AbortSignal)
+  ));
+  expect(initialSignal.aborted).toBe(true);
   await waitFor(() => expect(screen.getByText("اعمال").closest("button")).not.toBeDisabled());
   fireEvent.click(screen.getByText("خروجی Excel"));
   await waitFor(() => expect(exportSuperAdviserSalary).toHaveBeenLastCalledWith(expect.objectContaining({ month: 5, adviserId: "2", supportFormId: "10" })));
