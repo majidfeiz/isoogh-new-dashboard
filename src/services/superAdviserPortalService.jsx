@@ -375,25 +375,35 @@ export async function getSuperAdviserStudentAnswers({ formId, studentId } = {}) 
 // ─── Salary ───────────────────────────────────────────────────────────────────
 
 export async function getSuperAdviserSalary({
-  year = new Date().getFullYear(),
-  month = new Date().getMonth() + 1,
+  from,
+  to,
+  year,
+  month,
   adviserId = "",
   supportFormId = "",
-} = {}) {
+} = {}, signal) {
   const url = getApiUrl(API_ROUTES.superAdviserPortal.salary);
+  const params = new URLSearchParams();
+  if (from && to) {
+    params.set("from", String(from));
+    params.set("to", String(to));
+  } else {
+    if (year !== undefined && year !== null && year !== "") params.set("year", String(year));
+    if (month !== undefined && month !== null && month !== "") params.set("month", String(month));
+  }
+  if (adviserId) params.set("adviserId", String(adviserId));
+  if (supportFormId) params.set("supportFormId", String(supportFormId));
   const res = await apiGet(url, {
-    params: {
-      year,
-      month,
-      adviserId: adviserId || undefined,
-      supportFormId: supportFormId || undefined,
-    },
+    params,
+    signal,
   });
   const payload = res?.data;
   const data = payload?.data || {};
   return {
     year: data.year ?? year,
     month: data.month ?? month,
+    from: data.from ?? from ?? null,
+    to: data.to ?? to ?? null,
     advisers: (data.advisers ?? []).map(normalizeSalaryAdviser),
     totalDurationSeconds: data.total_duration_seconds ?? data.totalDurationSeconds ?? 0,
     durationFormatted: data.duration_formatted ?? data.durationFormatted ?? "00:00:00",
@@ -401,14 +411,21 @@ export async function getSuperAdviserSalary({
 }
 
 export async function exportSuperAdviserSalary({
+  from,
+  to,
   year,
   month,
   adviserId = "",
   supportFormId = "",
 } = {}) {
   const params = new URLSearchParams();
-  if (year !== undefined && year !== null && year !== "") params.set("year", String(year));
-  if (month !== undefined && month !== null && month !== "") params.set("month", String(month));
+  if (from && to) {
+    params.set("from", String(from));
+    params.set("to", String(to));
+  } else {
+    if (year !== undefined && year !== null && year !== "") params.set("year", String(year));
+    if (month !== undefined && month !== null && month !== "") params.set("month", String(month));
+  }
   if (adviserId !== undefined && adviserId !== null && adviserId !== "") params.set("adviserId", String(adviserId));
   if (supportFormId !== undefined && supportFormId !== null && supportFormId !== "") params.set("supportFormId", String(supportFormId));
 
