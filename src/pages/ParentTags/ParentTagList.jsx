@@ -38,6 +38,7 @@ import {
   getParentTagImportProgress,
   isParentTagImportTerminal,
   PARENT_TAG_IMPORT_ACTIONS,
+  PARENT_TAG_IMPORT_SAMPLE_ROWS,
   removeParentTagImportHeaders,
   toParentTagImportSheetRows,
 } from "./parentTagImportUtils.js";
@@ -447,6 +448,30 @@ const ParentTagList = () => {
     parseExcelFile(file);
   };
 
+  const handleDownloadImportSample = useCallback(async () => {
+    setImportError(null);
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.aoa_to_sheet(PARENT_TAG_IMPORT_SAMPLE_ROWS);
+
+      sheet["!cols"] = [
+        { wch: 18 },
+        { wch: 14 },
+        { wch: 24 },
+        { wch: 24 },
+        { wch: 24 },
+      ];
+      sheet["!autofilter"] = { ref: "A1:E4" };
+
+      XLSX.utils.book_append_sheet(workbook, sheet, "tags");
+      XLSX.writeFile(workbook, "parent-tags-import-sample.xlsx");
+    } catch (error) {
+      console.error("خطا در ساخت نمونه فایل اکسل", error);
+      setImportError("دانلود نمونه فایل اکسل ناموفق بود. دوباره تلاش کنید.");
+    }
+  }, []);
+
   const handleImportSubmit = async (e) => {
     e.preventDefault();
     if (importSubmitRef.current || (importJob && !isParentTagImportTerminal(importJob.status))) return;
@@ -763,6 +788,15 @@ const ParentTagList = () => {
                     مجموعه مدیر تک‌مجموعه‌ای خودکار انتخاب می‌شود؛ مدیر چندمجموعه‌ای و ادمین باید مجموعه را انتخاب کنند.
                   </div>
                 </div>
+                <Button
+                  type="button"
+                  color="success"
+                  outline
+                  onClick={handleDownloadImportSample}
+                >
+                  <i className="bx bx-download me-1" />
+                  دانلود نمونه اکسل
+                </Button>
               </CardHeader>
               <CardBody>
                 {importError && (
