@@ -21,7 +21,7 @@ import {
   getContactFormsComprehensiveReport,
 } from "../../services/reportService.jsx"
 import { getSchools } from "../../services/schoolService.jsx"
-import { getSupportForms } from "../../services/supportFormService.jsx"
+import { getAllSupportForms } from "../../services/supportFormService.jsx"
 import {
   canViewComprehensiveReport,
   canExportComprehensiveReport,
@@ -31,17 +31,24 @@ import {
   formatReportDuration,
   normalizeFormIds,
   parseComprehensiveQuery,
+  pickerDateFromBoundary,
   progressValue,
   scheduleDebouncedSearch,
   saveComprehensiveReportBlob,
   serializeComprehensiveQuery,
   toggleSort,
+  toTehranIsoRange,
   withDebouncedSearch,
 } from "./contactFormsComprehensiveUtils.js"
+import { isAdminUser } from "./inactiveAdvisersUtils.js"
 
 const fa = (value) => value == null ? "—" : Number(value).toLocaleString("fa-IR")
 const percent = (value) => value == null ? "—" : `${Number(value).toLocaleString("fa-IR", { maximumFractionDigits: 1 })}٪`
-const dateObject = (date) => new DateObject({ date: moment(String(date).slice(0, 10), "YYYY-MM-DD").toDate(), calendar: persian, locale: persianFa })
+const dateObject = (date, isExclusiveEnd = false) => new DateObject({
+  date: moment(pickerDateFromBoundary(date, isExclusiveEnd), "YYYY-MM-DD").toDate(),
+  calendar: persian,
+  locale: persianFa,
+})
 const dateObjectToGregorianDate = (dateObjectValue) => {
   const pad = (n) => String(n).padStart(2, "0")
   const g = toGregorian(dateObjectValue.year, dateObjectValue.month.number, dateObjectValue.day)
@@ -87,7 +94,7 @@ const KpiCards = ({ summary, loading }) => {
 
 const ContactFormsComprehensive = () => {
   document.title = "گزارش جامع فرم‌های تماس | داشبورد آیسوق"
-  const { permissions, hasPermission } = useAuth()
+  const { permissions, user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryString = searchParams.toString()
   const query = useMemo(() => parseComprehensiveQuery(new URLSearchParams(queryString)), [queryString])
@@ -97,15 +104,20 @@ const ContactFormsComprehensive = () => {
   const [schools, setSchools] = useState([])
   const [formOptions, setFormOptions] = useState([])
   const [draftFrom, setDraftFrom] = useState(() => dateObject(query.from))
-  const [draftTo, setDraftTo] = useState(() => dateObject(query.to))
+  const [draftTo, setDraftTo] = useState(() => dateObject(query.to, true))
   const [draftSchoolId, setDraftSchoolId] = useState(query.schoolId)
   const [draftFormIds, setDraftFormIds] = useState(query.formIds ? query.formIds.split(",") : [])
   const [formSearch, setFormSearch] = useState(query.search)
   const [statusSearch, setStatusSearch] = useState(query.statusSearch)
   const [filterError, setFilterError] = useState("")
   const [exporting, setExporting] = useState(false)
-  const showSchoolFilter = hasPermission("schools.index")
+  const [retryKey, setRetryKey] = useState(0)
+  const showSchoolFilter = isAdminUser(user)
   const canExport = canExportComprehensiveReport(permissions)
+  const requestQuery = useMemo(
+    () => ({ ...query, schoolId: showSchoolFilter ? query.schoolId : "" }),
+    [query, showSchoolFilter]
+  )
 
   const updateQuery = useCallback((updates) => {
     setSearchParams(serializeComprehensiveQuery({ ...query, ...updates }))
@@ -114,24 +126,24 @@ const ContactFormsComprehensive = () => {
   const loadReport = useCallback((signal) => {
     setLoading(true)
     setError("")
-    return getContactFormsComprehensiveReport(query, signal)
-      .then(setData)
+    return getContactFormsComprehensiveReport(requestQuery, signal)
+      .then((result) => { if (!signal.aborted) setData(result) })
       .catch((requestError) => {
         if (requestError?.code === "ERR_CANCELED" || requestError?.name === "CanceledError" || signal?.aborted) return
         setError("دریافت گزارش جامع فرم‌های تماس با خطا مواجه شد.")
       })
       .finally(() => { if (!signal?.aborted) setLoading(false) })
-  }, [query])
+  }, [requestQuery])
 
   useEffect(() => {
     const controller = new AbortController()
     loadReport(controller.signal)
     return () => controller.abort()
-  }, [loadReport])
+  }, [loadReport, retryKey])
 
   useEffect(() => {
-    getSupportForms({ page: 1, limit: 100 })
-      .then((result) => setFormOptions((result.items || []).map((form) => ({
+    getAllSupportForms()
+      .then((forms) => setFormOptions((forms || []).map((form) => ({
         value: String(form.id), label: form.title || form.name || `فرم ${form.id}`,
       }))))
       .catch(() => setFormOptions([]))
@@ -142,7 +154,7 @@ const ContactFormsComprehensive = () => {
 
   useEffect(() => {
     setDraftFrom(dateObject(query.from))
-    setDraftTo(dateObject(query.to))
+    setDraftTo(dateObject(query.to, true))
     setDraftSchoolId(query.schoolId)
     setDraftFormIds(query.formIds ? query.formIds.split(",") : [])
     setFormSearch(query.search)
@@ -169,9 +181,12 @@ const ContactFormsComprehensive = () => {
       return setFilterError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.")
     }
     setFilterError("")
+    const range = toTehranIsoRange(
+      dateObjectToGregorianDate(draftFrom),
+      dateObjectToGregorianDate(draftTo)
+    )
     updateQuery({
-      from: dateObjectToGregorianDate(draftFrom),
-      to: dateObjectToGregorianDate(draftTo),
+      ...range,
       formIds: normalizeFormIds(draftFormIds),
       schoolId: showSchoolFilter ? draftSchoolId : "",
       page: 1,
@@ -184,7 +199,7 @@ const ContactFormsComprehensive = () => {
     if (exporting) return
     setExporting(true)
     try {
-      const blob = await exportContactFormsComprehensiveReport(query)
+      const blob = await exportContactFormsComprehensiveReport(requestQuery)
       saveComprehensiveReportBlob(blob)
     } catch {
       // httpClient shows the standard API error toast
@@ -246,12 +261,14 @@ const ContactFormsComprehensive = () => {
     </CardBody></Card>
 
     {state === "error" && <div className="alert alert-danger text-center py-4">{error}<div className="mt-2">
-      <Button color="danger" outline onClick={() => loadReport(new AbortController().signal)}>تلاش مجدد</Button></div></div>}
+      <Button color="danger" outline onClick={() => setRetryKey((key) => key + 1)}>تلاش مجدد</Button></div></div>}
     {state === "empty" && <div className="alert alert-light text-center text-muted py-5">داده‌ای برای فیلترهای انتخاب‌شده یافت نشد.</div>}
     {(state === "loading" || state === "ready") && <>
       <KpiCards summary={data.summary} loading={loading} />
       <div className="alert alert-info py-2"><i className="mdi mdi-information-outline me-1" />
-        پیشرفت بر اساس وضعیت فعلی دانش‌آموزان تخصیص‌یافته است؛ آمار تماس، زمان و نمودار فقط به بازه زمانی انتخاب‌شده مربوط است.
+        پیشرفت بر اساس وضعیت فعلی تخصیص‌هایی است که در بازه انتخاب‌شده ایجاد شده‌اند. آمار تماس، زمان‌ها، وضعیت‌ها و نمودار
+        فقط از تماس‌های همان بازه ساخته می‌شوند. هر تماس بر اساس آخرین CDR موجود در بازه دقیقاً در یک وضعیت قرار می‌گیرد.
+        مدت تماس موفق را سرور با کسر زمان انتظار محاسبه می‌کند.
       </div>
       <Row className="g-4 mb-4">
         <Col xl="7"><Card className="h-100"><CardHeader className="bg-white d-flex justify-content-between align-items-center">

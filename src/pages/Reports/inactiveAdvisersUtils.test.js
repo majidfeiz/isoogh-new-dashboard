@@ -23,6 +23,7 @@ test("uses dedicated page and download permissions", () => {
 test("shows school filter only for admin role variants", () => {
   expect(isAdminUser({ roles: [{ name: "admin" }] })).toBe(true)
   expect(isAdminUser({ roles: [{ slug: "super_admin" }] })).toBe(true)
+  expect(isAdminUser({ roles: ["admin"] })).toBe(true)
   expect(isAdminUser({ roles: [{ name: "manager" }] })).toBe(false)
   expect(isAdminUser({ roles: [{ name: "head_adviser" }] })).toBe(false)
 })
