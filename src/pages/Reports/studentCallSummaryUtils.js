@@ -7,14 +7,13 @@ export const STUDENT_CALL_SUMMARY_SORT_FIELDS = [
 export const STUDENT_CALL_SUMMARY_DEBOUNCE_MS = 400
 
 export const defaultStudentCallSummaryQuery = () => ({
-  schoolId: "", from: "", to: "", search: "", page: 1, limit: 10,
+  schoolId: "", from: "", to: "", search: "", page: 1, limit: 15,
   sortBy: "studentName", sortOrder: "ASC",
 })
 
 export function parseStudentCallSummaryQuery(params) {
   const defaults = defaultStudentCallSummaryQuery()
   const page = Number(params.get("page"))
-  const limit = Number(params.get("limit"))
   const sortBy = params.get("sortBy")
   const sortOrder = params.get("sortOrder")
   const from = params.get("from") || ""
@@ -26,7 +25,7 @@ export function parseStudentCallSummaryQuery(params) {
     to: from && to ? to : "",
     search: params.get("search") || "",
     page: Number.isInteger(page) && page > 0 ? page : 1,
-    limit: [10, 25, 50, 100].includes(limit) ? limit : 10,
+    limit: 15,
     sortBy: STUDENT_CALL_SUMMARY_SORT_FIELDS.includes(sortBy) ? sortBy : defaults.sortBy,
     sortOrder: ["ASC", "DESC"].includes(sortOrder) ? sortOrder : defaults.sortOrder,
   }
@@ -64,6 +63,9 @@ export function formatStudentCallDuration(value) {
 }
 
 export const studentCallSummaryErrorMessage = (error) => {
+  const backendMessage = error?.response?.data?.message
+  if (Array.isArray(backendMessage)) return backendMessage.filter(Boolean).join("، ")
+  if (typeof backendMessage === "string" && backendMessage.trim()) return backendMessage
   const status = error?.response?.status ?? error?.status
   if (status === 403) return "شما اجازه مشاهده این گزارش را ندارید."
   if (status === 400) return "بازه زمانی یا ورودی‌های گزارش معتبر نیستند."

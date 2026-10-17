@@ -18,7 +18,7 @@ test("builds paired inclusive/exclusive Tehran ISO boundaries", () => {
 
 test("parses safe URL state and rejects unpaired dates/unknown sort", () => {
   const query = parseStudentCallSummaryQuery(new URLSearchParams("schoolId=8&from=x&page=3&limit=25&sortBy=bad&sortOrder=DESC"))
-  expect(query).toEqual(expect.objectContaining({ schoolId: "8", from: "", to: "", page: 3, limit: 25, sortBy: "studentName", sortOrder: "DESC" }))
+  expect(query).toEqual(expect.objectContaining({ schoolId: "8", from: "", to: "", page: 3, limit: 15, sortBy: "studentName", sortOrder: "DESC" }))
 })
 
 test("calculates server row number", () => expect(rowNumber(3, 25, 4)).toBe(55))

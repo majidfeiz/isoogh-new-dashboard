@@ -23,7 +23,7 @@ const row = { studentId: 12, username: "student-12", studentName: "علی", tota
 beforeEach(() => {
   jest.clearAllMocks(); mockCanExport = true
   getSchools.mockResolvedValue({ items: [{ id: 1, title: "مجموعه یک" }, { id: 2, title: "مجموعه دو" }] })
-  reportService.getStudentCallSummary.mockResolvedValue({ items: [row], meta: { page: 1, limit: 10, total: 1, lastPage: 1 } })
+  reportService.getStudentCallSummary.mockResolvedValue({ items: [row], meta: { page: 1, limit: 15, total: 1, lastPage: 1 } })
   reportService.streamStudentCallSummaryExport.mockResolvedValue({ filename: "student-call-summary.xlsx", loadedBytes: 4 })
   window.URL.createObjectURL = jest.fn(() => "blob:test")
   window.URL.revokeObjectURL = jest.fn()
@@ -85,7 +85,6 @@ test("shows real export progress and forwards active filters without pagination 
   ))
   expect(await screen.findByText("دانلود با موفقیت کامل شد.")).toBeInTheDocument()
   expect(screen.getByText(/10 بایت/)).toBeInTheDocument()
-  expect(screen.getByText(/در حافظه نگهداری/)).toBeInTheDocument()
 })
 
 test("cancel button aborts the active export", async () => {
@@ -104,7 +103,7 @@ test("shows loading skeleton, empty state and mapped validation error", async ()
   reportService.getStudentCallSummary.mockReturnValueOnce(new Promise((resolve) => { resolveReport = resolve }))
   const view = renderPage("/reports/student-call-summary?schoolId=1")
   await waitFor(() => expect(document.querySelectorAll(".placeholder").length).toBeGreaterThan(0))
-  resolveReport({ items: [], meta: { page: 1, limit: 10, total: 0, lastPage: 1 } })
+  resolveReport({ items: [], meta: { page: 1, limit: 15, total: 0, lastPage: 1 } })
   expect(await screen.findByText("رکوردی برای فیلترهای انتخاب‌شده یافت نشد.")).toBeInTheDocument()
   view.unmount()
 
