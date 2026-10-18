@@ -1,4 +1,4 @@
-import { incomingCallKey, isSameIncomingCall, mergeIncomingCall, resolveIncomingCallSchool, unwrapRealtimePayload } from "./incomingCallRealtimeUtils.js";
+import { incomingCallKey, isSameIncomingCall, mergeIncomingCall, normalizeRealtimeIncomingCall, resolveIncomingCallSchool, unwrapRealtimePayload } from "./incomingCallRealtimeUtils.js";
 
 test("unwraps the public HTTP/realtime data wrappers", () => {
   expect(unwrapRealtimePayload({ data: { data: { callId: 481 } } })).toEqual({ callId: 481 });
@@ -9,6 +9,13 @@ test("deduplicates by callId or uniqueId", () => {
   expect(incomingCallKey({ callId: 481, uniqueId: "u1" })).toBe("call:481");
   expect(isSameIncomingCall({ callId: 481 }, { callId: "481" })).toBe(true);
   expect(isSameIncomingCall({ uniqueId: "u1" }, { uniqueId: "u1" })).toBe(true);
+});
+
+test("normalizes snake_case call events and infers an identified caller", () => {
+  expect(normalizeRealtimeIncomingCall({ data: { call_id: 12, school_id: 146, unique_id: "u1", src: "0912", student_id: 9, started_at: "now" } })).toEqual(expect.objectContaining({
+    callId: 12, schoolId: 146, uniqueId: "u1", startedAt: "now",
+    caller: expect.objectContaining({ phone: "0912", matched: true, studentId: 9 }),
+  }));
 });
 
 test("merges call updates without losing caller details", () => {
