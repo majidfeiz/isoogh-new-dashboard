@@ -6,7 +6,7 @@ import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getIncomingCallerProfile, incomingCallErrorMessage } from "../../services/incomingCallService.jsx";
 import { formatDateTime, formatDuration } from "../../pages/IncomingCalls/IncomingCallsCommon.jsx";
-import { incomingCallKey, isSameIncomingCall, mergeIncomingCall, unwrapRealtimePayload } from "./incomingCallRealtimeUtils.js";
+import { incomingCallKey, isSameIncomingCall, mergeIncomingCall, normalizeRealtimeIncomingCall } from "./incomingCallRealtimeUtils.js";
 
 const statusLabels = { routing: "در حال مسیریابی", answered: "پاسخ داده شد", missed: "از دست رفته", ended: "پایان یافته", voice: "پیام صوتی" };
 const statusColors = { routing: "info", answered: "success", missed: "danger", ended: "secondary", voice: "warning" };
@@ -37,13 +37,13 @@ const IncomingCallRealtime = () => {
   const loadProfile = useCallback(async (activeCall) => {
     if (!activeCall?.caller?.matched || !canShowProfile) return;
     setProfileLoading(true); setProfileError("");
-    try { setProfile(await getIncomingCallerProfile(activeCall.callId, activeCall.schoolId)); }
+    try { setProfile(await getIncomingCallerProfile(activeCall.callId, activeCall.schoolId ?? schoolId)); }
     catch (error) {
       const status = error?.response?.status;
       if (status === 403) { close(); return; }
       setProfileError(status === 404 ? "تماس یا دانش‌آموز در این مجموعه یافت نشد." : incomingCallErrorMessage(error));
     } finally { setProfileLoading(false); }
-  }, [canShowProfile, close]);
+  }, [canShowProfile, close, schoolId]);
 
   useEffect(() => {
     if (!canSubscribe || !schoolId || !getAccessToken()) return undefined;
@@ -54,9 +54,9 @@ const IncomingCallRealtime = () => {
     socketRef.current = socket;
     const subscribe = () => { setConnection("connected"); socket.emit("incoming-calls.subscribe", { schoolId }); };
     const started = (payload) => {
-      const next = unwrapRealtimePayload(payload);
+      const next = normalizeRealtimeIncomingCall(payload);
       const key = incomingCallKey(next);
-      if (!key || String(next.schoolId) !== String(schoolId)) return;
+      if (!key || (next.schoolId != null && String(next.schoolId) !== String(schoolId))) return;
       if (seenRef.current.has(key)) { setCall((current) => isSameIncomingCall(current, next) ? { ...current, ...next } : current); return; }
       seenRef.current.add(key); setCall(next); setProfile(null); setProfileError("");
     };
@@ -76,12 +76,12 @@ const IncomingCallRealtime = () => {
   const contactValues = [student?.user?.phone, student?.phone, student?.mobile, ...(Array.isArray(student?.contacts) ? student.contacts.map((contact) => contact?.value ?? contact?.phone ?? contact?.mobile) : [])].filter(Boolean);
   const history = profile?.recentCalls ?? profile?.incomingCalls ?? profile?.calls ?? [];
 
-  return <Modal isOpen={!!call} toggle={close} size="xl" scrollable centered contentClassName="incoming-call-modal">
-    <ModalHeader toggle={close}>تماس ورودی <Badge className="ms-2" color={statusColors[call?.status] || "secondary"}>{statusLabels[call?.status] || call?.status}</Badge></ModalHeader>
+  return <Modal isOpen={!!call} toggle={close} size="xl" scrollable centered contentClassName="incoming-call-modal shadow-lg">
+    <ModalHeader toggle={close}><span className="d-inline-flex align-items-center gap-2"><span className="rounded-circle bg-success d-inline-block" style={{ width: 12, height: 12 }} /> تماس ورودی <Badge color={statusColors[call?.status] || "secondary"}>{statusLabels[call?.status] || call?.status}</Badge></span></ModalHeader>
     <ModalBody>
       {connection !== "subscribed" && <Alert color="warning" className="py-2">اتصال زنده در حال بازیابی است…</Alert>}
-      <Row><Field label="شماره تماس‌گیرنده"><span dir="ltr">{call?.caller?.phone}</span></Field><Field label="نام تماس‌گیرنده">{call?.caller?.matched ? call.caller.name : null}</Field><Field label="مجموعه">{schoolName}</Field><Field label="زمان شروع">{formatDateTime(call?.startedAt)}</Field></Row>
-      {call?.caller?.matched === false && <Alert color="warning">تماس‌گیرنده در این مجموعه شناسایی نشد. شماره خام: <span dir="ltr">{call?.caller?.phone || "—"}</span></Alert>}
+      <div className="rounded border bg-light p-3 mb-4"><Row className="align-items-center"><Col md="3" className="text-center mb-3 mb-md-0"><i className="bx bxs-phone-call text-success" style={{ fontSize: 52 }} /><div className="fw-bold fs-5" dir="ltr">{call?.caller?.phone || "شماره نامشخص"}</div></Col><Col md="9"><Row><Field label="نام تماس‌گیرنده">{call?.caller?.matched ? call.caller.name || "دانش‌آموز شناسایی‌شده" : "تماس‌گیرنده ناشناس"}</Field><Field label="مجموعه">{schoolName}</Field><Field label="زمان شروع">{formatDateTime(call?.startedAt)}</Field><Field label="نوع مقصد">{call?.destinationType === "supporter" ? "پشتیبان" : call?.destinationType === "consultant" ? "مشاور" : call?.destinationType}</Field></Row></Col></Row></div>
+      {call?.caller?.matched === false && <Alert color="warning" className="d-flex align-items-center gap-2"><i className="bx bx-user-x fs-3" /><div><strong>کاربر با این شماره پیدا نشد.</strong><div>شماره تماس‌گیرنده: <span dir="ltr">{call?.caller?.phone || "—"}</span></div></div></Alert>}
       {call?.caller?.matched && !canShowProfile && <Alert color="info">شما دسترسی مشاهده پرونده تماس‌گیرنده را ندارید.</Alert>}
       {profileLoading && <div className="text-center py-5"><Spinner color="primary" /><div className="mt-2">در حال دریافت پرونده…</div></div>}
       {profileError && <Alert color="danger">{profileError} <Button color="link" className="p-0 ms-2" onClick={() => loadProfile(call)}>تلاش مجدد</Button></Alert>}
