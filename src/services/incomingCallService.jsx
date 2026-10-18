@@ -3,6 +3,13 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
 const options = { silent: true };
 const unwrap = (response) => response?.data?.data ?? response?.data;
+const INCOMING_CALL_DESTINATIONS = ["consultant", "supporter", "voice"];
+export const normalizeIncomingCallPriorities = (priorities) => [
+  ...new Set([
+    ...(Array.isArray(priorities) ? priorities : []),
+    ...INCOMING_CALL_DESTINATIONS,
+  ].filter((item) => INCOMING_CALL_DESTINATIONS.includes(item))),
+].slice(0, INCOMING_CALL_DESTINATIONS.length);
 const schoolIdOf = (schoolId) => {
   const value = Number(schoolId);
   if (!Number.isInteger(value) || value <= 0) throw new Error("انتخاب مجموعه الزامی است");
@@ -23,7 +30,15 @@ const pageResult = (response, page, limit) => {
 };
 
 export const getIncomingCallSettings = async (schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.settings), { params: { schoolId: schoolIdOf(schoolId) }, ...options }));
-export const updateIncomingCallSettings = async (schoolId, settings) => unwrap(await apiPatch(getApiUrl(API_ROUTES.incomingCalls.settings), { ...settings, schoolId: schoolIdOf(schoolId) }, options));
+export const updateIncomingCallSettings = async (schoolId, settings) => {
+  const voiceDestination = settings?.voiceDestination?.trim();
+  const payload = {
+    schoolId: schoolIdOf(schoolId),
+    priorities: normalizeIncomingCallPriorities(settings?.priorities),
+    ...(voiceDestination ? { voiceDestination } : {}),
+  };
+  return unwrap(await apiPatch(getApiUrl(API_ROUTES.incomingCalls.settings), payload, options));
+};
 export const getIncomingSupporters = async (schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.supporters), { params: { schoolId: schoolIdOf(schoolId) }, ...options }));
 export const createIncomingSupporter = async (schoolId, supporter) => unwrap(await apiPost(getApiUrl(API_ROUTES.incomingCalls.supporters), { ...supporter, schoolId: schoolIdOf(schoolId) }, options));
 export const updateIncomingSupporter = async (id, schoolId, supporter) => unwrap(await apiPatch(getApiUrl(API_ROUTES.incomingCalls.supporter(id)), { ...supporter, schoolId: schoolIdOf(schoolId) }, options));

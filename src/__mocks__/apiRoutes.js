@@ -18,6 +18,17 @@ export const API_ROUTES = {
     callTraces: "/voip/call-traces",
     callTrace: (id) => `/voip/call-traces/${id}`,
   },
+  incomingCalls: {
+    list: "/incoming-calls",
+    settings: "/incoming-calls/settings",
+    supporters: "/incoming-calls/supporters",
+    supporter: (id) => `/incoming-calls/supporters/${id}`,
+    availability: "/incoming-calls/availability",
+    result: (id) => `/incoming-calls/${id}/result`,
+    students: "/incoming-calls/students",
+    studentProfile: (id) => `/incoming-calls/students/${id}/profile`,
+    studentTimeline: (id) => `/incoming-calls/students/${id}/timeline`,
+  },
   students: {
     list: "/students",
     profile: (studentId) => `/students/${studentId}/profile`,
