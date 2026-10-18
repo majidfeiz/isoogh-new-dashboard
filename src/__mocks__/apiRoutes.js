@@ -21,6 +21,7 @@ export const API_ROUTES = {
   incomingCalls: {
     list: "/incoming-calls",
     settings: "/incoming-calls/settings",
+    callerProfile: (id) => `/incoming-calls/${id}/caller-profile`,
     supporters: "/incoming-calls/supporters",
     supporter: (id) => `/incoming-calls/supporters/${id}`,
     availability: "/incoming-calls/availability",
