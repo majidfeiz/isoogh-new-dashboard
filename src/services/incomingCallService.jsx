@@ -44,6 +44,7 @@ export const normalizeIncomingCall = (item = {}) => ({
 });
 
 export const getIncomingCallSettings = async (schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.settings), { params: { schoolId: schoolIdOf(schoolId) }, ...options }));
+export const getIncomingCallerProfile = async (callId, schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.callerProfile(callId)), { params: { schoolId: schoolIdOf(schoolId) }, ...options }));
 export const updateIncomingCallSettings = async (schoolId, settings) => {
   const voiceDestination = settings?.voiceDestination?.trim();
   const payload = {

@@ -21,6 +21,7 @@ import NonAuthLayout from "./components/NonAuthLayout";
 // ✅ مهم: Provider
 import { AuthProvider } from "./context/AuthContext.jsx";
 import ImpersonationBanner from "./components/Common/ImpersonationBanner.jsx";
+import IncomingCallRealtime from "./components/IncomingCalls/IncomingCallRealtime.jsx";
 
 // Import scss
 import "./assets/scss/theme.scss";
@@ -82,6 +83,7 @@ const App = (props) => {
             />
           ))}
         </Routes>
+        <IncomingCallRealtime />
         <ToastContainer position="top-right" rtl autoClose={5000} />
       </>
     </AuthProvider>
