@@ -1,4 +1,4 @@
-import { formatTicketChartDate, formatTicketDate, isGlobalTicketRole, isMessageAttachment, isTicketAttachment, MAX_TICKET_FILE_SIZE, nextTicketStatus, sanitizeTicketStatus, validateTicketFile } from "./ticketUtils.js";
+import { formatTicketChartDate, formatTicketDate, isGlobalTicketRole, isMessageAttachment, isTicketAdmin, isTicketAttachment, MAX_TICKET_FILE_SIZE, nextTicketStatus, sanitizeTicketStatus, validateTicketFile } from "./ticketUtils.js";
 
 describe("ticket rules", () => {
   test("only allows the next status in the workflow", () => {
@@ -22,6 +22,14 @@ describe("ticket rules", () => {
     expect(isGlobalTicketRole({ roles: [{ slug: "super_manager" }] })).toBe(true);
     expect(isGlobalTicketRole({ roles: [{ slug: "support" }] })).toBe(true);
     expect(isGlobalTicketRole({ roles: [{ slug: "manager" }] })).toBe(false);
+  });
+
+  test("allows ticket classification only for the exact admin role", () => {
+    expect(isTicketAdmin({ roles: ["admin"] })).toBe(true);
+    expect(isTicketAdmin({ roles: [{ name: "ADMIN" }] })).toBe(true);
+    expect(isTicketAdmin({ roles: [{ slug: "support" }] })).toBe(false);
+    expect(isTicketAdmin({ roles: [{ name: "super_manager" }] })).toBe(false);
+    expect(isTicketAdmin({ roles: [{ name: "manager" }] })).toBe(false);
   });
 
   test("formats ticket dates with Persian calendar and digits", () => {

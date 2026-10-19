@@ -23,27 +23,32 @@ test("loads searchable forms for the selected school with cancellation", async (
   }));
 });
 
-test("combines username, school and form with existing list filters", async () => {
+test("combines supported filters and never forwards unsupported schoolId to the list API", async () => {
   apiGet.mockResolvedValue({ data: { data: { data: [{ student_ssn: "0012345678" }], meta: { total: 1 } } } });
   const result = await getOutboundCallHistories({ ...requiredRange, page: 1, per_page: 15, schoolId: 8,
     support_form_id: 3113, username: "student", ssn: "001", tagId: 4, disposition: "ANSWERED" });
   expect(result.items[0].student_ssn).toBe("0012345678");
   expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining({
-    schoolId: 8, support_form_id: 3113, username: "student", ssn: "001", tagId: 4,
+    support_form_id: 3113, username: "student", ssn: "001", tagId: 4,
   }));
+  expect(apiGet.mock.calls[0][1].params.schoolId).toBeUndefined();
 });
 
-test("keeps school scope in CSV but sends only supported filters to Excel", async () => {
+test("never forwards unsupported schoolId to CSV or Excel exports", async () => {
   apiGet.mockResolvedValue({ data: new Blob(["export"]), headers: {} });
   const filters = { ...requiredRange, schoolId: 8, support_form_id: 3113, username: "student", ssn: "001" };
   await exportOutboundCallHistories(filters);
   await exportOutboundCallHistoriesExcel(filters);
-  expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining(filters));
+  expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining({
+    start_date: requiredRange.start_date, end_date: requiredRange.end_date,
+    support_form_id: 3113, username: "student", ssn: "001",
+  }));
   expect(apiGet.mock.calls[1][1].params).toEqual(expect.objectContaining({
     start_date: requiredRange.start_date, end_date: requiredRange.end_date,
     support_form_id: 3113, username: "student", ssn: "001",
   }));
   expect(apiGet.mock.calls[1][1].params.schoolId).toBeUndefined();
+  expect(apiGet.mock.calls[0][1].params.schoolId).toBeUndefined();
 });
 
 test("sends trimmed SSN and numeric tag with all active call filters", async () => {

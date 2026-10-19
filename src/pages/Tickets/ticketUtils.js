@@ -20,6 +20,13 @@ export const isGlobalTicketRole = (user) => {
   ));
 };
 
+export const isTicketAdmin = (user) => {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  return roles.some((role) => String(
+    typeof role === "string" ? role : role?.name || role?.slug || ""
+  ).trim().toLowerCase() === "admin");
+};
+
 export const validateTicketFile = (file) => !file || file.size <= MAX_TICKET_FILE_SIZE;
 
 const persianDateTime = new Intl.DateTimeFormat("fa-IR-u-ca-persian", {
