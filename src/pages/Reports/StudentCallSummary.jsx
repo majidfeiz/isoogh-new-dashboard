@@ -5,6 +5,7 @@ import DatePicker from "react-multi-date-picker"
 import DateObject from "react-date-object"
 import persian from "react-date-object/calendars/persian"
 import persianFa from "react-date-object/locales/persian_fa"
+import { toast } from "react-toastify"
 
 import Breadcrumbs from "../../components/Common/Breadcrumb"
 import Paginations from "../../components/Common/Paginations.jsx"
@@ -109,11 +110,12 @@ const StudentCallSummary = () => {
     setSearchParams(serializeStudentCallSummaryQuery({ ...query, from: "", to: "", search: "", page: 1 }))
   }
   const handleExport = async () => {
-    if (!query.schoolId || ["connecting", "streaming"].includes(exportProgress.status)) return
+    if (!query.schoolId || exportControllerRef.current || ["connecting", "streaming"].includes(exportProgress.status)) return
     const controller = new AbortController()
     exportControllerRef.current = controller
     try {
       await streamStudentCallSummaryExport(query, { signal: controller.signal, onProgress: setExportProgress })
+      toast.success("خروجی Excel با موفقیت دانلود شد.")
     } catch (requestError) {
       const cancelled = controller.signal.aborted || requestError?.name === "AbortError"
       setExportProgress((current) => ({ ...current, status: cancelled ? "cancelled" : "failed", error: cancelled ? "دانلود لغو شد." : studentCallSummaryErrorMessage(requestError) }))
@@ -169,8 +171,7 @@ const StudentCallSummary = () => {
         <div className="progress mb-2" role="progressbar" aria-valuenow={exportPercent == null ? undefined : exportPercent}>
           <div className={`progress-bar ${exportPercent == null && exporting ? "progress-bar-striped progress-bar-animated" : ""}`} style={{ width: exportPercent == null ? (exporting ? "100%" : "0%") : `${exportPercent}%` }}>{exportPercent == null ? "" : `${exportPercent}٪`}</div>
         </div>
-        <div className="small text-muted">حجم دریافت‌شده: {formatBytes(exportProgress.loadedBytes)}{exportProgress.totalBytes ? ` از ${formatBytes(exportProgress.totalBytes)}` : ""}</div>
-        {exportProgress.memoryFallback && <div className="alert alert-warning py-2 mt-2 mb-0">مرورگر شما ذخیره مستقیم فایل را پشتیبانی نمی‌کند؛ فایل تا پایان دانلود در حافظه نگهداری می‌شود.</div>}
+        <div className="small text-muted">{exportProgress.status === "connecting" ? "در حال آماده‌سازی اولین بخش خروجی…" : exportProgress.status === "streaming" ? `در حال دریافت خروجی… ${formatBytes(exportProgress.loadedBytes)}${exportProgress.totalBytes ? ` از ${formatBytes(exportProgress.totalBytes)}` : ""}` : `حجم دریافت‌شده: ${formatBytes(exportProgress.loadedBytes)}`}</div>
         {exportProgress.status === "completed" && <div className="text-success mt-2">دانلود با موفقیت کامل شد.</div>}
         {exportProgress.status === "cancelled" && <div className="text-warning mt-2">دانلود لغو شد.</div>}
         {exportProgress.status === "failed" && <div className="text-danger mt-2">{exportProgress.error}<Button size="sm" color="link" onClick={handleExport}>تلاش مجدد</Button></div>}
@@ -180,10 +181,9 @@ const StudentCallSummary = () => {
     {state === "guide" && <Card><CardBody className="text-center text-muted py-5">ابتدا مجموعه را انتخاب کنید.</CardBody></Card>}
     {state === "error" && <div className="alert alert-danger text-center py-4">{error}<div className="mt-2"><Button color="danger" outline onClick={() => setRetryReport((value) => value + 1)}>تلاش مجدد</Button></div></div>}
     {state === "empty" && <Card><CardBody className="text-center text-muted py-5"><i className="mdi mdi-account-search-outline fs-1 d-block mb-2" />رکوردی برای فیلترهای انتخاب‌شده یافت نشد.</CardBody></Card>}
-    {state === "loading" && <Card><CardBody><div className="table-responsive"><Table bordered><tbody>{Array.from({ length: 7 }).map((_, row) => <tr key={row}>{columns.map((column) => <td key={column.id}><span className="placeholder col-8" /></td>)}</tr>)}</tbody></Table></div></CardBody></Card>}
+    {state === "loading" && <Card><CardBody><div className="table-responsive"><Table bordered><thead><tr>{columns.map((column) => <th key={column.id}>{column.header}</th>)}</tr></thead><tbody>{Array.from({ length: 7 }).map((_, row) => <tr key={row}>{columns.map((column) => <td key={column.id}><span className="placeholder col-8" /></td>)}</tr>)}</tbody></Table></div></CardBody></Card>}
     {state === "ready" && <Card><CardHeader className="bg-white d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span>تعداد کل رکوردها: <strong>{fa(data.meta.total)}</strong></span><div className="d-flex align-items-center gap-2"><Label className="mb-0" for="summary-limit">تعداد در صفحه</Label>
-      <Input id="summary-limit" type="select" value={query.limit} onChange={(event) => updateQuery({ limit: Number(event.target.value), page: 1 })} style={{ width: 85 }}>{[10, 25, 50, 100].map((limit) => <option key={limit} value={limit}>{limit}</option>)}</Input></div>
+      <span>تعداد کل رکوردها: <strong>{fa(data.meta.total)}</strong></span><span className="text-muted small">۱۵ رکورد در هر صفحه</span>
     </CardHeader><CardBody><TableContainer columns={columns} data={data.items} isGlobalFilter={false} isPagination={false} manualSorting sortingState={[{ id: query.sortBy, desc: query.sortOrder === "DESC" }]} onSortingChange={changeSort} tableClass="table-bordered table-nowrap dt-responsive nowrap w-100 dataTable no-footer dtr-inline" />
       <div className="mt-3"><Paginations perPageData={data.meta.limit || query.limit} data={data.items} totalRecords={data.meta.total || 0} currentPage={data.meta.page || query.page} setCurrentPage={(page) => updateQuery({ page })} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" /></div>
     </CardBody></Card>}

@@ -4,7 +4,7 @@ import { getSchools } from "../../services/schoolService.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export const SchoolPicker = ({ value, onChange, disabled = false }) => {
-  const { user, hasPermission } = useAuth();
+  const { user, hasPermission, setSelectedSchoolId } = useAuth();
   const [schools, setSchools] = useState([]);
   const [error, setError] = useState(false);
   const load = () => {
@@ -13,7 +13,7 @@ export const SchoolPicker = ({ value, onChange, disabled = false }) => {
       const ownSchoolId = user?.schoolId ?? user?.school_id;
       const scoped = user?.schools || (user?.school ? [user.school] : ownSchoolId ? [{ id: ownSchoolId, name: user.schoolName || user.school_name || "مجموعه من" }] : []);
       setSchools(scoped);
-      if (!value && scoped.length === 1) onChange(String(scoped[0].id));
+      if (!value && scoped.length === 1) { const id = String(scoped[0].id); setSelectedSchoolId(id); onChange(id); }
       return;
     }
     getSchools({ page: 1, limit: 100 }).then((res) => setSchools(res.items || [])).catch(() => setError(true));
@@ -21,7 +21,7 @@ export const SchoolPicker = ({ value, onChange, disabled = false }) => {
   useEffect(load, []);
   return <div>
     <Label>مجموعه</Label>
-    <Input type="select" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+    <Input type="select" value={value} disabled={disabled} onChange={(event) => { setSelectedSchoolId(event.target.value); onChange(event.target.value); }}>
       <option value="">انتخاب مجموعه</option>
       {schools.map((school) => <option key={school.id} value={school.id}>{school.name || school.title}</option>)}
     </Input>

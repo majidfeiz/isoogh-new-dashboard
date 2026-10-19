@@ -1,4 +1,4 @@
-import { downloadOutboundExcel, outboundExcelFilename } from "./outboundCallHistoryExcelUtils.js"
+import { downloadOutboundExcel, outboundExcelFilename, validateOutboundExcelBlob } from "./outboundCallHistoryExcelUtils.js"
 
 test("reads UTF-8 and regular Excel filenames with the required fallback", () => {
   expect(outboundExcelFilename("attachment; filename*=UTF-8''%DA%AF%D8%B2%D8%A7%D8%B1%D8%B4.xlsx")).toBe("گزارش.xlsx")
@@ -16,4 +16,13 @@ test("downloads the xlsx blob and revokes its object URL", () => {
   expect(link.click).toHaveBeenCalled()
   expect(link.remove).toHaveBeenCalled()
   expect(urlApi.revokeObjectURL).toHaveBeenCalledWith("blob:xlsx")
+})
+
+test("accepts a non-empty XLSX and turns JSON/blob failures into readable errors", async () => {
+  const xlsx = new Blob(["xlsx"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+  await expect(validateOutboundExcelBlob(xlsx)).resolves.toBe(xlsx)
+  await expect(validateOutboundExcelBlob(new Blob([]), xlsx.type)).rejects.toThrow("خالی")
+  const jsonError = new Blob([JSON.stringify({ message: "بازه تاریخ نامعتبر است" })], { type: "application/json" })
+  jsonError.text = jest.fn().mockResolvedValue(JSON.stringify({ message: "بازه تاریخ نامعتبر است" }))
+  await expect(validateOutboundExcelBlob(jsonError)).rejects.toThrow("بازه تاریخ نامعتبر است")
 })

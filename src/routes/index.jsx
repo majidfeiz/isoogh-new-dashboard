@@ -426,7 +426,7 @@ const authProtectedRoutes = [
   },
 
   // notifications
-  { path: "/notifications", component: <NotificationsPage /> },
+  { path: "/notifications", component: <ProtectedRoute permission="notifications.index"><NotificationsPage /></ProtectedRoute> },
   { path: "/notifications/compose", component: <NotificationComposePage /> },
 
   // files

@@ -10,7 +10,6 @@ import {
   Button,
   Form,
   Label,
-  Progress,
   Modal,
   ModalHeader,
   ModalBody,
@@ -34,7 +33,7 @@ import { getSchools } from "../../services/schoolService.jsx";
 import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
 import { createDefaultJalaliMonthRange, isJalaliDateRangeValid, normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
 import OutboundExportActions from "./OutboundExportActions.jsx";
-import { downloadOutboundExcel, outboundExcelFilename } from "./outboundCallHistoryExcelUtils.js";
+import { downloadOutboundExcel, outboundExcelFilename, validateOutboundExcelBlob } from "./outboundCallHistoryExcelUtils.js";
 import {
   mergeOutboundTagOptions,
   isOutboundCallAdmin,
@@ -475,14 +474,6 @@ const OutboundCallHistories = () => {
     []
   );
 
-  const formatBytes = (bytes) => {
-    if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
-    if (bytes < 1024) return `${bytes} B`;
-    const kb = bytes / 1024;
-    if (kb < 1024) return `${kb.toFixed(1)} KB`;
-    return `${(kb / 1024).toFixed(1)} MB`;
-  };
-
   const handleCancelExport = useCallback(() => {
     if (excelAbortRef.current) {
       excelAbortRef.current.abort();
@@ -492,7 +483,6 @@ const OutboundCallHistories = () => {
   }, []);
 
   const handleExport = useCallback(async (format = "xlsx") => {
-    if (excelAbortRef.current) return;
     if (!normalizeJalaliDateOnly(startDate) || !normalizeJalaliDateOnly(endDate)) {
       setSearchError("انتخاب هر دو تاریخ شروع و پایان الزامی است.");
       return;
@@ -501,51 +491,60 @@ const OutboundCallHistories = () => {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
       return;
     }
+    const commonParams = {
+      type,
+      q,
+      ssn,
+      username: usernameInput.trim(),
+      schoolId: isAdmin ? schoolId : "",
+      tagId: tagId ? Number(tagId) : "",
+      disposition,
+      start_date: normalizeJalaliDateOnly(startDate),
+      end_date: normalizeJalaliDateOnly(endDate),
+      sort_by: sort.by,
+      sort_order: sort.order,
+      support_form_id: supportFormId,
+      adviser_id: adviserId,
+      super_adviser_id: superAdviserId,
+    };
+    if (format === "csv") {
+      try {
+        const blob = await exportOutboundCallHistories(commonParams);
+        downloadOutboundExcel(blob, "outbound-call-histories.csv");
+        toast.success("فایل CSV با موفقیت دانلود شد.");
+      } catch {
+        // The shared HTTP client displays the standard error toast.
+      }
+      return;
+    }
+    if (excelAbortRef.current) return;
     const controller = new AbortController();
     excelAbortRef.current = controller;
     setSearchError("");
     setExportState({ status: "preparing", receivedBytes: 0, totalBytes: null, percent: null, errorMessage: null });
     try {
-      const exportParams = {
-        type,
-        q,
-        ssn,
-        username: usernameInput.trim(),
-        schoolId: isAdmin ? schoolId : "",
-        tagId: tagId ? Number(tagId) : "",
-        disposition,
-        start_date: normalizeJalaliDateOnly(startDate),
-        end_date: normalizeJalaliDateOnly(endDate),
-        sort_by: sort.by,
-        sort_order: sort.order,
-        support_form_id: supportFormId,
-        adviser_id: adviserId,
-        super_adviser_id: superAdviserId,
+      const result = await exportOutboundCallHistoriesExcel({
+        ...commonParams,
         signal: controller.signal,
-        onDownloadProgress: ({ loaded = 0, total }) => {
-          const totalBytes = Number.isFinite(total) && total > 0 ? total : null;
-          const percent = totalBytes ? Math.min(99, Math.floor((loaded / totalBytes) * 100)) : null;
-          setExportState({ status: "downloading", receivedBytes: loaded, totalBytes, percent, errorMessage: null });
-        },
-      };
-      const result = format === "csv"
-        ? await exportOutboundCallHistories(exportParams)
-        : await exportOutboundCallHistoriesExcel(exportParams);
+      });
       if (controller.signal.aborted) return;
-      if (format === "csv") {
-        downloadOutboundExcel(result, "outbound-call-histories.csv");
-      } else {
-        downloadOutboundExcel(result.blob, outboundExcelFilename(result.contentDisposition));
-      }
+      await validateOutboundExcelBlob(result.blob, result.contentType);
+      downloadOutboundExcel(result.blob, outboundExcelFilename(result.contentDisposition));
       setExportState((prev) => ({ ...prev, status: "success", percent: 100, errorMessage: null }));
-      toast.success(`فایل ${format === "csv" ? "CSV" : "Excel"} با موفقیت دانلود شد.`);
+      toast.success("فایل Excel با موفقیت دانلود شد.");
     } catch (error) {
       if (error?.code === "ERR_CANCELED" || error?.name === "CanceledError" || controller.signal.aborted) {
         setExportState(INITIAL_EXPORT_STATE);
         return;
       }
-      setExportState((prev) => ({ ...prev, status: "error", errorMessage: error?.message || "خروجی گرفتن ناموفق بود. دوباره تلاش کنید." }));
-      // The shared HTTP client displays the standard error toast.
+      const responseMessage = error?.response?.data?.message;
+      const message = error?.response?.status === 403
+        ? "شما اجازه دریافت خروجی Excel را ندارید."
+        : Array.isArray(responseMessage)
+        ? responseMessage.filter(Boolean).join("، ")
+        : responseMessage || error?.response?.data?.error || error?.message || "خطا در اتصال به سرور؛ دوباره تلاش کنید.";
+      setExportState((prev) => ({ ...prev, status: "error", errorMessage: message }));
+      if (error?.response?.status !== 401) toast.error(message);
     } finally {
       if (excelAbortRef.current === controller) {
         excelAbortRef.current = null;
@@ -887,8 +886,8 @@ const OutboundCallHistories = () => {
   const showExportPanel = exportState.status !== "idle";
 
   const exportStatusLabel = {
-    preparing: "در حال آماده‌سازی...",
-    downloading: "در حال دانلود...",
+    preparing: "در حال آماده‌سازی و دانلود فایل…",
+    downloading: "در حال آماده‌سازی و دانلود فایل…",
     success: "دانلود موفق",
     error: "خطا",
     cancelled: "لغو شد",
@@ -975,8 +974,8 @@ const OutboundCallHistories = () => {
                       </Col>
 
                       <Col md="4" className="d-flex align-items-end">
-                        <OutboundExportActions hasPermission={hasPermission} exportBusy={isExportBusy}
-                          tableLoading={loading} onExport={handleExport} onCancel={handleCancelExport} />
+                        <OutboundExportActions hasPermission={hasPermission} excelBusy={isExportBusy}
+                          onExport={handleExport} onCancel={handleCancelExport} />
                       </Col>
                     </Row>
 
@@ -1173,23 +1172,6 @@ const OutboundCallHistories = () => {
                           <span className="text-muted">
                             {exportStatusLabel[exportState.status] || ""}
                           </span>
-                          {exportState.receivedBytes > 0 && (
-                            <span className="text-muted">
-                              {exportState.totalBytes
-                                ? `${formatBytes(exportState.receivedBytes)} / ${formatBytes(exportState.totalBytes)}`
-                                : formatBytes(exportState.receivedBytes)}
-                              {exportState.percent != null && ` (${exportState.percent}%)`}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex-grow-1" style={{ minWidth: 180 }}>
-                          <Progress
-                            animated={exportState.percent === null && isExportBusy}
-                            striped={isExportBusy}
-                            color={exportState.status === "error" ? "danger" : exportState.status === "success" ? "success" : "primary"}
-                            style={{ height: 8, borderRadius: 4 }}
-                            value={exportState.percent ?? 30}
-                          />
                         </div>
                         {exportState.errorMessage && (
                           <div className="text-danger" style={{ fontSize: "0.8rem" }}>

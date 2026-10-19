@@ -19,6 +19,8 @@ import {
 } from "../services/userSwitchService.jsx";
 
 const AuthContext = createContext(null);
+const defaultSchoolId = (account) => account?.schoolId ?? account?.school_id ?? account?.school?.id
+  ?? (Array.isArray(account?.schools) && account.schools.length === 1 ? account.schools[0]?.id : "") ?? "";
 
 const toPermStrings = (user) => {
   const effective = user?.effectivePermissions;
@@ -38,6 +40,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => getAuthUser());
   const [permissions, setPermissions] = useState(() => getAuthPermissions());
   const [meLoading, setMeLoading] = useState(false);
+  const [selectedSchoolId, setSelectedSchoolId] = useState(() => defaultSchoolId(getAuthUser()));
 
   // switch state — initialized from localStorage so it survives page refresh
   const [isSwitched, setIsSwitched] = useState(() => !!getSwitchCallbackToken());
@@ -50,6 +53,7 @@ export const AuthProvider = ({ children }) => {
     setIsSwitched(false);
     setCallbackToken(null);
     setOriginalUser(null);
+    setSelectedSchoolId("");
   };
 
   const refreshMe = async (reason = "manual") => {
@@ -68,6 +72,7 @@ export const AuthProvider = ({ children }) => {
 
       setUser(freshUser ?? null);
       setPermissions(perms);
+      setSelectedSchoolId((current) => current || defaultSchoolId(freshUser));
 
       setAuthData({ accessToken: token, refreshToken: null, user: freshUser });
 
@@ -100,6 +105,7 @@ export const AuthProvider = ({ children }) => {
     setOriginalUser(currentUser);
     setUser(result.user);
     setPermissions(toPermStrings(result.user));
+    setSelectedSchoolId(defaultSchoolId(result.user));
   };
 
   const switchBack = async () => {
@@ -115,6 +121,7 @@ export const AuthProvider = ({ children }) => {
     setOriginalUser(null);
     setUser(result.user);
     setPermissions(toPermStrings(result.user));
+    setSelectedSchoolId(defaultSchoolId(result.user));
   };
 
   // ✅ فقط برای refresh صفحه
@@ -173,6 +180,8 @@ export const AuthProvider = ({ children }) => {
       hasPermission: (perm) => permissions.includes(perm),
       hasAnyPermission: (perms) => (perms || []).some((p) => permissions.includes(p)),
       hasAllPermissions: (perms) => (perms || []).every((p) => permissions.includes(p)),
+      selectedSchoolId,
+      setSelectedSchoolId,
       // switch state
       isSwitched,
       callbackToken,
@@ -181,7 +190,7 @@ export const AuthProvider = ({ children }) => {
       switchBack,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, permissions, meLoading, isSwitched, callbackToken, originalUser]
+    [user, permissions, meLoading, selectedSchoolId, isSwitched, callbackToken, originalUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
