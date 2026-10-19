@@ -74,7 +74,6 @@ export function buildOutboundSocketPayload(filters = {}) {
   if (endDate) payload.end_date = endDate;
   if (filters.ssn?.trim?.()) payload.ssn = filters.ssn.trim();
   if (filters.username?.trim?.()) payload.username = filters.username.trim();
-  if (filters.schoolId) payload.schoolId = filters.schoolId;
   if (filters.tagId) payload.tagId = filters.tagId;
   if (/^[1-9]\d*$/.test(String(filters.support_form_id || "")) || filters.support_form_id === "ALL") payload.support_form_id = filters.support_form_id;
   if (filters.adviser_id) payload.adviser_id = filters.adviser_id;

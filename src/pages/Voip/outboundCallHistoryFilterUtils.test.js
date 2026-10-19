@@ -86,7 +86,7 @@ test("preserves date range and all active filters in websocket list/subscribe/re
   });
   expect(payload).toEqual({
     page: 3, per_page: 50, type: "StudentName", q: "علی", ssn: "001", tagId: 12,
-    disposition: "ANSWERED", support_form_id: 4, adviser_id: 5, username: "student", schoolId: 8,
+    disposition: "ANSWERED", support_form_id: 4, adviser_id: 5, username: "student",
     start_date: "1405/06/01", end_date: "1405/06/10", sort_by: "id", sort_order: "DESC",
   });
 });
@@ -103,8 +103,9 @@ test("CSV uses the table date range and filters but excludes pagination", () => 
   });
   expect(Object.fromEntries(params)).toEqual({
     sort_by: "id", sort_order: "DESC", q: "علی", type: "StudentName", disposition: "ANSWERED",
-    start_date: "1405/06/01", end_date: "1405/06/10", ssn: "001", username: "student", schoolId: "8", support_form_id: "3113", tagId: "12",
+    start_date: "1405/06/01", end_date: "1405/06/10", ssn: "001", username: "student", support_form_id: "3113", tagId: "12",
   });
   expect(params.has("page")).toBe(false);
   expect(params.has("per_page")).toBe(false);
+  expect(params.has("schoolId")).toBe(false);
 });
