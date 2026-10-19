@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { io } from "socket.io-client";
+import { useNavigate } from "react-router-dom";
 import { Alert, Badge, Button, Col, Modal, ModalBody, ModalFooter, ModalHeader, Row, Spinner, Table } from "reactstrap";
 import { API_BASE_URL } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
@@ -7,6 +8,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { getIncomingCallerProfile, incomingCallErrorMessage } from "../../services/incomingCallService.jsx";
 import { formatDateTime, formatDuration } from "../../pages/IncomingCalls/IncomingCallsCommon.jsx";
 import { incomingCallKey, isSameIncomingCall, mergeIncomingCall, normalizeRealtimeIncomingCall } from "./incomingCallRealtimeUtils.js";
+import { buildLatestSupportFormTarget } from "./incomingCallNotificationUtils.js";
 
 const statusLabels = { routing: "در حال مسیریابی", answered: "پاسخ داده شد", missed: "از دست رفته", ended: "پایان یافته", voice: "پیام صوتی" };
 const statusColors = { routing: "info", answered: "success", missed: "danger", ended: "secondary", voice: "warning" };
@@ -16,6 +18,7 @@ const fullName = (record) => value(record?.name) || [record?.firstName ?? record
 const Field = ({ label, children }) => value(children) ? <Col sm="6" className="mb-3"><small className="text-muted d-block">{label}</small><span>{children}</span></Col> : null;
 
 const IncomingCallRealtime = () => {
+  const navigate = useNavigate();
   const { user, hasPermission, selectedSchoolId } = useAuth();
   const schoolId = selectedSchoolId ? Number(selectedSchoolId) : null;
   const canSubscribe = hasPermission("incoming-calls.realtime.subscribe");
@@ -70,11 +73,24 @@ const IncomingCallRealtime = () => {
     return () => { socket.removeAllListeners(); socket.disconnect(); socketRef.current = null; seenRef.current.clear(); close(); setConnection("idle"); };
   }, [canSubscribe, close, schoolId, user]);
 
+  useEffect(() => {
+    const openNotification = (event) => {
+      const next = normalizeRealtimeIncomingCall(event.detail);
+      if (!incomingCallKey(next)) return;
+      setCall((current) => isSameIncomingCall(current, next) ? { ...current, ...next, caller: { ...(current?.caller || {}), ...(next.caller || {}) } } : next);
+      setProfile(null); setProfileError("");
+    };
+    window.addEventListener("incoming-calls:open-notification", openNotification);
+    return () => window.removeEventListener("incoming-calls:open-notification", openNotification);
+  }, []);
+
   useEffect(() => { if (call?.caller?.matched && canShowProfile) loadProfile(call); }, [call?.callId, canShowProfile]);
 
   const student = profile?.student;
   const contactValues = [student?.user?.phone, student?.phone, student?.mobile, ...(Array.isArray(student?.contacts) ? student.contacts.map((contact) => contact?.value ?? contact?.phone ?? contact?.mobile) : [])].filter(Boolean);
   const history = profile?.recentCalls ?? profile?.incomingCalls ?? profile?.calls ?? [];
+  const latestSupportForm = profile?.latestSupportForm ?? call?.latestSupportForm;
+  const supportFormTarget = buildLatestSupportFormTarget(latestSupportForm);
 
   return <Modal isOpen={!!call} toggle={close} size="xl" scrollable centered contentClassName="incoming-call-modal shadow-lg">
     <ModalHeader toggle={close}><span className="d-inline-flex align-items-center gap-2"><span className="rounded-circle bg-success d-inline-block" style={{ width: 12, height: 12 }} /> تماس ورودی <Badge color={statusColors[call?.status] || "secondary"}>{statusLabels[call?.status] || call?.status}</Badge></span></ModalHeader>
@@ -87,6 +103,7 @@ const IncomingCallRealtime = () => {
       {profileError && <Alert color="danger">{profileError} <Button color="link" className="p-0 ms-2" onClick={() => loadProfile(call)}>تلاش مجدد</Button></Alert>}
       {profile && !profileLoading && <>
         <h5 className="mt-2">مشخصات</h5><Row><Field label="نام و نام خانوادگی">{fullName(student) || call?.caller?.name}</Field><Field label="نام کاربری">{student?.user?.username ?? call?.caller?.username}</Field><Field label="کد دانش‌آموز">{student?.id ?? call?.caller?.studentId}</Field><Field label="پایه">{student?.grade?.name ?? student?.gradeName ?? student?.grade_name}</Field></Row>
+        {supportFormTarget && <div className="d-flex justify-content-end mb-3"><Button color="success" onClick={() => { close(); navigate(supportFormTarget.pathname + supportFormTarget.search, { state: supportFormTarget.state }); }}><i className="bx bx-file me-1" />مشاهده آخرین فرم تماس</Button></div>}
         {!!contactValues.length && <><h5 className="mt-3">شماره‌ها و راه‌های تماس</h5><div className="d-flex flex-wrap gap-2">{[...new Set(contactValues)].map((contact) => <Badge key={contact} color="light" className="text-dark fs-6" dir="ltr">{contact}</Badge>)}</div></>}
         {!!history.length && <><h5 className="mt-4">سوابق تماس</h5><div className="table-responsive"><Table size="sm" hover><thead><tr><th>وضعیت</th><th>شماره</th><th>شروع</th><th>مدت</th></tr></thead><tbody>{history.slice(0, 50).map((item, index) => <tr key={item.id ?? item.callId ?? index}><td>{statusLabels[item.status] || item.status || "—"}</td><td dir="ltr">{item.src ?? item.callerNumber ?? item.caller?.phone ?? "—"}</td><td>{formatDateTime(item.startedAt ?? item.started_at ?? item.created_at)}</td><td>{formatDuration(item.durationSeconds ?? item.duration_seconds)}</td></tr>)}</tbody></Table></div></>}
       </>}

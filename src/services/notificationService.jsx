@@ -1,7 +1,7 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
-const normalizeNotification = (item = {}) => ({
+export const normalizeNotification = (item = {}) => ({
   id: item?.id ?? null,
   type: item?.type ?? "",
   title: item?.title ?? "",
@@ -12,6 +12,7 @@ const normalizeNotification = (item = {}) => ({
   isRead: item?.isRead ?? item?.is_read ?? false,
   readAt: item?.readAt ?? item?.read_at ?? null,
   createdAt: item?.createdAt ?? item?.created_at ?? null,
+  data: item?.data && typeof item.data === "object" ? item.data : {},
 });
 
 export async function getUnreadNotifications() {

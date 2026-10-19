@@ -20,6 +20,9 @@ import {
   markAllAsRead,
   deleteNotification,
 } from "../../services/notificationService.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+import IncomingCallNotificationActions from "../../components/IncomingCalls/IncomingCallNotificationActions.jsx";
+import { formatNotificationDateTime, isIncomingCallNotification, incomingCallNotificationTone } from "../../components/IncomingCalls/incomingCallNotificationUtils.js";
 
 function timeAgo(dateString) {
   if (!dateString) return "";
@@ -57,6 +60,8 @@ const TABS = [
 const LIMIT = 15;
 
 const NotificationsPage = () => {
+  const { hasPermission } = useAuth();
+  const canMarkRead = hasPermission("notifications.mark-read");
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("all");
   const [items, setItems] = useState([]);
@@ -93,7 +98,7 @@ const NotificationsPage = () => {
   };
 
   const handleItemClick = async (item) => {
-    if (!item.isRead) {
+    if (!item.isRead && canMarkRead) {
       // optimistic update
       setItems((prev) =>
         prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
@@ -245,6 +250,7 @@ const NotificationsPage = () => {
                             <h6 className="mb-0 text-truncate">{item.title}</h6>
                           </div>
                           <p className="text-muted font-size-13 mb-1">{item.body}</p>
+                          {isIncomingCallNotification(item) && <div className={`border-start border-3 border-${incomingCallNotificationTone(item)} ps-3 my-2`}><div className={`fw-bold fs-5 text-${incomingCallNotificationTone(item)}`} dir="ltr">{item.data.callerPhone || "شماره نامشخص"}</div><div className="text-muted font-size-12">{formatNotificationDateTime(item.data.occurredAt)}</div>{!item.data.matched && <div className="text-danger mt-1">تماس‌گیرنده در این مجموعه شناسایی نشد</div>}<IncomingCallNotificationActions item={item} markRead={handleItemClick} /></div>}
                           <p className="text-muted font-size-12 mb-0">
                             <i className="mdi mdi-clock-outline me-1" />
                             {timeAgo(item.createdAt)}
