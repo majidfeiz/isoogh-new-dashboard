@@ -215,7 +215,6 @@ export async function exportOutboundCallHistoriesExcel({
   end_date = "",
   ssn = "",
   username = "",
-  schoolId = "",
   tagId = "",
   support_form_id = "",
   adviser_id = "",
@@ -223,17 +222,16 @@ export async function exportOutboundCallHistoriesExcel({
   sort_by = "",
   sort_order = "",
   signal,
-  onDownloadProgress,
 } = {}) {
   const range = requiredOutboundRange(start_date, end_date);
+  const cleanedQuery = q?.trim?.() || undefined;
   const params = Object.fromEntries(Object.entries({
-    type: type || undefined,
-    q: q?.trim?.() || undefined,
+    type: cleanedQuery && type ? type : undefined,
+    q: cleanedQuery,
     disposition: disposition && disposition !== "ALL" ? disposition : undefined,
     ...range,
     ssn: ssn?.trim?.() || undefined,
     username: username?.trim?.() || undefined,
-    schoolId: schoolId || undefined,
     tagId: tagId || undefined,
     support_form_id: support_form_id || undefined,
     adviser_id: adviser_id || undefined,
@@ -243,14 +241,15 @@ export async function exportOutboundCallHistoriesExcel({
   }).filter(([, value]) => value !== undefined));
   const response = await apiGet(getApiUrl(API_ROUTES.voip.exportOutboundCallHistoriesExcel), {
     responseType: "blob",
-    timeout: 120000,
+    timeout: 0,
+    silent: true,
     signal,
-    onDownloadProgress,
     params,
   });
   return {
     blob: response.data,
     contentDisposition: response.headers?.["content-disposition"] || "",
+    contentType: response.headers?.["content-type"] || response.data?.type || "",
   };
 }
 
