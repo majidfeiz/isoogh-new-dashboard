@@ -7,6 +7,9 @@ import {
   getNotifications,
   markAsRead,
 } from "../../../services/notificationService.jsx";
+import { useAuth } from "../../../context/AuthContext.jsx";
+import IncomingCallNotificationActions from "../../IncomingCalls/IncomingCallNotificationActions.jsx";
+import { formatNotificationDateTime, isIncomingCallNotification, incomingCallNotificationTone } from "../../IncomingCalls/incomingCallNotificationUtils.js";
 
 const POLL_INTERVAL_MS = 60_000;
 
@@ -38,6 +41,9 @@ function NotificationIcon({ icon, color }) {
 }
 
 const NotificationDropdown = () => {
+  const { hasPermission } = useAuth();
+  const canView = hasPermission("notifications.index");
+  const canMarkRead = hasPermission("notifications.mark-read");
   const [menu, setMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [items, setItems] = useState([]);
@@ -45,6 +51,7 @@ const NotificationDropdown = () => {
   const timerRef = useRef(null);
 
   const fetchUnread = useCallback(async () => {
+    if (!canView) return;
     try {
       const data = await getUnreadNotifications();
 
@@ -62,7 +69,7 @@ const NotificationDropdown = () => {
     } catch {
       // silent — httpClient already shows toast for API errors
     }
-  }, []);
+  }, [canView]);
 
   useEffect(() => {
     fetchUnread();
@@ -73,7 +80,7 @@ const NotificationDropdown = () => {
   const handleItemClick = async (item) => {
     setMenu(false);
     // optimistic update
-    if (!item.isRead) {
+    if (!item.isRead && canMarkRead) {
       setUnreadCount((c) => Math.max(0, c - 1));
       setItems((prev) =>
         prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n))
@@ -89,6 +96,8 @@ const NotificationDropdown = () => {
       navigate(item.actionUrl);
     }
   };
+
+  if (!canView) return null;
 
   return (
     <Dropdown
@@ -130,12 +139,13 @@ const NotificationDropdown = () => {
             </div>
           ) : (
             items.map((item) => (
-              <button
+              <div
                 key={item.id}
-                type="button"
                 onClick={() => handleItemClick(item)}
                 className="w-100 text-reset notification-item border-0 bg-transparent text-start"
-                style={!item.isRead ? { backgroundColor: "rgba(85,110,230,0.05)" } : {}}
+                role="button"
+                tabIndex={0}
+                style={!item.isRead ? { backgroundColor: `var(--bs-${incomingCallNotificationTone(item)}-bg-subtle, rgba(85,110,230,0.05))` } : {}}
               >
                 <div className="d-flex align-items-start p-2">
                   <NotificationIcon icon={item.icon} color={item.color} />
@@ -143,6 +153,7 @@ const NotificationDropdown = () => {
                     <h6 className="mt-0 mb-1 text-truncate">{item.title}</h6>
                     <div className="font-size-12 text-muted">
                       <p className="mb-1 text-truncate">{item.body}</p>
+                      {isIncomingCallNotification(item) && <><p className={`mb-1 fw-bold text-${incomingCallNotificationTone(item)}`} dir="ltr">{item.data.callerPhone || "شماره نامشخص"}</p><p className="mb-1">{formatNotificationDateTime(item.data.occurredAt)}</p><IncomingCallNotificationActions item={item} markRead={handleItemClick} /></>}
                       <p className="mb-0">
                         <i className="mdi mdi-clock-outline" />{" "}
                         {timeAgo(item.createdAt)}
@@ -162,7 +173,7 @@ const NotificationDropdown = () => {
                     />
                   )}
                 </div>
-              </button>
+              </div>
             ))
           )}
         </SimpleBar>
