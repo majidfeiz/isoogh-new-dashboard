@@ -3,34 +3,34 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import OutboundExportActions from "./OutboundExportActions.jsx"
 
 const renderActions = (permissions, props = {}) => render(<OutboundExportActions
-  hasPermission={(permission) => permissions.includes(permission)} exportBusy={false}
-  tableLoading={false} onExport={jest.fn()} onCancel={jest.fn()} {...props} />)
+  hasPermission={(permission) => permissions.includes(permission)}
+  excelBusy={false} onExport={jest.fn()} onCancel={jest.fn()} {...props} />)
 
 test("Excel visibility uses only its independent permission", () => {
   const { rerender } = renderActions(["voip.outbound.index.export-excel"])
-  expect(screen.getByRole("option", { name: "Excel (XLSX)" })).toBeInTheDocument()
-  expect(screen.queryByRole("option", { name: "CSV" })).not.toBeInTheDocument()
+  expect(screen.getByRole("button", { name: /خروجی Excel/ })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /خروجی CSV/ })).not.toBeInTheDocument()
   rerender(<OutboundExportActions hasPermission={(permission) => permission === "voip.outbound.index.export"}
-    exportBusy={false} tableLoading={false} onExport={jest.fn()} onCancel={jest.fn()} />)
-  expect(screen.getByRole("option", { name: "CSV" })).toBeInTheDocument()
-  expect(screen.queryByRole("option", { name: "Excel (XLSX)" })).not.toBeInTheDocument()
+    excelBusy={false} onExport={jest.fn()} onCancel={jest.fn()} />)
+  expect(screen.getByRole("button", { name: /خروجی CSV/ })).toBeInTheDocument()
+  expect(screen.queryByRole("button", { name: /خروجی Excel/ })).not.toBeInTheDocument()
 })
 
 test("Excel loading prevents repeated clicks and exposes cancel", () => {
   const onExport = jest.fn()
   const { rerender } = renderActions(["voip.outbound.index.export-excel"], { onExport })
-  fireEvent.click(screen.getByTestId("export-button"))
+  fireEvent.click(screen.getByTestId("excel-export-button"))
   expect(onExport).toHaveBeenCalledWith("xlsx")
-  rerender(<OutboundExportActions hasPermission={() => true} exportBusy tableLoading={false}
+  rerender(<OutboundExportActions hasPermission={() => true} excelBusy
     onExport={onExport} onCancel={jest.fn()} />)
-  expect(screen.getByTestId("export-button")).toBeDisabled()
+  expect(screen.getByTestId("excel-export-button")).toBeDisabled()
+  expect(screen.getByRole("button", { name: /خروجی CSV/ })).toBeEnabled()
   expect(screen.getByRole("button", { name: /لغو/ })).toBeInTheDocument()
 })
 
-test("user can choose CSV before exporting", () => {
+test("CSV remains an independent action", () => {
   const onExport = jest.fn()
   renderActions(["voip.outbound.index.export", "voip.outbound.index.export-excel"], { onExport })
-  fireEvent.change(screen.getByRole("combobox", { name: "فرمت خروجی" }), { target: { value: "xlsx" } })
-  fireEvent.click(screen.getByTestId("export-button"))
-  expect(onExport).toHaveBeenCalledWith("xlsx")
+  fireEvent.click(screen.getByRole("button", { name: /خروجی CSV/ }))
+  expect(onExport).toHaveBeenCalledWith("csv")
 })
