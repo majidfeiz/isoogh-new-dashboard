@@ -54,6 +54,14 @@ export const normalizeOutboundCallItem = (item = {}) => ({
   files: Array.isArray(item?.files) ? item.files.map(normalizeOutboundFile) : [],
 });
 
+const requiredOutboundRange = (startDate, endDate) => {
+  const start_date = normalizeJalaliDateOnly(startDate);
+  const end_date = normalizeJalaliDateOnly(endDate);
+  if (!start_date || !end_date) throw new Error("بازه تاریخ تماس‌های خروجی الزامی است");
+  if (start_date > end_date) throw new Error("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد");
+  return { start_date, end_date };
+};
+
 // مستندات سوکت تماس‌های خروجی (namespace, event ها و ...)
 export async function getOutboundCallHistorySocketDocs() {
   const url = getApiUrl(API_ROUTES.voip.outboundCallHistoriesSocketDocs);
@@ -83,6 +91,7 @@ export async function getOutboundCallHistories({
   signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.voip.outboundCallHistories);
+  const range = requiredOutboundRange(start_date, end_date);
 
   const response = await apiGet(url, {
     params: {
@@ -94,8 +103,7 @@ export async function getOutboundCallHistories({
       // API فقط snake_case می‌خواهد
       sort_by: sortBy || undefined,
       sort_order: sortOrder || undefined,
-      start_date: normalizeJalaliDateOnly(start_date) || undefined,
-      end_date: normalizeJalaliDateOnly(end_date) || undefined,
+      ...range,
       ssn: ssn?.trim?.() || undefined,
       username: username?.trim?.() || undefined,
       schoolId: schoolId || undefined,
@@ -173,6 +181,7 @@ export async function exportOutboundCallHistories({
   signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.voip.exportOutboundCallHistories);
+  const range = requiredOutboundRange(start_date, end_date);
 
   const response = await apiGet(url, {
     responseType: "blob",
@@ -182,8 +191,7 @@ export async function exportOutboundCallHistories({
       type: type || undefined,
       q: q || undefined,
       disposition: disposition && disposition !== "ALL" ? disposition : undefined,
-      start_date: normalizeJalaliDateOnly(start_date) || undefined,
-      end_date: normalizeJalaliDateOnly(end_date) || undefined,
+      ...range,
       ssn: ssn?.trim?.() || undefined,
       username: username?.trim?.() || undefined,
       schoolId: schoolId || undefined,
@@ -217,12 +225,12 @@ export async function exportOutboundCallHistoriesExcel({
   signal,
   onDownloadProgress,
 } = {}) {
+  const range = requiredOutboundRange(start_date, end_date);
   const params = Object.fromEntries(Object.entries({
     type: type || undefined,
     q: q?.trim?.() || undefined,
     disposition: disposition && disposition !== "ALL" ? disposition : undefined,
-    start_date: normalizeJalaliDateOnly(start_date) || undefined,
-    end_date: normalizeJalaliDateOnly(end_date) || undefined,
+    ...range,
     ssn: ssn?.trim?.() || undefined,
     username: username?.trim?.() || undefined,
     schoolId: schoolId || undefined,

@@ -1,5 +1,12 @@
 export const PARENT_TAG_IMPORT_ACTIONS = ["Append", "Replace", "Remove"];
 
+export const PARENT_TAG_IMPORT_SAMPLE_ROWS = [
+  ["username", "action", "tag1", "tag2", "tag3"],
+  ["09120000001", "Append", "دانش‌آموزان ویژه", "پیگیری هفتگی", ""],
+  ["09120000002", "Replace", "پایه دوازدهم", "رشته تجربی", "نیازمند تماس"],
+  ["09120000003", "Remove", "", "", ""],
+];
+
 export const getParentTagImportSchoolMode = ({ isAdminLike, schools = [] }) => ({
   managerAutoSchool: !isAdminLike && schools.length === 1 ? schools[0] : null,
   needsSchoolSelect: isAdminLike || schools.length > 1,

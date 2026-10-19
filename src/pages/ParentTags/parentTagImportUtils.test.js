@@ -3,9 +3,25 @@ import {
   getParentTagImportSchoolMode,
   isParentTagImportHeader,
   isParentTagImportTerminal,
+  PARENT_TAG_IMPORT_SAMPLE_ROWS,
   removeParentTagImportHeaders,
   toParentTagImportSheetRows,
 } from "./parentTagImportUtils.js";
+
+test("sample workbook follows the documented parent tag import columns and actions", () => {
+  expect(PARENT_TAG_IMPORT_SAMPLE_ROWS[0]).toEqual([
+    "username",
+    "action",
+    "tag1",
+    "tag2",
+    "tag3",
+  ]);
+  expect(PARENT_TAG_IMPORT_SAMPLE_ROWS.slice(1).map((row) => row[1])).toEqual([
+    "Append",
+    "Replace",
+    "Remove",
+  ]);
+});
 
 test("removes consecutive English and Persian headers before rebuilding xlsx", () => {
   const rows = [

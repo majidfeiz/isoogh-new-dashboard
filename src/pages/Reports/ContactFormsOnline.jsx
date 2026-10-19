@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Navigate, useSearchParams } from "react-router-dom"
 import { Button, Card, CardBody, CardHeader, Col, Input, Label, Row, Table } from "reactstrap"
+import Select from "react-select"
 
 import Breadcrumbs from "../../components/Common/Breadcrumb"
 import Paginations from "../../components/Common/Paginations.jsx"
@@ -54,6 +55,11 @@ const ContactFormsOnline = () => {
   const [error, setError] = useState("")
   const [search, setSearch] = useState(query.search)
   const [forms, setForms] = useState([])
+  const [formSearch, setFormSearch] = useState("")
+  const [formsLoading, setFormsLoading] = useState(false)
+  const [formsError, setFormsError] = useState("")
+  const [formsMeta, setFormsMeta] = useState({ page: 1, lastPage: 1 })
+  const formsAbortRef = useRef(null)
   const [schools, setSchools] = useState([])
   const [exporting, setExporting] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
@@ -103,18 +109,41 @@ const ContactFormsOnline = () => {
     }
   }, [showSchoolFilter])
 
-  useEffect(() => {
-    let ignore = false
-    setForms([])
-    getSupportForms({
-      page: 1,
-      limit: 100,
-      schoolId: showSchoolFilter ? query.schoolId || undefined : undefined,
-    })
-      .then((result) => { if (!ignore) setForms(result.items || []) })
-      .catch(() => { if (!ignore) setForms([]) })
-    return () => { ignore = true }
+  const loadForms = useCallback(async (page = 1, searchValue = "", append = false) => {
+    formsAbortRef.current?.abort()
+    const controller = new AbortController()
+    formsAbortRef.current = controller
+    setFormsLoading(true)
+    setFormsError("")
+    try {
+      const result = await getSupportForms({
+        page,
+        limit: 20,
+        search: searchValue.trim(),
+        schoolId: showSchoolFilter ? query.schoolId || undefined : undefined,
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return
+      setForms((current) => {
+        const previous = append ? current : []
+        return [...new Map([...previous, ...(result.items || [])].map((form) => [String(form.id), form])).values()]
+      })
+      setFormsMeta({ page: result.pagination?.page || page, lastPage: result.pagination?.lastPage || 1 })
+    } catch (requestError) {
+      if (!controller.signal.aborted && requestError?.code !== "ERR_CANCELED") {
+        if (!append) setForms([])
+        setFormsError("دریافت فرم‌ها با خطا مواجه شد.")
+      }
+    } finally {
+      if (!controller.signal.aborted) setFormsLoading(false)
+    }
   }, [query.schoolId, showSchoolFilter])
+
+  useEffect(() => {
+    setForms([])
+    const timer = setTimeout(() => loadForms(1, formSearch, false), formSearch ? 400 : 0)
+    return () => { clearTimeout(timer); formsAbortRef.current?.abort() }
+  }, [formSearch, loadForms])
 
   useEffect(() => { setSearch(query.search) }, [query.search])
   useEffect(() => {
@@ -158,13 +187,19 @@ const ContactFormsOnline = () => {
     <Breadcrumbs title="گزارش‌های مدیریتی" breadcrumbItem="گزارش آنلاین فرم تماس‌ها" />
     <Card className="mb-4"><CardHeader className="bg-white"><h5 className="mb-0">گزارش آنلاین فرم تماس‌ها</h5></CardHeader><CardBody>
       <Row className="g-3 align-items-end">
-        <Col xl="4" md="6"><Label>فرم تماس <span className="text-danger">*</span></Label>
-          <Input type="select" value={query.formId} onChange={(event) => updateQuery({ formId: event.target.value, page: 1 })}>
-            <option value="">انتخاب فرم تماس</option>
-            {forms.map((form) => <option key={form.id} value={form.id}>{form.title || form.name || `فرم ${form.id}`}</option>)}
-          </Input></Col>
+        <Col xl="4" md="6"><Label id="online-form-label">فرم تماس <span className="text-danger">*</span></Label>
+          <Select inputId="online-form-select" aria-labelledby="online-form-label" isRtl isClearable
+            value={forms.find((form) => String(form.id) === String(query.formId)) || (query.formId ? { id: query.formId, title: data.form?.title || `فرم ${query.formId}` } : null)}
+            options={forms} getOptionValue={(form) => String(form.id)} getOptionLabel={(form) => form.title || form.name || `فرم ${form.id}`}
+            onChange={(form) => updateQuery({ formId: form ? String(form.id) : "", page: 1 })}
+            onInputChange={(value, action) => { if (action.action === "input-change") setFormSearch(value) }}
+            onMenuScrollToBottom={() => { if (!formsLoading && formsMeta.page < formsMeta.lastPage) loadForms(formsMeta.page + 1, formSearch, true) }}
+            isLoading={formsLoading} placeholder="انتخاب یا جستجوی فرم تماس" loadingMessage={() => "در حال دریافت فرم‌ها..."}
+            noOptionsMessage={() => formsError || "فرمی یافت نشد"} classNamePrefix="react-select" />
+          {formsError && <button type="button" className="btn btn-link btn-sm p-0 mt-1" onClick={() => loadForms(1, formSearch, false)}>تلاش مجدد</button>}
+        </Col>
         {showSchoolFilter && <Col xl="3" md="6"><Label>مدرسه</Label><Input type="select" value={query.schoolId}
-          onChange={(event) => updateQuery({ schoolId: event.target.value, formId: "", page: 1 })}><option value="">همه مدارس</option>
+          onChange={(event) => { setFormSearch(""); setForms([]); formsAbortRef.current?.abort(); updateQuery({ schoolId: event.target.value, formId: "", page: 1 }) }}><option value="">همه مدارس</option>
           {schools.map((school) => <option key={school.id} value={school.id}>{school.name || school.title}</option>)}</Input></Col>}
         <Col xl="3" md="6"><Label>جستجو</Label><Input value={search} onChange={(event) => setSearch(event.target.value)}
           placeholder="نام، شماره یا مقدار آماری" /></Col>

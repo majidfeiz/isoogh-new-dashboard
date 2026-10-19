@@ -32,7 +32,7 @@ import { exportOutboundCallHistories, exportOutboundCallHistoriesExcel, getOutbo
 import { getSupportForms } from "../../services/supportFormService.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
-import { isJalaliDateRangeValid, normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
+import { createDefaultJalaliMonthRange, isJalaliDateRangeValid, normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
 import OutboundExportActions from "./OutboundExportActions.jsx";
 import { downloadOutboundExcel, outboundExcelFilename } from "./outboundCallHistoryExcelUtils.js";
 import {
@@ -78,7 +78,13 @@ const OutboundCallHistories = () => {
   const { hasPermission, user } = useAuth();
   const isAdmin = useMemo(() => isOutboundCallAdmin(user), [user]);
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialQuery = useMemo(() => parseOutboundCallQuery(searchParams), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const initialRange = useMemo(() => createDefaultJalaliMonthRange("Asia/Tehran"), []);
+  const initialQuery = useMemo(() => ({
+    ...parseOutboundCallQuery(searchParams),
+    page: 1,
+    startDate: initialRange.startDate,
+    endDate: initialRange.endDate,
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
@@ -101,6 +107,7 @@ const OutboundCallHistories = () => {
   const [superAdviserId] = useState(initialQuery.superAdviserId);
   const [disposition, setDisposition] = useState(initialQuery.disposition);
   const [loading, setLoading] = useState(false);
+  const [listError, setListError] = useState("");
   const [sorting, setSorting] = useState(initialQuery.sortBy ? [{ id: initialQuery.sortBy, desc: initialQuery.sortOrder === "DESC" }] : []);
   const [sort, setSort] = useState({ by: initialQuery.sortBy || null, order: initialQuery.sortOrder || null });
   const [startDate, setStartDate] = useState(() => outboundDateObject(initialQuery.startDate));
@@ -115,6 +122,7 @@ const OutboundCallHistories = () => {
   const tagsAbortRef = useRef(null);
   const formsAbortRef = useRef(null);
   const pageLimitRef = useRef(15);
+  const dateEffectMountedRef = useRef(false);
 
   const [exportState, setExportState] = useState(INITIAL_EXPORT_STATE);
   const excelAbortRef = useRef(null);
@@ -149,10 +157,22 @@ const OutboundCallHistories = () => {
       currentSupportFormId = supportFormId,
       currentSchoolId = schoolId,
     } = {}) => {
+      const normalizedStart = normalizeJalaliDateOnly(currentStart);
+      const normalizedEnd = normalizeJalaliDateOnly(currentEnd);
+      if (!normalizedStart || !normalizedEnd) {
+        setSearchError("انتخاب هر دو تاریخ شروع و پایان الزامی است.");
+        return;
+      }
+      if (normalizedStart > normalizedEnd) {
+        setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
+        return;
+      }
       callsAbortRef.current?.abort();
       const controller = new AbortController();
       callsAbortRef.current = controller;
       setLoading(true);
+      setListError("");
+      setData([]);
       try {
         const cleanedQ = currentQ?.trim?.() || "";
         const res = await getOutboundCallHistories({
@@ -163,8 +183,8 @@ const OutboundCallHistories = () => {
           disposition: currentDisposition,
           sortBy: currentSortBy,
           sortOrder: currentSortOrder,
-          start_date: currentStart,
-          end_date: currentEnd,
+          start_date: normalizedStart,
+          end_date: normalizedEnd,
           ssn: currentSsn,
           username: currentUsername,
           schoolId: isAdmin ? currentSchoolId : "",
@@ -204,13 +224,14 @@ const OutboundCallHistories = () => {
           disposition: currentDisposition,
           sortBy: currentSortBy,
           sortOrder: currentSortOrder,
-          startDate: currentStart,
-          endDate: currentEnd,
+          startDate: normalizedStart,
+          endDate: normalizedEnd,
         }), { replace: true });
       } catch (e) {
         if (e?.code === "ERR_CANCELED" || controller.signal.aborted) return;
         console.error("خطا در دریافت تماس‌های خروجی", e);
         setData([]);
+        setListError("دریافت تماس‌های خروجی با خطا مواجه شد.");
         setMeta((prev) => ({ ...prev, total: 0, lastPage: 1 }));
       } finally {
         if (callsAbortRef.current === controller && !controller.signal.aborted) setLoading(false);
@@ -337,13 +358,16 @@ const OutboundCallHistories = () => {
 
   const handleSearch = useCallback((overrides = {}) => {
     setSearchError("");
+    const start = normalizeJalaliDateOnly(startDate);
+    const end = normalizeJalaliDateOnly(endDate);
+    if (!start || !end) {
+      setSearchError("انتخاب هر دو تاریخ شروع و پایان الزامی است.");
+      return;
+    }
     if (!isJalaliDateRangeValid(startDate, endDate)) {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
       return;
     }
-
-    const start = normalizeJalaliDateOnly(startDate);
-    const end = normalizeJalaliDateOnly(endDate);
 
     fetchData({
       page: 1,
@@ -361,6 +385,29 @@ const OutboundCallHistories = () => {
       currentSchoolId: overrides.schoolId ?? schoolId,
     });
   }, [fetchData, sort.by, sort.order, type, q, disposition, startDate, endDate, ssn, tagId, usernameInput, supportFormId, schoolId]);
+
+  useEffect(() => {
+    if (!dateEffectMountedRef.current) {
+      dateEffectMountedRef.current = true;
+      return undefined;
+    }
+    callsAbortRef.current?.abort();
+    setData([]);
+    setMeta(resetOutboundPage);
+    const start = normalizeJalaliDateOnly(startDate);
+    const end = normalizeJalaliDateOnly(endDate);
+    if (!start || !end) {
+      setSearchError("انتخاب هر دو تاریخ شروع و پایان الزامی است.");
+      return undefined;
+    }
+    if (start > end) {
+      setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
+      return undefined;
+    }
+    setSearchError("");
+    const timer = setTimeout(() => handleSearch(), 250);
+    return () => clearTimeout(timer);
+  }, [startDate, endDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePageChange = useCallback(
     (page) => {
@@ -417,25 +464,15 @@ const OutboundCallHistories = () => {
       setUsernameInput("");
       setSupportFormId("");
       setTagId("");
-      setStartDate(null);
-      setEndDate(null);
+      const defaultRange = createDefaultJalaliMonthRange("Asia/Tehran");
+      setStartDate(outboundDateObject(defaultRange.startDate));
+      setEndDate(outboundDateObject(defaultRange.endDate));
+      setData([]);
+      setMeta(resetOutboundPage);
+      callsAbortRef.current?.abort();
       setSearchError("");
-      fetchData({
-        page: 1,
-        currentType: "",
-        currentQ: "",
-        currentDisposition: "ALL",
-        currentSortBy: sort.by,
-        currentSortOrder: sort.order,
-        currentStart: "",
-        currentEnd: "",
-        currentSsn: "",
-        currentTagId: "",
-        currentUsername: "",
-        currentSupportFormId: "",
-      });
   },
-    [fetchData, sort.by, sort.order]
+    []
   );
 
   const formatBytes = (bytes) => {
@@ -456,6 +493,10 @@ const OutboundCallHistories = () => {
 
   const handleExport = useCallback(async (format = "xlsx") => {
     if (excelAbortRef.current) return;
+    if (!normalizeJalaliDateOnly(startDate) || !normalizeJalaliDateOnly(endDate)) {
+      setSearchError("انتخاب هر دو تاریخ شروع و پایان الزامی است.");
+      return;
+    }
     if (!isJalaliDateRangeValid(startDate, endDate)) {
       setSearchError("تاریخ شروع نمی‌تواند بعد از تاریخ پایان باشد.");
       return;
@@ -1172,7 +1213,14 @@ const OutboundCallHistories = () => {
               </CardHeader>
 
               <CardBody className="p-0">
-                <TableContainer
+                {listError ? (
+                  <div className="alert alert-danger text-center m-3 mb-0">
+                    {listError}
+                    <div className="mt-2"><Button color="danger" outline size="sm" onClick={() => handleSearch()}>تلاش مجدد</Button></div>
+                  </div>
+                ) : !loading && data.length === 0 ? (
+                  <div className="text-center text-muted py-5">در بازه انتخاب‌شده تماسی یافت نشد</div>
+                ) : <TableContainer
                   columns={columns}
                   data={data || []}
                   isGlobalFilter={false}
@@ -1184,7 +1232,7 @@ const OutboundCallHistories = () => {
                   theadClass="table-light"
                   tableClass="table-bordered table-hover align-middle mb-0"
                   divClassName="table-responsive"
-                />
+                />}
 
                 <div className="px-3 py-2 border-top bg-light">
                   <Paginations
