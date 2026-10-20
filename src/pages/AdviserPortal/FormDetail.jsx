@@ -23,6 +23,7 @@ import { toast } from "react-toastify";
 import moment from "moment-jalaali";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 import CallTrackingWarningModal from "./CallTrackingWarningModal.jsx";
 import { getCallTrace } from "../../services/voipService.jsx";
 import { isQueuedCallResponse, normalizeQueuedCall, pollQueuedCallTrace } from "./queuedCallUtils.js";
@@ -35,6 +36,7 @@ import {
   getStudentCallLogs,
   makeCall,
   submitAnswers,
+  updateAdviserStudentStatus,
   updateAdviserStudentWorkShift,
 } from "../../services/adviserPortalService.jsx";
 import {
@@ -65,7 +67,7 @@ const formatDuration = (seconds) => {
   return `${m}:${String(s).padStart(2, "0")}`;
 };
 
-const callStatusConfig = {
+export const callStatusConfig = {
   0: { label: "بدون وضعیت", color: "secondary" },
   1: { label: "موفق", color: "success" },
   2: { label: "ناموفق/ناقص", color: "danger" },
@@ -462,6 +464,7 @@ const FormDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { hasPermission } = useAuth();
 
   const [form, setForm] = useState(null);
   const [stats, setStats] = useState(null);
@@ -477,6 +480,7 @@ const FormDetail = () => {
   const [workShiftsLoading, setWorkShiftsLoading] = useState(true);
   const [workShiftsError, setWorkShiftsError] = useState(false);
   const [updatingShiftIds, setUpdatingShiftIds] = useState({});
+  const [updatingStatusIds, setUpdatingStatusIds] = useState({});
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [answerCallContext, setAnswerCallContext] = useState(null);
@@ -486,6 +490,7 @@ const FormDetail = () => {
 
   const callCooldown = useRef({});
   const shiftRequestVersions = useRef({});
+  const statusRequests = useRef({});
   const studentsRequest = useRef(null);
   const accessDeniedHandled = useRef(false);
   const [callingIds, setCallingIds] = useState({});
@@ -493,6 +498,8 @@ const FormDetail = () => {
   const canEdit = form?.canEdit === true;
   const canCall = form?.canCall === true;
   const isReadOnly = Boolean(form) && (form.isClosed === true || !canEdit);
+  const canUpdateStudentStatus = hasPermission("adviser-portal.students.update");
+  const statusSchoolId = Number(form?.schoolId ?? location.state?.schoolId);
 
   const handleFormEnded = useCallback((error) => {
     if (!isSupportFormEndedError(error)) return false;
@@ -767,6 +774,47 @@ const FormDetail = () => {
     }
   };
 
+  const handleStudentStatusChange = async (student, selectedStatus) => {
+    const assignmentId = Number(student.id);
+    const nextStatus = Number(selectedStatus);
+    if (!canUpdateStudentStatus || !Number.isInteger(assignmentId) || assignmentId <= 0) return;
+    if (!Number.isInteger(statusSchoolId) || statusSchoolId <= 0 || ![0, 1, 2].includes(nextStatus)) return;
+    if (Number(student.status ?? 0) === nextStatus || statusRequests.current[assignmentId]) return;
+
+    statusRequests.current[assignmentId] = true;
+    setUpdatingStatusIds((current) => ({ ...current, [assignmentId]: true }));
+    try {
+      const updated = await updateAdviserStudentStatus({
+        formId: Number(formId),
+        assignmentId,
+        schoolId: statusSchoolId,
+        status: nextStatus,
+      });
+      setData((current) => current.map((item) => (
+        Number(item.id) === assignmentId ? { ...item, status: updated.status } : item
+      )));
+      toast.success("وضعیت تماس دانش‌آموز به‌روزرسانی شد");
+      await Promise.allSettled([
+        fetchStudents(meta.page, search, callStatus, workShiftId, sort),
+        fetchStats(),
+      ]);
+    } catch (error) {
+      const responseStatus = error?.response?.status;
+      if (responseStatus === 403) {
+        toast.error("اجازه تغییر وضعیت این تخصیص را ندارید");
+        await Promise.allSettled([
+          fetchStudents(meta.page, search, callStatus, workShiftId, sort),
+          fetchStats(),
+        ]);
+      } else if (responseStatus !== 401) {
+        toast.error(error?.response?.data?.message || "به‌روزرسانی وضعیت تماس انجام نشد");
+      }
+    } finally {
+      delete statusRequests.current[assignmentId];
+      setUpdatingStatusIds((current) => ({ ...current, [assignmentId]: false }));
+    }
+  };
+
   const formTitle = form?.title || `فرم ${formId}`;
   const formHeadings = parseFormHeadings(form?.headings);
 
@@ -939,7 +987,7 @@ const FormDetail = () => {
                       <th style={{ width: 110 }}>مجموع تماس‌ها</th>
                       <th>آخرین تماس</th>
                       <th style={{ width: 80 }}>پاسخ</th>
-                      <th style={{ width: 130 }} role="button" onClick={handleStatusSort}>
+                      <th style={{ minWidth: 210 }} role="button" onClick={handleStatusSort}>
                         وضعیت تماس
                         {sort.by === "status" && <i className={`bx bx-sort-${sort.order === "ASC" ? "up" : "down"} ms-1`} />}
                       </th>
@@ -997,9 +1045,26 @@ const FormDetail = () => {
                           )}
                         </td>
                         <td>
-                          <Badge color={(callStatusConfig[student.status] || callStatusConfig[0]).color} pill>
-                            {(callStatusConfig[student.status] || callStatusConfig[0]).label}
-                          </Badge>
+                          <div className="d-flex align-items-center gap-2">
+                            <Badge color={(callStatusConfig[student.status] || callStatusConfig[0]).color} pill>
+                              {(callStatusConfig[student.status] || callStatusConfig[0]).label}
+                            </Badge>
+                            <Input
+                              type="select"
+                              bsSize="sm"
+                              aria-label={`تغییر وضعیت تماس ${student.name || student.studentId || student.id}`}
+                              value={String(student.status ?? 0)}
+                              disabled={!canUpdateStudentStatus || updatingStatusIds[student.id] || !Number.isInteger(statusSchoolId) || statusSchoolId <= 0}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) => handleStudentStatusChange(student, event.target.value)}
+                              style={{ minWidth: 115 }}
+                            >
+                              {Object.entries(callStatusConfig).map(([value, config]) => (
+                                <option key={value} value={value}>{config.label}</option>
+                              ))}
+                            </Input>
+                            {updatingStatusIds[student.id] && <Spinner size="sm" color="primary" />}
+                          </div>
                         </td>
                         <td>
                           <div className="d-flex align-items-center gap-2">

@@ -115,10 +115,18 @@ export function scheduleDebouncedSearch(callback, value, delay = SEARCH_DEBOUNCE
 }
 
 export function formatReportDuration(seconds) {
-  if (seconds == null || seconds === "") return "—"
+  if (seconds == null || seconds === "") return "00:00:00"
   const total = Math.max(0, Math.round(Number(seconds) || 0))
   return [Math.floor(total / 3600), Math.floor((total % 3600) / 60), total % 60]
     .map((part) => String(part).padStart(2, "0")).join(":")
+}
+
+export function formatReportNumber(value) {
+  return Number(value ?? 0).toLocaleString("fa-IR")
+}
+
+export function formatReportPercent(value) {
+  return `${Number(value ?? 0).toLocaleString("fa-IR", { maximumFractionDigits: 1 })}٪`
 }
 
 export function comprehensiveViewState({ loading, error, formsCount, statusesCount, chartCount }) {

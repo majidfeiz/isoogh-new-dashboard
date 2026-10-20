@@ -4,6 +4,8 @@ import {
   chartColor,
   comprehensiveViewState,
   formatReportDuration,
+  formatReportNumber,
+  formatReportPercent,
   normalizeFormIds,
   parseComprehensiveQuery,
   pickerDateFromBoundary,
@@ -89,6 +91,11 @@ test("debounces search and supports cancellation", () => {
 
 test("formats time, keeps unknown chart statuses and exposes view states", () => {
   expect(formatReportDuration(3661)).toBe("01:01:01")
+  expect(formatReportDuration(0)).toBe("00:00:00")
+  expect(formatReportDuration(null)).toBe("00:00:00")
+  expect(formatReportNumber(0)).not.toBe("—")
+  expect(formatReportNumber(undefined)).toBe(formatReportNumber(0))
+  expect(formatReportPercent(null)).toBe(formatReportPercent(0))
   expect(chartColor({ key: "OTHER:FAILED" }, 2)).toBeTruthy()
   expect(progressValue(62.5)).toBe(62.5)
   expect(progressValue(140)).toBe(100)
