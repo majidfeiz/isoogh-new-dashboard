@@ -12,8 +12,10 @@ jest.mock("../../services/adviserPortalService.jsx", () => ({
   getStudentCallLogs: jest.fn(),
   makeCall: jest.fn(),
   submitAnswers: jest.fn(),
+  updateAdviserStudentStatus: jest.fn(),
   updateAdviserStudentWorkShift: jest.fn(),
 }));
+jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ hasPermission: () => true }) }));
 jest.mock("../../services/voipService.jsx", () => ({ getCallTrace: jest.fn() }));
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 

@@ -29,6 +29,8 @@ import {
   comprehensiveViewState,
   defaultComprehensiveQuery,
   formatReportDuration,
+  formatReportNumber,
+  formatReportPercent,
   normalizeFormIds,
   parseComprehensiveQuery,
   pickerDateFromBoundary,
@@ -42,8 +44,8 @@ import {
 } from "./contactFormsComprehensiveUtils.js"
 import { isAdminUser } from "./inactiveAdvisersUtils.js"
 
-const fa = (value) => value == null ? "—" : Number(value).toLocaleString("fa-IR")
-const percent = (value) => value == null ? "—" : `${Number(value).toLocaleString("fa-IR", { maximumFractionDigits: 1 })}٪`
+const fa = formatReportNumber
+const percent = formatReportPercent
 const dateObject = (date, isExclusiveEnd = false) => new DateObject({
   date: moment(pickerDateFromBoundary(date, isExclusiveEnd), "YYYY-MM-DD").toDate(),
   calendar: persian,
@@ -91,6 +93,29 @@ const KpiCards = ({ summary, loading }) => {
     </CardBody></Card></Col>
   </Row>
 }
+
+export const createStatusColumns = () => [
+  { id: "label", accessorKey: "label", header: "نوع تماس", cell: ({ getValue }) => getValue() ?? "—" },
+  { id: "totalDurationSeconds", accessorKey: "totalDurationSeconds", header: "مجموع زمان", cell: ({ getValue }) => formatReportDuration(getValue()) },
+  { id: "avgDurationSeconds", accessorKey: "avgDurationSeconds", header: "میانگین زمان", cell: ({ getValue }) => formatReportDuration(getValue()) },
+  { id: "uniqueStudents", accessorKey: "uniqueStudents", header: "دانش‌آموز یکتا", cell: ({ getValue }) => fa(getValue()) },
+  { id: "totalCalls", accessorKey: "totalCalls", header: "تعداد تماس", cell: ({ getValue }) => fa(getValue()) },
+  { id: "percent", accessorKey: "percent", header: "سهم از کل", cell: ({ getValue }) => percent(getValue()) },
+].map((column) => ({ ...column, enableColumnFilter: false }))
+
+export const createFormColumns = () => [
+  { id: "formTitle", accessorKey: "formTitle", header: "نام فرم", cell: ({ getValue }) => getValue() ?? "—" },
+  ...["assignedStudents", "completedStudents", "remainingStudents"].map((id, index) => ({
+    id, accessorKey: id, header: ["تخصیص‌یافته", "تکمیل‌شده", "باقی‌مانده"][index], cell: ({ getValue }) => fa(getValue()),
+  })),
+  { id: "progressPercent", accessorKey: "progressPercent", header: "پیشرفت", cell: ({ getValue }) => <div style={{ minWidth: 110 }}><small>{percent(getValue())}</small><Progress aria-label="پیشرفت فرم" value={progressValue(getValue())} color="success" style={{ height: 6 }} /></div> },
+  ...["totalCalls", "answeredCalls", "uniqueStudents"].map((id, index) => ({
+    id, accessorKey: id, header: ["کل تماس", "پاسخ‌داده‌شده", "دانش‌آموز یکتا"][index], cell: ({ getValue }) => fa(getValue()),
+  })),
+  ...["totalDurationSeconds", "avgDurationSeconds"].map((id, index) => ({
+    id, accessorKey: id, header: ["مجموع زمان", "میانگین زمان"][index], cell: ({ getValue }) => formatReportDuration(getValue()),
+  })),
+].map((column) => ({ ...column, enableColumnFilter: false }))
 
 const ContactFormsComprehensive = () => {
   document.title = "گزارش جامع فرم‌های تماس | داشبورد آیسوق"
@@ -208,28 +233,8 @@ const ContactFormsComprehensive = () => {
     }
   }
 
-  const statusColumns = useMemo(() => [
-    { id: "label", accessorKey: "label", header: "نوع تماس", cell: ({ getValue }) => getValue() || "—" },
-    { id: "totalDurationSeconds", accessorKey: "totalDurationSeconds", header: "مجموع زمان", cell: ({ getValue }) => formatReportDuration(getValue()) },
-    { id: "avgDurationSeconds", accessorKey: "avgDurationSeconds", header: "میانگین زمان", cell: ({ getValue }) => formatReportDuration(getValue()) },
-    { id: "uniqueStudents", accessorKey: "uniqueStudents", header: "دانش‌آموز یکتا", cell: ({ getValue }) => fa(getValue()) },
-    { id: "totalCalls", accessorKey: "totalCalls", header: "تعداد تماس", cell: ({ getValue }) => fa(getValue()) },
-    { id: "percent", accessorKey: "percent", header: "سهم از کل", cell: ({ getValue }) => percent(getValue()) },
-  ], [])
-
-  const formColumns = useMemo(() => [
-    { id: "formTitle", accessorKey: "formTitle", header: "نام فرم", cell: ({ getValue }) => getValue() || "—" },
-    ...["assignedStudents", "completedStudents", "remainingStudents"].map((id, index) => ({
-      id, accessorKey: id, header: ["تخصیص‌یافته", "تکمیل‌شده", "باقی‌مانده"][index], cell: ({ getValue }) => fa(getValue()),
-    })),
-    { id: "progressPercent", accessorKey: "progressPercent", header: "پیشرفت", cell: ({ getValue }) => <div style={{ minWidth: 110 }}><small>{percent(getValue())}</small><Progress value={progressValue(getValue())} color="success" style={{ height: 6 }} /></div> },
-    ...["totalCalls", "answeredCalls", "uniqueStudents"].map((id, index) => ({
-      id, accessorKey: id, header: ["کل تماس", "پاسخ‌داده‌شده", "دانش‌آموز یکتا"][index], cell: ({ getValue }) => fa(getValue()),
-    })),
-    ...["totalDurationSeconds", "avgDurationSeconds"].map((id, index) => ({
-      id, accessorKey: id, header: ["مجموع زمان", "میانگین زمان"][index], cell: ({ getValue }) => formatReportDuration(getValue()),
-    })),
-  ], [])
+  const statusColumns = useMemo(createStatusColumns, [])
+  const formColumns = useMemo(createFormColumns, [])
 
   const state = comprehensiveViewState({
     loading, error, formsCount: data.forms.length, statusesCount: data.statuses.length, chartCount: data.chart.length,
@@ -272,7 +277,7 @@ const ContactFormsComprehensive = () => {
       </div>
       <Row className="g-4 mb-4">
         <Col xl="7"><Card className="h-100"><CardHeader className="bg-white d-flex justify-content-between align-items-center">
-          <h6 className="mb-0">وضعیت تماس‌ها</h6><Input value={statusSearch} onChange={(event) => setStatusSearch(event.target.value)}
+          <h6 className="mb-0">وضعیت تماس‌ها</h6><Input aria-label="جستجو در وضعیت‌ها" value={statusSearch} onChange={(event) => setStatusSearch(event.target.value)}
             placeholder="جستجو در وضعیت‌ها" style={{ maxWidth: 260 }} /></CardHeader><CardBody>
           {loading ? <SectionSkeleton /> : data.statuses.length ? <TableContainer columns={statusColumns} data={data.statuses}
             isGlobalFilter={false} isPagination={false} manualSorting
@@ -290,7 +295,7 @@ const ContactFormsComprehensive = () => {
         </CardBody></Card></Col>
       </Row>
       <Card><CardHeader className="bg-white d-flex justify-content-between align-items-center"><h6 className="mb-0">پیشرفت فرم‌ها</h6>
-        <Input value={formSearch} onChange={(event) => setFormSearch(event.target.value)} placeholder="جستجو در فرم‌ها" style={{ maxWidth: 280 }} /></CardHeader><CardBody>
+        <Input aria-label="جستجو در فرم‌ها" value={formSearch} onChange={(event) => setFormSearch(event.target.value)} placeholder="جستجو در فرم‌ها" style={{ maxWidth: 280 }} /></CardHeader><CardBody>
         {loading ? <SectionSkeleton rows={8} columns={8} /> : data.forms.length ? <>
           <TableContainer columns={formColumns} data={data.forms} isGlobalFilter={false} isPagination={false} manualSorting
             sortingState={[{ id: query.sortBy, desc: query.sortOrder === "DESC" }]}
@@ -298,6 +303,7 @@ const ContactFormsComprehensive = () => {
             tableClass="table-bordered table-nowrap align-middle mb-0" />
           <div className="mt-3"><Paginations perPageData={data.meta.limit || query.limit} data={data.forms}
             totalRecords={data.meta.total || 0} currentPage={data.meta.page || query.page}
+            totalPages={data.meta.lastPage}
             setCurrentPage={(page) => updateQuery({ page })} isShowingPageLength paginationDiv="col-sm-auto"
             paginationClass="pagination pagination-sm mb-0" /></div></> : <div className="text-center text-muted py-5">فرمی یافت نشد.</div>}
       </CardBody></Card>

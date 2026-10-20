@@ -320,6 +320,8 @@ export const API_ROUTES = {
     workShifts: "/adviser-portal/work-shifts",
     studentWorkShift: (formId, studentId) =>
       `/adviser-portal/support-forms/${formId}/students/${studentId}/work-shift`,
+    studentAssignmentStatus: (formId, assignmentId) =>
+      `/adviser-portal/support-forms/${formId}/students/${assignmentId}/status`,
     supportFormStats: (id) => `/adviser-portal/support-forms/${id}/stats`,
     submitAnswers: (formId, studentId) =>
       `/adviser-portal/support-forms/${formId}/students/${studentId}/answers`,

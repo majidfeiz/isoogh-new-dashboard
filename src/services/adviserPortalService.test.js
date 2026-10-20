@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents, getAdviserSupportFormDetail, getStudentAnswers, getStudentCallLogs, getStudentProfile, makeCall, submitAnswers, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
+import { getAdviserFormStudents, getAdviserSupportFormDetail, getStudentAnswers, getStudentCallLogs, getStudentProfile, makeCall, submitAnswers, updateAdviserStudentStatus, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -275,6 +275,33 @@ test("updates work shift with the student id and uses the returned row values", 
     workShiftId: 5,
     workShift: { id: 5, name: "عصر" },
   })
+})
+
+test.each([0, 1, 2])("updates assignment status %s with assignment id and numeric school id", async (status) => {
+  apiPatch.mockResolvedValue({
+    data: { data: { assignmentId: 10659006, studentId: 5521, supportFormId: 3130, status, updatedAt: "2026-10-21T08:30:00.000Z" } },
+  })
+
+  await expect(updateAdviserStudentStatus({
+    formId: 3130,
+    assignmentId: 10659006,
+    schoolId: "146",
+    status,
+  })).resolves.toEqual(expect.objectContaining({ assignmentId: 10659006, studentId: 5521, status }))
+
+  expect(apiPatch).toHaveBeenLastCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/support-forms/3130/students/10659006/status",
+    { schoolId: 146, status },
+    { silent: true }
+  )
+})
+
+test("does not issue a status request without a valid school or with an invalid status", async () => {
+  await expect(updateAdviserStudentStatus({ formId: 3130, assignmentId: 10, status: 1 }))
+    .rejects.toThrow("schoolId")
+  await expect(updateAdviserStudentStatus({ formId: 3130, assignmentId: 10, schoolId: 146, status: 3 }))
+    .rejects.toThrow("status")
+  expect(apiPatch).not.toHaveBeenCalled()
 })
 
 test("keeps tag values scoped to each requested student profile", async () => {
