@@ -403,6 +403,35 @@ export async function updateAdviserStudentWorkShift({ formId, studentId, workShi
   };
 }
 
+export async function updateAdviserStudentStatus({ formId, assignmentId, schoolId, status }) {
+  const normalizedFormId = normalizeId(formId);
+  const normalizedAssignmentId = normalizeId(assignmentId);
+  const normalizedSchoolId = normalizeId(schoolId);
+  const normalizedStatus = Number(status);
+  if (!normalizedFormId || !normalizedAssignmentId || !normalizedSchoolId) {
+    throw new Error("formId, assignmentId and schoolId are required")
+  }
+  if (![0, 1, 2].includes(normalizedStatus)) {
+    throw new Error("status must be 0, 1 or 2")
+  }
+  const url = getApiUrl(API_ROUTES.adviserPortal.studentAssignmentStatus(
+    normalizedFormId,
+    normalizedAssignmentId
+  ));
+  const res = await apiPatch(url, {
+    schoolId: normalizedSchoolId,
+    status: normalizedStatus,
+  }, { silent: true });
+  const data = res?.data?.data || res?.data || {};
+  return {
+    assignmentId: data?.assignmentId ?? data?.assignment_id ?? normalizedAssignmentId,
+    studentId: data?.studentId ?? data?.student_id ?? null,
+    supportFormId: data?.supportFormId ?? data?.support_form_id ?? normalizedFormId,
+    status: data?.status == null ? normalizedStatus : Number(data.status),
+    updatedAt: data?.updatedAt ?? data?.updated_at ?? null,
+  };
+}
+
 // ─── Call ─────────────────────────────────────────────────────────────────────
 
 export async function makeCall({ supportFormId, studentId, priority }) {

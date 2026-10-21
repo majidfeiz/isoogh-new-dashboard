@@ -2,6 +2,7 @@ export const INCOMING_CALL_NOTIFICATION_TYPES = [
   "incoming_call.started",
   "incoming_call.missed",
   "incoming_call.hangup",
+  "incoming_call.transferred",
 ];
 
 export const isIncomingCallNotification = (item) => INCOMING_CALL_NOTIFICATION_TYPES.includes(item?.type);
