@@ -1,5 +1,5 @@
-import { apiPatch } from "../helpers/httpClient.jsx";
-import { getIncomingCalls, normalizeIncomingCall, normalizeIncomingCallPriorities, updateIncomingCallSettings } from "./incomingCallService.jsx";
+import { apiGet, apiPatch } from "../helpers/httpClient.jsx";
+import { getIncomingAvailability, getIncomingCalls, normalizeIncomingCall, normalizeIncomingCallPriorities, setIncomingAvailability, updateIncomingCallSettings } from "./incomingCallService.jsx";
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -80,4 +80,29 @@ test("normalizes items returned by the incoming-calls endpoint", async () => {
   const response = await getIncomingCalls({ schoolId: 146 });
 
   expect(response.items[0]).toEqual(expect.objectContaining({ callerNumber: "0912", destination: "219", startedAt: "2026-10-18T12:00:00.000Z" }));
+});
+
+test("gets and normalizes consultant availability for the selected school", async () => {
+  const controller = new AbortController();
+  apiGet.mockResolvedValue({ data: { data: { actorType: "consultant", schoolId: 146, isAvailable: true } } });
+
+  await expect(getIncomingAvailability("146", controller.signal)).resolves.toEqual({
+    actorType: "consultant", schoolId: 146, isAvailable: true,
+  });
+  expect(apiGet).toHaveBeenCalledWith("http://127.0.0.1:8040/incoming-calls/availability", {
+    params: { schoolId: 146 }, signal: controller.signal, silent: true,
+  });
+});
+
+test("patches availability with the exact numeric school body and trusts the response", async () => {
+  apiPatch.mockResolvedValue({ data: { data: { actorType: "supporter", schoolId: 146, isAvailable: false } } });
+
+  await expect(setIncomingAvailability("146", true)).resolves.toEqual({
+    actorType: "supporter", schoolId: 146, isAvailable: false,
+  });
+  expect(apiPatch).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/incoming-calls/availability",
+    { schoolId: 146, isAvailable: true },
+    { silent: true }
+  );
 });

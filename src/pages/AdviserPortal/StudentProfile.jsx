@@ -1176,6 +1176,10 @@ const StudentProfile = () => {
           titleLink={studentListPath}
         />
 
+        {location.state?.highlightAssignmentId != null && <Alert color="info" data-testid="highlighted-assignment">
+          <i className="bx bx-target-lock me-2" />این دانش‌آموز از تماس ورودی انتخاب شده است؛ تخصیص شماره {location.state.highlightAssignmentId} فعال است.
+        </Alert>}
+
         {isReadOnly && <Alert color="warning" className="d-flex align-items-center gap-2"><i className="bx bx-lock-alt font-size-18" />{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert>}
 
         {/* ── Hero Card ──────────────────────────────────────────────────── */}

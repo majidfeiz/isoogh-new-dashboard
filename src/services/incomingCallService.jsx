@@ -57,7 +57,30 @@ export const updateIncomingCallSettings = async (schoolId, settings) => {
 export const getIncomingSupporters = async (schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.supporters), { params: { schoolId: schoolIdOf(schoolId) }, ...options }));
 export const createIncomingSupporter = async (schoolId, supporter) => unwrap(await apiPost(getApiUrl(API_ROUTES.incomingCalls.supporters), { ...supporter, schoolId: schoolIdOf(schoolId) }, options));
 export const updateIncomingSupporter = async (id, schoolId, supporter) => unwrap(await apiPatch(getApiUrl(API_ROUTES.incomingCalls.supporter(id)), { ...supporter, schoolId: schoolIdOf(schoolId) }, options));
-export const setIncomingAvailability = async (schoolId, isAvailable, config = options) => unwrap(await apiPatch(getApiUrl(API_ROUTES.incomingCalls.availability), { schoolId: schoolIdOf(schoolId), isAvailable: Boolean(isAvailable) }, config));
+export const getIncomingAvailability = async (schoolId, signal) => {
+  const data = unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.availability), {
+    params: { schoolId: schoolIdOf(schoolId) },
+    signal,
+    ...options,
+  }));
+  return {
+    actorType: data?.actorType ?? data?.actor_type ?? "",
+    schoolId: Number(data?.schoolId ?? data?.school_id ?? schoolIdOf(schoolId)),
+    isAvailable: data?.isAvailable === true || Number(data?.is_available) === 1,
+  };
+};
+export const setIncomingAvailability = async (schoolId, isAvailable, config = options) => {
+  const normalizedSchoolId = schoolIdOf(schoolId);
+  const data = unwrap(await apiPatch(getApiUrl(API_ROUTES.incomingCalls.availability), {
+    schoolId: normalizedSchoolId,
+    isAvailable: Boolean(isAvailable),
+  }, config));
+  return {
+    actorType: data?.actorType ?? data?.actor_type ?? "",
+    schoolId: Number(data?.schoolId ?? data?.school_id ?? normalizedSchoolId),
+    isAvailable: data?.isAvailable === true || Number(data?.is_available) === 1,
+  };
+};
 export const getIncomingCalls = async ({ schoolId, page = 1, limit = 15, status = "", search = "" }) => {
   const result = pageResult(await apiGet(getApiUrl(API_ROUTES.incomingCalls.list), { params: { schoolId: schoolIdOf(schoolId), page, limit, status: status || undefined, search: search.trim() || undefined }, ...options }), page, limit);
   return { ...result, items: result.items.map(normalizeIncomingCall) };
