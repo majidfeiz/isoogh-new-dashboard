@@ -13,6 +13,10 @@ test("recognizes and styles persistent incoming-call notifications", () => {
   expect(incomingNotificationDedupeKey(notification)).toBe("481:missed");
 });
 
+test("recognizes transferred incoming-call notifications", () => {
+  expect(isIncomingCallNotification({ type: "incoming_call.transferred" })).toBe(true);
+});
+
 test("maps notification data to the realtime profile shape", () => {
   expect(notificationToIncomingCall(notification)).toEqual(expect.objectContaining({
     callId: 481, schoolId: 146, status: "missed",
