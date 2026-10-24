@@ -20,6 +20,8 @@ export const API_ROUTES = {
   },
   incomingCalls: {
     list: "/incoming-calls",
+    exportCsv: "/incoming-calls/export/csv",
+    exportXlsx: "/incoming-calls/export/xlsx",
     settings: "/incoming-calls/settings",
     callerProfile: (id) => `/incoming-calls/${id}/caller-profile`,
     supporters: "/incoming-calls/supporters",

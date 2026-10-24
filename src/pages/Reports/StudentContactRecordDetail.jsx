@@ -249,12 +249,13 @@ const StudentContactRecordDetail = () => {
                   </button>
                 </th>
               })}
-              <th>عملیات</th>
+              <th>جهت</th><th>مبدأ</th><th>مقصد</th><th>پایان</th><th>فایل صوتی</th><th>عملیات</th>
             </tr></thead>
             <tbody>{data.calls.map((call, index) => {
               const status = callStatus(call.status, call.statusLabel)
               const callId = getContactCallId(call)
               const rowKey = `${callId ?? "call"}-${call.historyId ?? "history"}-${index}`
+              const canShowAnswers = call.direction !== "incoming" && Boolean(call.formId || call.formTitle || call.answers?.length)
               return <tr key={rowKey}>
                 <td>{formatRecordDate(call.calledAt)}</td>
                 <td>{text(call.formTitle)}</td>
@@ -262,11 +263,17 @@ const StudentContactRecordDetail = () => {
                 <td>{formatDuration(call.durationSeconds)}</td>
                 <td>{text(call.adviserName)}</td>
                 <td>{text(call.headAdviserName)}</td>
-                <td><button type="button" className="btn btn-sm btn-outline-primary"
+                <td><Badge color={call.direction === "incoming" ? "info" : "primary"}>{call.direction === "incoming" ? "ورودی" : "خروجی"}</Badge></td>
+                <td dir="ltr" className="text-end">{text(call.src)}</td><td dir="ltr" className="text-end">{text(call.dst)}</td><td>{formatRecordDate(call.endedAt)}</td>
+                <td>{call.audioFiles?.length ? <div className="d-grid gap-2">{call.audioFiles.map((audio) => <div key={audio.id || audio.url}>
+                  <audio controls preload="none" src={audio.url} aria-label={audio.name || "فایل صوتی"} />
+                  <a className="small d-block" href={audio.url} download={audio.name || true}>دانلود {audio.name || "فایل صوتی"}</a>
+                </div>)}</div> : "—"}</td>
+                <td>{canShowAnswers ? <button type="button" className="btn btn-sm btn-outline-primary"
                   onClick={(event) => openAnswersModal(event, call)}
                   aria-label={`مشاهده پاسخ‌های تماس ${callId || ""}`}>
                   <i className="bx bx-show me-1" aria-hidden="true" />مشاهده پاسخ‌ها
-                </button></td>
+                </button> : "—"}</td>
               </tr>
             })}</tbody>
           </Table>
