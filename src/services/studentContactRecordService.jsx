@@ -13,6 +13,18 @@ export function buildStudentContactRecordParams(params = {}, includePagination =
 }
 
 const unwrap = (response) => response?.data?.data ?? response?.data ?? {}
+const normalizeContactCall = (call = {}) => ({
+  ...call,
+  direction: call.direction === "incoming" ? "incoming" : "outbound",
+  calledAt: call.calledAt ?? call.startedAt ?? call.started_at,
+  endedAt: call.endedAt ?? call.ended_at,
+  durationSeconds: call.durationSeconds ?? call.duration_seconds,
+  formId: call.formId ?? call.form_id ?? call.supportForm?.formId ?? call.support_form?.form_id,
+  formTitle: call.formTitle ?? call.form_title ?? call.supportForm?.title ?? call.support_form?.title,
+  src: call.src ?? call.source ?? "",
+  dst: call.dst ?? call.destination ?? "",
+  audioFiles: Array.isArray(call.audioFiles ?? call.audio_files) ? (call.audioFiles ?? call.audio_files) : [],
+})
 
 export async function getStudentContactRecords(params = {}, signal) {
   const response = await apiGet(getApiUrl(API_ROUTES.reports.studentContactRecords), {
@@ -47,7 +59,7 @@ export async function getStudentContactRecord(studentId, params = {}, signal) {
     student: data?.student || null,
     summary: data?.summary || {},
     forms: data?.forms || [],
-    calls: data?.calls || [],
+    calls: (data?.calls || []).map(normalizeContactCall),
     meta: data?.meta || { page: params.page || 1, limit: params.limit || 10, total: 0, lastPage: 1 },
   }
 }
