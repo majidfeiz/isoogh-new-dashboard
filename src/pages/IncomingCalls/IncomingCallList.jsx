@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
+import DatePicker, { DateObject } from "react-multi-date-picker"
+import gregorian from "react-date-object/calendars/gregorian"
+import persian from "react-date-object/calendars/persian"
+import gregorianEn from "react-date-object/locales/gregorian_en"
+import persianFa from "react-date-object/locales/persian_fa"
 import { Alert, Badge, Button, Card, CardBody, Col, Input, Label, Row, Table } from "reactstrap"
 import Breadcrumbs from "../../components/Common/Breadcrumb.jsx"
 import Paginations from "../../components/Common/Paginations.jsx"
@@ -12,6 +17,12 @@ import { incomingCallRangeError, parseIncomingCallQuery, serializeIncomingCallQu
 const display = (input) => input == null || input === "" ? "—" : input
 const personName = (person, unknown = false) => person ? display(person.name) : unknown ? "شناسایی نشده" : "—"
 const sortHeaders = [["status", "وضعیت"], ["durationSeconds", "مدت مکالمه"], ["startedAt", "شروع"], ["endedAt", "پایان"]]
+const pickerValue = (date) => date
+  ? new DateObject({ date, format: "YYYY-MM-DD", calendar: gregorian, locale: gregorianEn }).convert(persian, persianFa)
+  : null
+const apiDate = (date) => date
+  ? new DateObject(date).convert(gregorian, gregorianEn).format("YYYY-MM-DD")
+  : ""
 
 const IncomingCallList = () => {
   document.title = "گزارش تماس‌های ورودی | آیسوق"
@@ -75,8 +86,12 @@ const IncomingCallList = () => {
         <Col xl="2" md="4"><Label>کد ملی دقیق</Label><Input value={query.ssn} onChange={(event) => updateQuery({ ssn: event.target.value.trim(), page: 1 })} /></Col>
         <Col xl="2" md="4"><Label>نام کاربری دقیق</Label><Input value={query.username} onChange={(event) => updateQuery({ username: event.target.value.trim(), page: 1 })} /></Col>
         <Col xl="3" md="4"><Label>فرم تماس</Label><Input type="select" value={query.formId} disabled={!query.schoolId} onChange={(event) => updateQuery({ formId: event.target.value, page: 1 })}><option value="">همه فرم‌ها</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.title || form.name || `فرم ${form.id}`}</option>)}</Input></Col>
-        <Col xl="2" md="4"><Label>از تاریخ</Label><Input type="date" value={query.from} onChange={(event) => updateQuery({ from: event.target.value, page: 1 })} /></Col>
-        <Col xl="2" md="4"><Label>تا پایان روز</Label><Input type="date" value={query.to} min={query.from || undefined} onChange={(event) => updateQuery({ to: event.target.value, page: 1 })} /></Col>
+        <Col xl="2" md="4"><Label htmlFor="incoming-calls-from">از تاریخ</Label><DatePicker id="incoming-calls-from" calendar={persian} locale={persianFa}
+          value={pickerValue(query.from)} onChange={(date) => updateQuery({ from: apiDate(date), page: 1 })} format="YYYY/MM/DD"
+          inputClass="form-control" calendarPosition="bottom-right" placeholder="انتخاب تاریخ شمسی" /></Col>
+        <Col xl="2" md="4"><Label htmlFor="incoming-calls-to">تا پایان روز</Label><DatePicker id="incoming-calls-to" calendar={persian} locale={persianFa}
+          value={pickerValue(query.to)} onChange={(date) => updateQuery({ to: apiDate(date), page: 1 })} format="YYYY/MM/DD"
+          inputClass="form-control" calendarPosition="bottom-right" placeholder="انتخاب تاریخ شمسی" /></Col>
         <Col xl="2" md="4"><Label>تعداد در صفحه</Label><Input type="select" value={query.limit} onChange={(event) => updateQuery({ limit: Number(event.target.value), page: 1 })}>{[10, 20, 50, 100].map((limit) => <option key={limit}>{limit}</option>)}</Input></Col>
         {hasPermission("incoming-calls.export") && <Col xl="3" md="8" className="d-flex gap-2"><Button color="success" outline disabled={!!exporting || !query.schoolId || !!rangeError} onClick={() => download("csv")}>{exporting === "csv" ? "در حال دریافت..." : "خروجی CSV"}</Button><Button color="success" disabled={!!exporting || !query.schoolId || !!rangeError} onClick={() => download("xlsx")}>{exporting === "xlsx" ? "در حال دریافت..." : "خروجی Excel"}</Button></Col>}
       </Row>
