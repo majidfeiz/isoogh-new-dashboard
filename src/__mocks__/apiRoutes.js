@@ -146,6 +146,7 @@ export const API_ROUTES = {
   advisers: {
     list: "/advisers",
     superStatus: (adviserId) => `/advisers/${adviserId}/super-status`,
+    accountStatus: (adviserId) => `/advisers/${adviserId}/account-status`,
     subordinates: (adviserId) => `/advisers/${adviserId}/subordinates`,
     subordinate: (adviserId, subordinateId) => `/advisers/${adviserId}/subordinates/${subordinateId}`,
     subordinatesExport: (adviserId) => `/advisers/${adviserId}/subordinates/export`,

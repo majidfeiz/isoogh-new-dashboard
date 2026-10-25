@@ -160,6 +160,13 @@ export async function updateAdviserSuperStatus(adviserId, { schoolId, isSuper })
   return res?.data?.data ?? res?.data;
 }
 
+export async function updateAdviserAccountStatus(adviserId, { schoolId, isActive }) {
+  const res = await apiPatch(getApiUrl(API_ROUTES.advisers.accountStatus(adviserId)), {
+    schoolId: Number(schoolId), isActive: Boolean(isActive),
+  }, { silent: true });
+  return res?.data?.data ?? res?.data;
+}
+
 export async function getAdviserSubordinates(adviserId, {
   schoolId,
   page = 1,

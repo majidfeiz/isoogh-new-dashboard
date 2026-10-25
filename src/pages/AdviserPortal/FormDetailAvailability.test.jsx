@@ -144,6 +144,18 @@ test("handles SUPPORT_FORM_ENDED from an in-flight call without removing existin
   expect(screen.getByText("دانش‌آموز")).toBeInTheDocument();
 });
 
+test("disables new calls after ADVISER_ACCOUNT_INACTIVE without clearing students", async () => {
+  getAdviserSupportFormDetail.mockResolvedValue({ id: 10, schoolId: 146, title: "فرم فعال", isClosed: false, canEdit: true, canCall: true, questions: [] });
+  makeCall.mockRejectedValue({ response: { status: 403, data: { code: "ADVISER_ACCOUNT_INACTIVE" } } });
+  renderPage();
+  const callButton = await screen.findByTitle("برقراری تماس");
+  fireEvent.click(callButton);
+  expect(await screen.findByText(/حساب شما در این مجموعه غیرفعال است/)).toBeInTheDocument();
+  expect(callButton).toBeDisabled();
+  expect(screen.getByText("دانش‌آموز")).toBeInTheDocument();
+  expect(getAdviserFormStudents).toHaveBeenCalledTimes(1);
+});
+
 test("renders contact-form headings as readable fields instead of raw JSON", async () => {
   getAdviserSupportFormDetail.mockResolvedValue({
     id: 10,
