@@ -457,6 +457,7 @@ export const API_ROUTES = {
     adviserPerformanceExport: "/reports/adviser-performance/export",
     adviserPerformanceSchools: "/reports/adviser-performance/schools",
     adviserPerformanceForms: "/reports/adviser-performance/forms",
+    adviserFormCapacity: "/reports/adviser-form-capacity",
     callsByHour: "/reports/calls-by-hour",
     studentsCoverage: "/reports/students-coverage",
     uncontactedStudents: "/reports/uncontacted-students",

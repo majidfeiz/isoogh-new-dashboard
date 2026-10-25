@@ -35,6 +35,7 @@ import Paginations from "../../components/Common/Paginations.jsx";
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { adviserStudentStatus, canManageAdviserStudentArchive, isArchivedAssignment } from "./adviserStudentArchiveUtils.js";
+import { adviserCapacityConflict, notifyCapacityChanged } from "./adviserCapacityErrorUtils.js";
 import {
   getSupportForm,
   getSupportFormQuestions,
@@ -1002,8 +1003,10 @@ export const StudentsTab = ({ formId, schoolId }) => {
       const skipped = d.skipped ?? "-";
       setAlert({ type: "success", message: `وارد شد: ${added} | رد شد: ${skipped}` });
       await fetchStudents(1);
-    } catch {
-      setAlert({ type: "danger", message: "خطا در وارد کردن دانش‌آموزان." });
+    } catch (error) {
+      const conflict = adviserCapacityConflict(error);
+      if (conflict) { await fetchStudents(1); notifyCapacityChanged(formId); }
+      setAlert({ type: "danger", message: conflict?.message || "خطا در وارد کردن دانش‌آموزان." });
     } finally {
       setActionLoading(false);
     }
@@ -1039,12 +1042,14 @@ export const StudentsTab = ({ formId, schoolId }) => {
       setAlert({ type: "success", message: restoring ? "تخصیص بازگردانده شد." : "تخصیص آرشیو شد." });
     } catch (error) {
       const status = error?.response?.status;
-      setAlert({ type: "danger", message: error?.message === "missing-school-id"
+      const conflict = adviserCapacityConflict(error);
+      if (conflict) { await fetchStudents(1); notifyCapacityChanged(formId); }
+      setAlert({ type: "danger", message: conflict?.message || (error?.message === "missing-school-id"
         ? "شناسه مجموعهٔ فرم تماس در دسترس نیست. صفحه را دوباره بارگذاری کنید."
         : status === 403
         ? "شما اجازهٔ آرشیو یا بازگردانی این تخصیص را ندارید."
         : status === 404 ? "این تخصیص یا فرم تماس پیدا نشد."
-          : "تغییر وضعیت آرشیو انجام نشد." });
+          : "تغییر وضعیت آرشیو انجام نشد.") });
     } finally {
       setActionLoading(false);
     }
@@ -1120,8 +1125,10 @@ export const StudentsTab = ({ formId, schoolId }) => {
       setSelectedCandidates(new Set());
       await fetchStudents(meta.page);
       setAlert({ type: "success", message: "دانش‌آموزان اضافه شدند." });
-    } catch {
-      setAlert({ type: "danger", message: "خطا در افزودن دانش‌آموزان." });
+    } catch (error) {
+      const conflict = adviserCapacityConflict(error);
+      if (conflict) { await fetchStudents(1); notifyCapacityChanged(formId); }
+      setAlert({ type: "danger", message: conflict?.message || "خطا در افزودن دانش‌آموزان." });
     } finally {
       setAttachLoading(false);
     }
@@ -1135,8 +1142,10 @@ export const StudentsTab = ({ formId, schoolId }) => {
       const d = res?.data || res || {};
       setTagAlert({ type: "success", message: `اضافه: ${d.added ?? "-"} | رد: ${d.skipped ?? "-"}` });
       await fetchStudents(meta.page);
-    } catch {
-      setTagAlert({ type: "danger", message: "خطا در افزودن بر اساس تگ." });
+    } catch (error) {
+      const conflict = adviserCapacityConflict(error);
+      if (conflict) { await fetchStudents(1); notifyCapacityChanged(formId); }
+      setTagAlert({ type: "danger", message: conflict?.message || "خطا در افزودن بر اساس تگ." });
     } finally {
       setAttachLoading(false);
     }
@@ -1534,11 +1543,13 @@ export const AllStudentsTab = ({ formId, schoolId, incompleteOnly = false }) => 
       setAlert({ type: "success", message: restoring ? "تخصیص بازگردانده شد." : "تخصیص آرشیو شد." });
     } catch (error) {
       const status = error?.response?.status;
-      setAlert({ type: "danger", message: error?.message === "missing-school-id"
+      const conflict = adviserCapacityConflict(error);
+      if (conflict) { await fetchData(1); notifyCapacityChanged(formId); }
+      setAlert({ type: "danger", message: conflict?.message || (error?.message === "missing-school-id"
         ? "شناسه مجموعهٔ فرم تماس در دسترس نیست. صفحه را دوباره بارگذاری کنید."
         : status === 403 ? "شما اجازهٔ آرشیو یا بازگردانی این تخصیص را ندارید."
           : status === 404 ? "این تخصیص یا فرم تماس پیدا نشد."
-            : "تغییر وضعیت آرشیو انجام نشد." });
+            : "تغییر وضعیت آرشیو انجام نشد.") });
     } finally {
       setActionLoading(null);
     }
