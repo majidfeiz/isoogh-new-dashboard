@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
+  Badge,
   Button,
   Card,
   CardBody,
@@ -31,14 +32,20 @@ import {
   detachAdviserStudents,
   getAdviserStudentCandidates,
   getAdviserStudents,
+  updateAdviserAccountStatus,
 } from "../../services/adviserService.jsx";
 import { getParentTags, getParentTagValues } from "../../services/parentTagService.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { adviserAccountActive, adviserAccountErrorMessage, INACTIVE_CONFIRMATION, withAdviserAccountStatus } from "./adviserAccountStatusUtils.js";
 
 const AdviserStudents = () => {
   const { adviserId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const adviserInfo = location.state?.adviser;
+  const { hasPermission } = useAuth();
+  const [adviserInfo, setAdviserInfo] = useState(location.state?.adviser || null);
+  const schoolId = location.state?.schoolId || "";
+  const [accountLoading, setAccountLoading] = useState(false);
 
   document.title = "دانش‌آموزان مشاور | داشبورد آیسوق";
 
@@ -547,6 +554,23 @@ const AdviserStudents = () => {
   );
 
   const adviserDisplayName = adviserInfo?.user?.name || adviserInfo?.name;
+  const accountActive = adviserAccountActive(adviserInfo, schoolId);
+  const handleAccountStatus = async () => {
+    if (!schoolId || accountActive == null || accountLoading) return;
+    const nextIsActive = !accountActive;
+    if (!nextIsActive && !window.confirm(INACTIVE_CONFIRMATION)) return;
+    const previous = adviserInfo;
+    setAccountLoading(true);
+    setAlert(null);
+    setAdviserInfo((current) => withAdviserAccountStatus(current, schoolId, nextIsActive));
+    try {
+      await updateAdviserAccountStatus(adviserId, { schoolId, isActive: nextIsActive });
+      setAlert({ type: "success", message: nextIsActive ? "حساب مشاور در این مجموعه فعال شد." : "حساب مشاور در این مجموعه غیرفعال شد. سوابق و اطلاعات دانش‌آموزان حفظ شده‌اند." });
+    } catch (error) {
+      setAdviserInfo(previous);
+      setAlert({ type: "danger", message: adviserAccountErrorMessage(error) });
+    } finally { setAccountLoading(false); }
+  };
 
   return (
     <div className="page-content">
@@ -564,9 +588,11 @@ const AdviserStudents = () => {
                       ? `مشاور: ${adviserDisplayName}`
                       : `مشاور با شناسه ${adviserId}`}
                   </p>
+                  {schoolId && accountActive != null && <Badge color={accountActive ? "success" : "danger"} className="mt-1">حساب در مجموعه: {accountActive ? "فعال" : "غیرفعال"}</Badge>}
                 </div>
                 <div className="d-flex align-items-center gap-2">
                   {loading && <Spinner size="sm" color="primary" />}
+                  {hasPermission("advisers.update") && accountActive != null && <Button color={accountActive ? "danger" : "success"} outline onClick={handleAccountStatus} disabled={accountLoading}>{accountLoading ? <Spinner size="sm" /> : accountActive ? "غیرفعال‌سازی حساب" : "فعال‌سازی حساب"}</Button>}
                   <Button color="danger" onClick={() => setBulkDeleteModal(true)}>
                     حذف همه دانش‌آموزان
                   </Button>

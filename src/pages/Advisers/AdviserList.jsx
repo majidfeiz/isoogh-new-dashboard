@@ -32,7 +32,7 @@ import {
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
-import { getAdvisers, syncAdviserGrades } from "../../services/adviserService.jsx";
+import { getAdvisers, syncAdviserGrades, updateAdviserAccountStatus } from "../../services/adviserService.jsx";
 import { updateAdviserSuperStatus } from "../../services/adviserService.jsx";
 import { getGrades } from "../../services/gradeService.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
@@ -42,6 +42,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { toast } from "react-toastify";
 import AdviserRowActions from "./AdviserRowActions.jsx";
 import AdviserSubordinatesModal from "./AdviserSubordinatesModal.jsx";
+import { adviserAccountActive, adviserAccountErrorMessage, INACTIVE_CONFIRMATION, withAdviserAccountStatus } from "./adviserAccountStatusUtils.js";
 
 /**
  * @typedef {Object} AdviserListItem
@@ -86,6 +87,7 @@ const AdviserList = () => {
   const approxTotalRef = useRef(null);
   const superMutationRef = useRef(new Set());
   const [superMutationIds, setSuperMutationIds] = useState({});
+  const [accountMutationIds, setAccountMutationIds] = useState({});
   const [mutationError, setMutationError] = useState("");
   const [subordinatesAdviser, setSubordinatesAdviser] = useState(null);
   const canShow = auth?.hasPermission?.("advisers.show") === true;
@@ -274,6 +276,24 @@ const AdviserList = () => {
       setSuperMutationIds((current) => ({ ...current, [adviser.id]: false }));
     }
   }, [filters, meta.page, sort, fetchData]);
+
+  const handleAccountStatus = useCallback(async (adviser, nextIsActive) => {
+    if (!filters.schoolId || accountMutationIds[adviser.id]) return;
+    if (!nextIsActive && !window.confirm(INACTIVE_CONFIRMATION)) return;
+    const previous = adviser;
+    setAccountMutationIds((current) => ({ ...current, [adviser.id]: true }));
+    setMutationError("");
+    setData((current) => current.map((item) => item.id === adviser.id ? withAdviserAccountStatus(item, filters.schoolId, nextIsActive) : item));
+    try {
+      await updateAdviserAccountStatus(adviser.id, { schoolId: filters.schoolId, isActive: nextIsActive });
+      toast.success(nextIsActive ? "حساب مشاور در این مجموعه فعال شد." : "حساب مشاور در این مجموعه غیرفعال شد.");
+    } catch (error) {
+      setData((current) => current.map((item) => item.id === adviser.id ? previous : item));
+      setMutationError(adviserAccountErrorMessage(error));
+    } finally {
+      setAccountMutationIds((current) => ({ ...current, [adviser.id]: false }));
+    }
+  }, [accountMutationIds, filters.schoolId]);
 
   const handlePageChange = (page) => {
     saveState({ page, filters, sort, sorting });
@@ -525,6 +545,17 @@ const AdviserList = () => {
         },
       },
       {
+        id: "account_status",
+        header: "وضعیت حساب در مجموعه",
+        enableColumnFilter: false,
+        enableSorting: false,
+        cell: ({ row }) => {
+          if (!filters.schoolId) return <span className="text-muted">مجموعه را انتخاب کنید</span>;
+          const active = adviserAccountActive(row.original, filters.schoolId);
+          return active == null ? <Badge color="secondary">فاقد اتصال</Badge> : <Badge color={active ? "success" : "danger"}>{active ? "فعال" : "غیرفعال"}</Badge>;
+        },
+      },
+      {
         id: "created_at",
         header: "تاریخ ایجاد",
         accessorKey: "created_at",
@@ -539,11 +570,11 @@ const AdviserList = () => {
         enableSorting: false,
         cell: ({ row }) => {
           const adviser = row.original;
-          return <AdviserRowActions adviser={adviser} canShow={canShow} canUpdate={canUpdate} schoolId={filters.schoolId} busy={Boolean(superMutationIds[adviser.id])} onStudents={(item) => navigate(`/advisers/${item.id}/students`, { state: { adviser: item } })} onGrades={openGradeModal} onSuperStatus={handleSuperStatus} onSubordinates={setSubordinatesAdviser} />;
+          return <AdviserRowActions adviser={adviser} canShow={canShow} canUpdate={canUpdate} schoolId={filters.schoolId} busy={Boolean(superMutationIds[adviser.id])} accountBusy={Boolean(accountMutationIds[adviser.id])} onStudents={(item) => navigate(`/advisers/${item.id}/students`, { state: { adviser: item, schoolId: filters.schoolId } })} onGrades={openGradeModal} onSuperStatus={handleSuperStatus} onAccountStatus={handleAccountStatus} onSubordinates={setSubordinatesAdviser} />;
         },
       },
     ],
-    [navigate, openGradeModal, canShow, canUpdate, filters.schoolId, superMutationIds, handleSuperStatus]
+    [navigate, openGradeModal, canShow, canUpdate, filters.schoolId, superMutationIds, accountMutationIds, handleSuperStatus, handleAccountStatus]
   );
 
   const handleSortingChange = useCallback(
