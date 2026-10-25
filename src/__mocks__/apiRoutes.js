@@ -77,6 +77,7 @@ export const API_ROUTES = {
     studentContactRecord: (studentId) => `/reports/student-contact-records/${studentId}`,
     studentContactCallAnswers: (studentId, callId) =>
       `/reports/student-contact-records/${studentId}/calls/${callId}/answers`,
+    adviserFormCapacity: "/reports/adviser-form-capacity",
     inactiveAdvisers: "/reports/inactive-advisers",
     inactiveAdvisersExport: "/reports/inactive-advisers/export",
     adviserPerformance: "/reports/adviser-performance",

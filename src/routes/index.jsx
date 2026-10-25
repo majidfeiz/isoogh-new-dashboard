@@ -276,6 +276,7 @@ import InactiveAdvisers from "../pages/Reports/InactiveAdvisers.jsx";
 import StudentContactRecords from "../pages/Reports/StudentContactRecords.jsx";
 import StudentContactRecordDetail from "../pages/Reports/StudentContactRecordDetail.jsx";
 import SupportFormAnswers from "../pages/Reports/SupportFormAnswers.jsx";
+import AdviserFormCapacity from "../pages/Reports/AdviserFormCapacity.jsx";
 import DynamicReportList from "../pages/DynamicReports/DynamicReportList.jsx";
 import DynamicReportWizard from "../pages/DynamicReports/DynamicReportWizard.jsx";
 import DynamicReportView from "../pages/DynamicReports/DynamicReportView.jsx";
@@ -490,6 +491,7 @@ const authProtectedRoutes = [
   { path: "/reports/student-contact-records/:studentId", component: <StudentContactRecordDetail /> },
   { path: "/reports/inactive-advisers", component: <InactiveAdvisers /> },
   { path: "/reports/support-form-answers", component: <ProtectedRoute permission="reports.support-form-answers.index"><SupportFormAnswers /></ProtectedRoute> },
+  { path: "/reports/adviser-form-capacity", component: <ProtectedRoute permission="reports.adviser-form-capacity.index"><AdviserFormCapacity /></ProtectedRoute> },
   { path: "/dynamic-reports", component: <ProtectedRoute permission="dynamic-reports.index"><DynamicReportList /></ProtectedRoute> },
   { path: "/dynamic-reports/create", component: <ProtectedRoute permission="dynamic-reports.create"><DynamicReportWizard /></ProtectedRoute> },
   { path: "/dynamic-reports/:id/edit", component: <ProtectedRoute permission="dynamic-reports.update"><DynamicReportWizard /></ProtectedRoute> },
