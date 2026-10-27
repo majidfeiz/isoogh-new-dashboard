@@ -34,7 +34,7 @@ import {
 import { createUser, getUser } from "../../services/userService.jsx"
 import { getSchools } from "../../services/schoolService.jsx"
 import { useAuth } from "../../context/AuthContext.jsx"
-import { createdStudentId as getCreatedStudentId, createdUserId as getCreatedUserId, dispatchUserListInvalidation, findStudentId } from "./studentCreateUtils.js"
+import { createdStudentId as getCreatedStudentId, createdUserId as getCreatedUserId, dispatchUserListInvalidation, findStudentId, isRegistrationPhoneLookupEligible, REGISTRATION_PHONE_DEBOUNCE_MS, REGISTRATION_USERNAME_DEBOUNCE_MS } from "./studentCreateUtils.js"
 import { createdUserMatchesStudentContract, toStudentCreatePayload, validateCreateUserPayload } from "../../services/userCreateContract.js"
 import { getUserApiErrors } from "../Users/userFormUtils.js"
 
@@ -239,28 +239,30 @@ const StudentForm = () => {
     const username = form.username.trim()
     const phone = normalizeDigits(form.phone).trim()
     const validUsername = /^[A-Za-z][A-Za-z0-9._]{2,}$/.test(username)
-    const validPhone = !!phone && phone.length <= 20
+    const validPhone = isRegistrationPhoneLookupEligible(phone)
+    const shouldCheckUsername = validUsername && !availability.username
+    const shouldCheckPhone = validPhone && !availability.phone
 
-    if (!validUsername && !(phone && validPhone)) {
-      setAvailability({ phone: null, username: null })
+    if (!shouldCheckUsername && !shouldCheckPhone) {
       setAvailabilityLoading({ phone: false, username: false })
       return undefined
     }
 
+    const debounceMs = shouldCheckUsername ? REGISTRATION_USERNAME_DEBOUNCE_MS : REGISTRATION_PHONE_DEBOUNCE_MS
     const timer = window.setTimeout(async () => {
       availabilityControllerRef.current?.abort()
       const controller = new AbortController()
       availabilityControllerRef.current = controller
-      setAvailabilityLoading({ phone: !!phone && validPhone, username: validUsername })
+      setAvailabilityLoading({ phone: shouldCheckPhone, username: shouldCheckUsername })
       try {
         const result = await getStudentRegistrationAvailability({
-          ...(phone && validPhone ? { phone } : {}),
-          ...(validUsername ? { username } : {}),
+          ...(shouldCheckPhone ? { phone } : {}),
+          ...(shouldCheckUsername ? { username } : {}),
           signal: controller.signal,
         })
         setAvailability((prev) => ({
-          phone: phone && validPhone ? result.phone ?? null : prev.phone,
-          username: validUsername ? result.username ?? null : prev.username,
+          phone: shouldCheckPhone ? result.phone ?? null : prev.phone,
+          username: shouldCheckUsername ? result.username ?? null : prev.username,
         }))
         setRestoreConfirmed(false)
       } catch (error) {
@@ -272,7 +274,7 @@ const StudentForm = () => {
           setAvailabilityLoading({ phone: false, username: false })
         }
       }
-    }, 500)
+    }, debounceMs)
 
     return () => window.clearTimeout(timer)
   }, [createdUserId, form.phone, form.username, isEdit])
@@ -520,11 +522,11 @@ const StudentForm = () => {
   )
   const phoneValue = normalizeDigits(form.phone).trim()
   const usernameIsValid = /^[A-Za-z][A-Za-z0-9._]{2,}$/.test(form.username.trim())
-  const phoneIsValid = !!phoneValue && phoneValue.length <= 20
+  const phoneLookupEligible = isRegistrationPhoneLookupEligible(phoneValue)
   const availabilityPending = availabilityLoading.phone || availabilityLoading.username
-  const availabilityChecked = !!availability.username && (!phoneValue || !!availability.phone)
+  const availabilityChecked = !!availability.username && (!phoneLookupEligible || !!availability.phone)
   const registrationBlocked = !isEdit && !createdUserId && (
-    availabilityPending || !usernameIsValid || !phoneIsValid || !availabilityChecked ||
+    availabilityPending || !usernameIsValid || !availabilityChecked ||
     hasActiveConflict || (!!archivedAvailability && !restoreConfirmed)
   )
 
