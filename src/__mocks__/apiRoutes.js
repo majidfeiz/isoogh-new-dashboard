@@ -20,6 +20,8 @@ export const API_ROUTES = {
   },
   incomingCalls: {
     list: "/incoming-calls",
+    exportCsv: "/incoming-calls/export/csv",
+    exportXlsx: "/incoming-calls/export/xlsx",
     settings: "/incoming-calls/settings",
     callerProfile: (id) => `/incoming-calls/${id}/caller-profile`,
     supporters: "/incoming-calls/supporters",
@@ -41,6 +43,9 @@ export const API_ROUTES = {
   },
   users: {
     list: "/users",
+    create: "/users",
+    detail: (id) => `/users/${id}`,
+    update: (id) => `/users/${id}`,
     importRoles: "/authorization/users/roles/import",
     importRolesTemplate: "/authorization/users/roles/import/template",
   },
@@ -75,6 +80,7 @@ export const API_ROUTES = {
     studentContactRecord: (studentId) => `/reports/student-contact-records/${studentId}`,
     studentContactCallAnswers: (studentId, callId) =>
       `/reports/student-contact-records/${studentId}/calls/${callId}/answers`,
+    adviserFormCapacity: "/reports/adviser-form-capacity",
     inactiveAdvisers: "/reports/inactive-advisers",
     inactiveAdvisersExport: "/reports/inactive-advisers/export",
     adviserPerformance: "/reports/adviser-performance",
@@ -143,6 +149,7 @@ export const API_ROUTES = {
   advisers: {
     list: "/advisers",
     superStatus: (adviserId) => `/advisers/${adviserId}/super-status`,
+    accountStatus: (adviserId) => `/advisers/${adviserId}/account-status`,
     subordinates: (adviserId) => `/advisers/${adviserId}/subordinates`,
     subordinate: (adviserId, subordinateId) => `/advisers/${adviserId}/subordinates/${subordinateId}`,
     subordinatesExport: (adviserId) => `/advisers/${adviserId}/subordinates/export`,

@@ -21,7 +21,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import Breadcrumbs from "../../components/Common/Breadcrumb"
 import {
   getStudent,
-  createStudent,
+  getStudents,
   updateStudent,
   getStudentRegistrationAvailability,
   getStudentContactSubjects,
@@ -31,9 +31,12 @@ import {
   setDefaultStudentContact,
   deleteStudentContact,
 } from "../../services/studentService.jsx"
-import { createUser } from "../../services/userService.jsx"
+import { createUser, getUser } from "../../services/userService.jsx"
 import { getSchools } from "../../services/schoolService.jsx"
 import { useAuth } from "../../context/AuthContext.jsx"
+import { createdStudentId as getCreatedStudentId, createdUserId as getCreatedUserId, dispatchUserListInvalidation, findStudentId, isRegistrationPhoneLookupEligible, REGISTRATION_PHONE_DEBOUNCE_MS, REGISTRATION_USERNAME_DEBOUNCE_MS } from "./studentCreateUtils.js"
+import { createdUserMatchesStudentContract, toStudentCreatePayload, validateCreateUserPayload } from "../../services/userCreateContract.js"
+import { getUserApiErrors } from "../Users/userFormUtils.js"
 
 const toNum = (v) => {
   if (v === "" || v == null) return undefined
@@ -107,6 +110,7 @@ const StudentForm = () => {
   const [contactSubjects, setContactSubjects] = useState([])
   const [contacts, setContacts] = useState([])
   const [contactsLoading, setContactsLoading] = useState(false)
+  const submittingRef = useRef(false)
 
 
   // Schools
@@ -235,28 +239,30 @@ const StudentForm = () => {
     const username = form.username.trim()
     const phone = normalizeDigits(form.phone).trim()
     const validUsername = /^[A-Za-z][A-Za-z0-9._]{2,}$/.test(username)
-    const validPhone = !phone || /^09\d{9}$/.test(phone)
+    const validPhone = isRegistrationPhoneLookupEligible(phone)
+    const shouldCheckUsername = validUsername && !availability.username
+    const shouldCheckPhone = validPhone && !availability.phone
 
-    if (!validUsername && !(phone && validPhone)) {
-      setAvailability({ phone: null, username: null })
+    if (!shouldCheckUsername && !shouldCheckPhone) {
       setAvailabilityLoading({ phone: false, username: false })
       return undefined
     }
 
+    const debounceMs = shouldCheckUsername ? REGISTRATION_USERNAME_DEBOUNCE_MS : REGISTRATION_PHONE_DEBOUNCE_MS
     const timer = window.setTimeout(async () => {
       availabilityControllerRef.current?.abort()
       const controller = new AbortController()
       availabilityControllerRef.current = controller
-      setAvailabilityLoading({ phone: !!phone && validPhone, username: validUsername })
+      setAvailabilityLoading({ phone: shouldCheckPhone, username: shouldCheckUsername })
       try {
         const result = await getStudentRegistrationAvailability({
-          ...(phone && validPhone ? { phone } : {}),
-          ...(validUsername ? { username } : {}),
+          ...(shouldCheckPhone ? { phone } : {}),
+          ...(shouldCheckUsername ? { username } : {}),
           signal: controller.signal,
         })
         setAvailability((prev) => ({
-          phone: phone && validPhone ? result.phone ?? null : prev.phone,
-          username: validUsername ? result.username ?? null : prev.username,
+          phone: shouldCheckPhone ? result.phone ?? null : prev.phone,
+          username: shouldCheckUsername ? result.username ?? null : prev.username,
         }))
         setRestoreConfirmed(false)
       } catch (error) {
@@ -268,7 +274,7 @@ const StudentForm = () => {
           setAvailabilityLoading({ phone: false, username: false })
         }
       }
-    }, 500)
+    }, debounceMs)
 
     return () => window.clearTimeout(timer)
   }, [createdUserId, form.phone, form.username, isEdit])
@@ -353,6 +359,7 @@ const StudentForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (loading || submittingRef.current) return
     setErrors({})
     setAlert(null)
 
@@ -376,7 +383,7 @@ const StudentForm = () => {
       if (cleanedName.length < 2 || cleanedName.length > 255) newErrors.name = ["نام باید بین ۲ تا ۲۵۵ کاراکتر باشد"]
       if (!/^[A-Za-z][A-Za-z0-9._]{2,}$/.test(cleanedUsername)) newErrors.username = ["نام کاربری باید با حرف انگلیسی شروع شود و حداقل ۳ کاراکتر باشد"]
       if (form.password.trim().length < 6) newErrors.password = ["رمز عبور باید حداقل ۶ کاراکتر باشد"]
-      if (phone && !/^09\d{9}$/.test(phone)) newErrors.phone = ["شماره موبایل باید ۱۱ رقم و با 09 شروع شود"]
+      if (!phone || phone.length > 20) newErrors.phone = ["شماره تماس الزامی است و حداکثر می‌تواند ۲۰ کاراکتر باشد"]
       if (ssn && !/^\d{10}$/.test(ssn)) newErrors.ssn = ["کد ملی باید دقیقاً ۱۰ رقم باشد"]
       if (form.email.trim() && (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) || form.email.trim().length > 255)) newErrors.email = ["ایمیل معتبر وارد کنید"]
       if (form.point !== "" && (!Number.isInteger(Number(form.point)) || Number(form.point) < 0)) newErrors.point = ["امتیاز باید عدد صحیح نامنفی باشد"]
@@ -398,10 +405,10 @@ const StudentForm = () => {
       return
     }
 
+    submittingRef.current = true
     setLoading(true)
     try {
-      const studentPayload = {
-        schoolIds: effectiveSchoolIds.map(Number),
+      const studentDetailsPayload = {
         birthday: cleanOptional(form.birthday),
         point: toNum(form.point),
         phone_2: cleanOptional(form.phone_2), phone_3: cleanOptional(form.phone_3),
@@ -416,27 +423,38 @@ const StudentForm = () => {
 
       if (!isEdit) {
         let userId = createdUserId
+        let createdUser
         if (!userId) {
-          const userResponse = await createUser({
-            name: cleanedName,
-            username: cleanedUsername,
-            password: form.password.trim(),
-            ...(phone ? { phone } : {}),
-            ...(ssn ? { ssn } : {}),
-            ...(form.email.trim() ? { email: form.email.trim() } : {}),
-          })
-          userId = userResponse?.data?.id ?? userResponse?.id
+          const createPayload = toStudentCreatePayload({ ...form, schoolIds: effectiveSchoolIds })
+          const createErrors = validateCreateUserPayload(createPayload, { requireSchoolIds: true })
+          if (Object.keys(createErrors).length) {
+            setErrors(createErrors)
+            return
+          }
+          createdUser = await createUser(createPayload, { silent: true })
+          userId = getCreatedUserId(createdUser)
           if (!userId) throw new Error("شناسه کاربر در پاسخ سرور موجود نیست")
           setCreatedUserId(userId)
         }
+        const expectedSchoolIds = effectiveSchoolIds.map(Number)
+        const verifiedUser = createdUserMatchesStudentContract(createdUser?.user || createdUser, expectedSchoolIds)
+          ? (createdUser.user || createdUser)
+          : await getUser(userId, { silent: true })
+        if (!createdUserMatchesStudentContract(verifiedUser, expectedSchoolIds)) {
+          throw new Error("ثبت دانش‌آموز کامل نشد؛ نقش یا اتصال مجموعه در پاسخ سرور تأیید نشد")
+        }
         let studentId = createdStudentId
         if (!studentId) {
-          studentPayload.user_id = userId
-          const studentResponse = await createStudent(studentPayload)
-          studentId = studentResponse?.data?.id ?? studentResponse?.id
+          studentId = getCreatedStudentId(createdUser || verifiedUser)
+          if (!studentId) {
+            const studentResult = await getStudents({ page: 1, limit: 10, userId, schoolId: expectedSchoolIds[0] })
+            studentId = findStudentId(studentResult.items, userId)
+          }
           if (!studentId) throw new Error("شناسه دانش‌آموز در پاسخ سرور موجود نیست")
           setCreatedStudentId(studentId)
         }
+        await updateStudent(studentId, studentDetailsPayload)
+        dispatchUserListInvalidation()
         const failedContacts = await saveContacts(studentId)
         if (failedContacts > 0) {
           setAlert({ type: "warning", message: `${failedContacts} شماره تماس ثبت نشد. فقط همان ردیف‌ها در تلاش بعدی دوباره ارسال می‌شوند.` })
@@ -445,6 +463,7 @@ const StudentForm = () => {
         setAlert({ type: "success", message: "دانش‌آموز و شماره‌های تماس با موفقیت ایجاد شدند." })
       } else {
         const original = initialFormRef.current || {}
+        const studentPayload = { ...studentDetailsPayload, schoolIds: effectiveSchoolIds.map(Number) }
         const payload = Object.fromEntries(Object.entries(studentPayload).filter(([key, value]) => {
           if (key === "schoolIds") {
             const current = [...value].sort((a, b) => a - b)
@@ -465,18 +484,21 @@ const StudentForm = () => {
       }
       setTimeout(() => navigate(-1), 800)
     } catch (e) {
-      console.error(e)
-      const serverErrors = e.response?.data?.errors
-      if (serverErrors) setErrors(serverErrors)
+      if (process.env.NODE_ENV === "development") console.error(e)
+      const apiError = getUserApiErrors(e)
+      if (Object.keys(apiError.fieldErrors).length) setErrors(apiError.fieldErrors)
       if (e.response?.status === 409 && /phone|موبایل|شماره/i.test(JSON.stringify(e.response?.data || {}))) {
         setErrors((prev) => ({ ...prev, phone: [e.response?.data?.message || "این شماره موبایل قبلاً ثبت شده است"] }))
       }
       if (createdStudentId) {
         setAlert({ type: "warning", message: "دانش‌آموز ساخته شده است؛ در تلاش بعدی فقط شماره‌های ناموفق دوباره ارسال می‌شوند." })
-      } else if (createdUserId || (!isEdit && e.response?.config?.url?.includes("/students"))) {
-        setAlert({ type: "warning", message: "حساب کاربری ساخته شده است؛ اطلاعات فرم حفظ شد. برای تلاش دوباره ثبت دانش‌آموز را بزنید." })
+      } else if (createdUserId) {
+        setAlert({ type: "warning", message: "حساب دانش‌آموز ساخته شده است؛ اطلاعات فرم حفظ شد. برای تکمیل اطلاعات دوباره تلاش کنید." })
+      } else {
+        setAlert({ type: "danger", message: apiError.message })
       }
     } finally {
+      submittingRef.current = false
       setLoading(false)
     }
   }
@@ -500,11 +522,11 @@ const StudentForm = () => {
   )
   const phoneValue = normalizeDigits(form.phone).trim()
   const usernameIsValid = /^[A-Za-z][A-Za-z0-9._]{2,}$/.test(form.username.trim())
-  const phoneIsValid = !phoneValue || /^09\d{9}$/.test(phoneValue)
+  const phoneLookupEligible = isRegistrationPhoneLookupEligible(phoneValue)
   const availabilityPending = availabilityLoading.phone || availabilityLoading.username
-  const availabilityChecked = !!availability.username && (!phoneValue || !!availability.phone)
+  const availabilityChecked = !!availability.username && (!phoneLookupEligible || !!availability.phone)
   const registrationBlocked = !isEdit && !createdUserId && (
-    availabilityPending || !usernameIsValid || !phoneIsValid || !availabilityChecked ||
+    availabilityPending || !usernameIsValid || !availabilityChecked ||
     hasActiveConflict || (!!archivedAvailability && !restoreConfirmed)
   )
 

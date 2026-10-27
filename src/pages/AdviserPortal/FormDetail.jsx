@@ -46,7 +46,7 @@ import {
   updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
 import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers, isMultiChoiceQuestion } from "./answerFormUtils.js";
-import { closeSupportForm, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
+import { ADVISER_ACCOUNT_INACTIVE_MESSAGE, closeSupportForm, isAdviserAccountInactiveError, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
 import { parseFormHeadings } from "./supportFormHeadings.js";
 import "./support-form-list.scss";
 
@@ -494,9 +494,10 @@ const FormDetail = () => {
   const studentsRequest = useRef(null);
   const accessDeniedHandled = useRef(false);
   const [callingIds, setCallingIds] = useState({});
+  const [accountInactive, setAccountInactive] = useState(false);
 
   const canEdit = form?.canEdit === true;
-  const canCall = form?.canCall === true;
+  const canCall = form?.canCall === true && !accountInactive;
   const isReadOnly = Boolean(form) && (form.isClosed === true || !canEdit);
   const canUpdateStudentStatus = hasPermission("adviser-portal.students.update");
   const statusSchoolId = Number(form?.schoolId ?? location.state?.schoolId);
@@ -504,6 +505,12 @@ const FormDetail = () => {
   const handleFormEnded = useCallback((error) => {
     if (!isSupportFormEndedError(error)) return false;
     setForm((current) => closeSupportForm(current, error));
+    return true;
+  }, []);
+  const handleAccountInactive = useCallback((error) => {
+    if (!isAdviserAccountInactiveError(error)) return false;
+    setAccountInactive(true);
+    toast.error(ADVISER_ACCOUNT_INACTIVE_MESSAGE);
     return true;
   }, []);
 
@@ -532,6 +539,7 @@ const FormDetail = () => {
   }, [formId, location.state?.schoolId, navigate]);
 
   useEffect(() => { accessDeniedHandled.current = false; }, [formId]);
+  useEffect(() => { setAccountInactive(false); }, [formId, location.state?.schoolId]);
 
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
@@ -664,7 +672,7 @@ const FormDetail = () => {
       fetchStudents(meta.page, search, callStatus, workShiftId, sort);
       fetchStats();
     } catch (error) {
-      handleFormEnded(error);
+      if (!handleAccountInactive(error)) handleFormEnded(error);
       callCooldown.current[id] = false;
       setCallingIds((p) => ({ ...p, [id]: false }));
     }
@@ -828,6 +836,7 @@ const FormDetail = () => {
         />
 
         {isReadOnly && <Alert color="warning" className="d-flex align-items-center gap-2"><i className="bx bx-lock-alt font-size-18" />{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert>}
+        {accountInactive && <Alert color="danger" className="d-flex align-items-center gap-2"><i className="bx bx-user-x font-size-18" />{ADVISER_ACCOUNT_INACTIVE_MESSAGE}</Alert>}
 
         {/* Form Info Panel */}
         {form && (

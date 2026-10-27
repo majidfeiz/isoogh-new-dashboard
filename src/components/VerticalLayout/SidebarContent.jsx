@@ -451,6 +451,7 @@ const SidebarContent = (props) => {
           "reports.student-contact-records.index",
           "reports.inactive-advisers.index",
           "reports.support-form-answers.index",
+          "reports.adviser-form-capacity.index",
           "dynamic-reports.index",
           "dynamic-reports.create",
         ],
@@ -508,6 +509,7 @@ const SidebarContent = (props) => {
             to: "/reports/support-form-answers",
             permission: "reports.support-form-answers.index",
           },
+          { label: "ظرفیت اتصال دانش‌آموز و مشاور", to: "/reports/adviser-form-capacity", permission: "reports.adviser-form-capacity.index" },
         ],
       },
       {

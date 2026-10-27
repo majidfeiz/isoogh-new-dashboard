@@ -38,6 +38,7 @@ import { getParentTags, getParentTagValues } from "../../services/parentTagServi
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { adviserStudentStatus, canManageAdviserStudentArchive, isArchivedAssignment } from "./adviserStudentArchiveUtils.js";
+import { adviserCapacityConflict, notifyCapacityChanged } from "./adviserCapacityErrorUtils.js";
 
 const SupportFormAdviserStudents = () => {
   const { id, adviserId } = useParams();
@@ -237,7 +238,9 @@ const SupportFormAdviserStudents = () => {
       setAlert({ type: "success", message: "دانش‌آموزان اضافه شدند." });
     } catch (e) {
       console.error("خطا در افزودن دانش‌آموز", e);
-      setAlert({ type: "danger", message: "خطا در افزودن دانش‌آموز." });
+      const conflict = adviserCapacityConflict(e);
+      if (conflict) { await fetchData(1, filters, sort, { preserveAlert: true }); notifyCapacityChanged(id); }
+      setAlert({ type: "danger", message: conflict?.message || "خطا در افزودن دانش‌آموز." });
     } finally {
       setAttachLoading(false);
     }
@@ -278,10 +281,12 @@ const SupportFormAdviserStudents = () => {
       setAlert({ type: "success", message: restoring ? "تخصیص بازگردانده شد." : "تخصیص آرشیو شد." });
     } catch (error) {
       const status = error?.response?.status;
-      setAlert({ type: "danger", message: status === 403
+      const conflict = adviserCapacityConflict(error);
+      if (conflict) { await fetchData(1, filters, sort, { preserveAlert: true }); notifyCapacityChanged(id); }
+      setAlert({ type: "danger", message: conflict?.message || (status === 403
         ? "شما اجازهٔ آرشیو یا بازگردانی این تخصیص را ندارید."
         : status === 404 ? "این تخصیص یا فرم تماس پیدا نشد."
-          : "تغییر وضعیت آرشیو انجام نشد." });
+          : "تغییر وضعیت آرشیو انجام نشد.") });
     } finally {
       setArchiveBusyId(null);
     }
@@ -301,7 +306,9 @@ const SupportFormAdviserStudents = () => {
       });
     } catch (e) {
       console.error("خطا در وارد کردن دانش‌آموزان", e);
-      setAlert({ type: "danger", message: "خطا در وارد کردن دانش‌آموزان." });
+      const conflict = adviserCapacityConflict(e);
+      if (conflict) { await fetchData(1, filters, sort, { preserveAlert: true }); notifyCapacityChanged(id); }
+      setAlert({ type: "danger", message: conflict?.message || "خطا در وارد کردن دانش‌آموزان." });
     } finally {
       setAttachLoading(false);
     }
@@ -418,7 +425,9 @@ const SupportFormAdviserStudents = () => {
       await fetchData(meta.page, filters, sort);
     } catch (e) {
       console.error("خطا در افزودن بر اساس تگ", e);
-      const err = { type: "danger", message: "خطا در افزودن بر اساس تگ." };
+      const conflict = adviserCapacityConflict(e);
+      if (conflict) { await fetchData(1, filters, sort, { preserveAlert: true }); notifyCapacityChanged(id); }
+      const err = { type: "danger", message: conflict?.message || "خطا در افزودن بر اساس تگ." };
       setAlert(err);
       setTagAlert(err);
     } finally {

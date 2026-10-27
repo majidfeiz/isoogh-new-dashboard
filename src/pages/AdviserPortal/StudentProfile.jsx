@@ -45,7 +45,7 @@ import {
 } from "../../services/adviserPortalService.jsx";
 import { buildAnswerPayload, createAnswerCallContext, getAnswerDisplayText, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers } from "./answerFormUtils.js";
 import { getAdviserStudentListPath } from "./formDetailSortUtils.js";
-import { closeSupportForm, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
+import { ADVISER_ACCOUNT_INACTIVE_MESSAGE, closeSupportForm, isAdviserAccountInactiveError, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1001,14 +1001,21 @@ const StudentProfile = () => {
   const [callCooldownSeconds, setCallCooldownSeconds] = useState(0);
   const cooldown = useRef(false);
   const accessDeniedHandled = useRef(false);
+  const [accountInactive, setAccountInactive] = useState(false);
 
   const canEdit = form?.canEdit === true;
-  const canCall = form?.canCall === true;
+  const canCall = form?.canCall === true && !accountInactive;
   const isReadOnly = Boolean(form) && (form.isClosed === true || !canEdit);
 
   const handleFormEnded = useCallback((error) => {
     if (!isSupportFormEndedError(error)) return false;
     setForm((current) => closeSupportForm(current, error));
+    return true;
+  }, []);
+  const handleAccountInactive = useCallback((error) => {
+    if (!isAdviserAccountInactiveError(error)) return false;
+    setAccountInactive(true);
+    toast.error(ADVISER_ACCOUNT_INACTIVE_MESSAGE);
     return true;
   }, []);
 
@@ -1052,6 +1059,7 @@ const StudentProfile = () => {
   }, [formId, studentId, fetchProfile]);
 
   useEffect(() => { accessDeniedHandled.current = false; }, [formId, studentId]);
+  useEffect(() => { setAccountInactive(false); }, [formId, location.state?.schoolId]);
 
   useEffect(() => () => queuedTraceRequest.current?.abort(), []);
 
@@ -1114,7 +1122,7 @@ const StudentProfile = () => {
       setAnswerCallContext(context);
       setDrawerOpen(true);
     } catch (error) {
-      handleFormEnded(error);
+      if (!handleAccountInactive(error)) handleFormEnded(error);
       // The cooldown intentionally remains active after failed attempts as well.
     } finally {
       setCalling(false);
@@ -1181,6 +1189,7 @@ const StudentProfile = () => {
         </Alert>}
 
         {isReadOnly && <Alert color="warning" className="d-flex align-items-center gap-2"><i className="bx bx-lock-alt font-size-18" />{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert>}
+        {accountInactive && <Alert color="danger" className="d-flex align-items-center gap-2"><i className="bx bx-user-x font-size-18" />{ADVISER_ACCOUNT_INACTIVE_MESSAGE}</Alert>}
 
         {/* ── Hero Card ──────────────────────────────────────────────────── */}
         <Card className="border-0 shadow-sm mb-4 overflow-hidden">

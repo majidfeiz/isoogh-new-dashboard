@@ -114,3 +114,22 @@ test("shows an explicit empty state when the backend returns no call or form ans
   expect(getStudentContactRecord).toHaveBeenCalledTimes(1)
   expect(getStudentContactCallAnswers).toHaveBeenCalledWith("125", 500, expect.any(AbortSignal))
 })
+
+test("renders incoming and outbound calls together and never requests answers for an incoming call", async () => {
+  getStudentContactRecord.mockResolvedValue({
+    ...response,
+    calls: [
+      response.calls[0],
+      { id: 501, direction: "incoming", status: "answered", src: "09120000000", dst: "021900000", endedAt: "2026-10-20T10:00:00Z", audioFiles: [{ id: 9, name: "incoming.mp3", url: "https://files.example/incoming.mp3" }] },
+    ],
+    meta: { page: 1, limit: 10, total: 2, lastPage: 1 },
+  })
+  render(<MemoryRouter initialEntries={["/reports/student-contact-records/125"]}><Routes><Route path="/reports/student-contact-records/:studentId" element={<StudentContactRecordDetail />} /></Routes></MemoryRouter>)
+
+  expect(await screen.findByText("سارا محمدی")).toBeInTheDocument()
+  expect(screen.getByText("ورودی")).toBeInTheDocument()
+  expect(screen.getByText("خروجی")).toBeInTheDocument()
+  expect(screen.getByLabelText("incoming.mp3")).toHaveAttribute("src", "https://files.example/incoming.mp3")
+  expect(screen.getAllByRole("button", { name: /مشاهده پاسخ‌های تماس/ })).toHaveLength(1)
+  expect(getStudentContactCallAnswers).not.toHaveBeenCalled()
+})

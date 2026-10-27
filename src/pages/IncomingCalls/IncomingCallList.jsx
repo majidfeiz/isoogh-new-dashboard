@@ -1,30 +1,110 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, CardBody, Col, Input, Label, Modal, ModalBody, ModalFooter, ModalHeader, Row, Table } from "reactstrap";
-import { toast } from "react-toastify";
-import Breadcrumbs from "../../components/Common/Breadcrumb.jsx";
-import Paginations from "../../components/Common/Paginations.jsx";
-import { getIncomingCalls, incomingCallErrorMessage, saveIncomingCallResult } from "../../services/incomingCallService.jsx";
-import { formatDateTime, formatDuration, RequestState, SchoolPicker } from "./IncomingCallsCommon.jsx";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
+import DatePicker, { DateObject } from "react-multi-date-picker"
+import gregorian from "react-date-object/calendars/gregorian"
+import persian from "react-date-object/calendars/persian"
+import gregorianEn from "react-date-object/locales/gregorian_en"
+import persianFa from "react-date-object/locales/persian_fa"
+import { Alert, Badge, Button, Card, CardBody, Col, Input, Label, Row, Table } from "reactstrap"
+import Breadcrumbs from "../../components/Common/Breadcrumb.jsx"
+import Paginations from "../../components/Common/Paginations.jsx"
+import { useAuth } from "../../context/AuthContext.jsx"
+import { getSupportForms } from "../../services/supportFormService.jsx"
+import { exportIncomingCalls, getIncomingCalls, incomingCallErrorMessage, saveIncomingCallsExport } from "../../services/incomingCallService.jsx"
+import { formatDateTime, formatDuration, RequestState, SchoolPicker } from "./IncomingCallsCommon.jsx"
+import { incomingCallRangeError, parseIncomingCallQuery, serializeIncomingCallQuery, statusView } from "./incomingCallReportUtils.js"
 
-const statuses = { routing: ["در حال مسیریابی", "info"], answered: ["پاسخ داده‌شده", "success"], missed: ["از دست‌رفته", "danger"], voice: ["پیام صوتی", "warning"], ended: ["پایان‌یافته", "secondary"] };
-const destinationTypes = { consultant: "مشاور", supporter: "پشتیبان", voice: "پیام صوتی" };
+const display = (input) => input == null || input === "" ? "—" : input
+const personName = (person, unknown = false) => person ? display(person.name) : unknown ? "شناسایی نشده" : "—"
+const sortHeaders = [["status", "وضعیت"], ["durationSeconds", "مدت مکالمه"], ["startedAt", "شروع"], ["endedAt", "پایان"]]
+const pickerValue = (date) => date
+  ? new DateObject({ date, format: "YYYY-MM-DD", calendar: gregorian, locale: gregorianEn }).convert(persian, persianFa)
+  : null
+const apiDate = (date) => date
+  ? new DateObject(date).convert(gregorian, gregorianEn).format("YYYY-MM-DD")
+  : ""
+
 const IncomingCallList = () => {
-  document.title = "تماس‌های ورودی | آیسوق";
-  const [schoolId, setSchoolId] = useState(""); const [items, setItems] = useState([]);
-  const [meta, setMeta] = useState({ page: 1, limit: 15, total: 0, lastPage: 1 });
-  const [status, setStatus] = useState(""); const [search, setSearch] = useState(""); const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false); const [error, setError] = useState("");
-  const [selected, setSelected] = useState(null); const [result, setResult] = useState(""); const [note, setNote] = useState(""); const [saving, setSaving] = useState(false);
-  const load = useCallback(async (page = 1) => { if (!schoolId) return; setLoading(true); setError(""); try { const data = await getIncomingCalls({ schoolId, page, limit: meta.limit, status, search: query }); setItems(data.items); setMeta(data.pagination); } catch (e) { setError(incomingCallErrorMessage(e)); } finally { setLoading(false); } }, [schoolId, meta.limit, status, query]);
-  useEffect(() => { if (schoolId) load(1); }, [schoolId, status, query]);
-  const submitSearch = (e) => { e.preventDefault(); setQuery(search.trim()); };
-  const submitResult = async (e) => { e.preventDefault(); if (!result.trim()) { toast.error("نتیجه تماس الزامی است."); return; } setSaving(true); try { await saveIncomingCallResult(selected.id, { schoolId, result, note }); toast.success("نتیجه تماس ثبت شد."); setSelected(null); setResult(""); setNote(""); await load(meta.page); } catch (err) { toast.error(incomingCallErrorMessage(err)); } finally { setSaving(false); } };
-  return <div className="page-content"><div className="container-fluid"><Breadcrumbs title="تماس‌های ورودی" breadcrumbItem="لیست تماس‌ها" />
-    <Card><CardBody><Row className="g-3 align-items-end"><Col lg="3"><SchoolPicker value={schoolId} onChange={setSchoolId} /></Col><Col lg="3"><Label>وضعیت</Label><Input type="select" value={status} onChange={(e) => setStatus(e.target.value)}><option value="">همه</option>{Object.entries(statuses).map(([key, value]) => <option key={key} value={key}>{value[0]}</option>)}</Input></Col><Col lg="5"><form onSubmit={submitSearch}><Label>جستجو</Label><div className="input-group"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="شماره تماس‌گیرنده یا مقصد" /><Button type="submit" color="primary">جستجو</Button></div></form></Col></Row>
-      {!schoolId ? <div className="text-muted text-center py-5">مجموعه را انتخاب کنید.</div> : <RequestState loading={loading} error={error} empty={!items.length} onRetry={() => load(meta.page)} emptyText="تماسی یافت نشد." />}
-      {!!items.length && !loading && <><div className="table-responsive mt-4"><Table hover><thead><tr><th>وضعیت</th><th>تماس‌گیرنده</th><th>مقصد</th><th>مسیر تماس</th><th>شناسه تماس</th><th>مدت</th><th>شروع</th><th>پاسخ</th><th>پایان</th><th /></tr></thead><tbody>{items.map((item) => { const view = statuses[item.status] || [item.status || "—", "secondary"]; return <tr key={item.id} className={item.status === "missed" ? "table-danger" : ""}><td><Badge color={view[1]}>{view[0]}</Badge></td><td dir="ltr" className="text-end">{item.callerNumber || "—"}</td><td><div dir="ltr" className="text-end">{item.destination || "—"}</div>{item.appName && <small className="text-muted">{item.appName}</small>}</td><td>{destinationTypes[item.destinationType] || item.destinationType || "—"}{item.supporterId != null && <small className="d-block text-muted">شناسه: {item.supporterId}</small>}</td><td dir="ltr" className="text-end"><small>{item.uniqueId || item.id || "—"}</small></td><td>{formatDuration(item.durationSeconds)}</td><td className="text-nowrap">{formatDateTime(item.startedAt)}</td><td className="text-nowrap">{formatDateTime(item.answeredAt)}</td><td className="text-nowrap">{formatDateTime(item.endedAt)}</td><td>{["answered", "ended"].includes(item.status) && <Button size="sm" outline color="primary" onClick={() => { setSelected(item); setResult(item.result || ""); setNote(item.note || ""); }}>ثبت نتیجه</Button>}</td></tr>; })}</tbody></Table></div><Paginations perPageData={meta.limit} data={items} totalRecords={meta.total} currentPage={meta.page} setCurrentPage={load} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" /></>}
+  document.title = "گزارش تماس‌های ورودی | آیسوق"
+  const { hasPermission } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const query = useMemo(() => parseIncomingCallQuery(new URLSearchParams(searchParams.toString())), [searchParams])
+  const [draftSearch, setDraftSearch] = useState(query.search)
+  const [items, setItems] = useState([])
+  const [meta, setMeta] = useState({ page: 1, limit: 20, total: 0, lastPage: 1 })
+  const [forms, setForms] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [exporting, setExporting] = useState("")
+  const requestRef = useRef(null)
+  const rangeError = incomingCallRangeError(query)
+  const updateQuery = useCallback((updates) => setSearchParams(serializeIncomingCallQuery({ ...query, ...updates })), [query, setSearchParams])
+
+  useEffect(() => { setDraftSearch(query.search) }, [query.search])
+  useEffect(() => {
+    const timer = setTimeout(() => { const search = draftSearch.trim(); if (search !== query.search) updateQuery({ search, page: 1 }) }, 450)
+    return () => clearTimeout(timer)
+  }, [draftSearch, query.search, updateQuery])
+
+  const load = useCallback(async () => {
+    if (!query.schoolId || rangeError) return
+    requestRef.current?.abort()
+    const controller = new AbortController(); requestRef.current = controller
+    setLoading(true); setError("")
+    try {
+      const result = await getIncomingCalls({ ...query, signal: controller.signal })
+      if (!controller.signal.aborted) { setItems(result.items); setMeta(result.pagination) }
+    } catch (requestError) {
+      if (controller.signal.aborted || requestError?.code === "ERR_CANCELED") return
+      setItems([]); setMeta((current) => ({ ...current, total: 0, page: query.page })); setError(incomingCallErrorMessage(requestError))
+    } finally { if (!controller.signal.aborted) setLoading(false) }
+  }, [query, rangeError])
+  useEffect(() => { load(); return () => requestRef.current?.abort() }, [load])
+
+  useEffect(() => {
+    if (!query.schoolId) { setForms([]); return }
+    const controller = new AbortController()
+    getSupportForms({ schoolId: query.schoolId, page: 1, limit: 100, signal: controller.signal }).then((result) => setForms(result.items || [])).catch((requestError) => { if (requestError?.code !== "ERR_CANCELED") setForms([]) })
+    return () => controller.abort()
+  }, [query.schoolId])
+
+  const changeSort = (sortBy) => updateQuery({ sortBy, sortOrder: query.sortBy === sortBy && query.sortOrder === "ASC" ? "DESC" : "ASC", page: 1 })
+  const sortButton = ([sortBy, label]) => <th key={sortBy}><button type="button" className="btn btn-link text-reset p-0 fw-semibold text-nowrap" onClick={() => changeSort(sortBy)}>{label} {query.sortBy === sortBy ? query.sortOrder === "ASC" ? "▲" : "▼" : "↕"}</button></th>
+  const download = async (format) => {
+    if (!query.schoolId || rangeError) return
+    setExporting(format); setError("")
+    try { saveIncomingCallsExport(await exportIncomingCalls(format, query)) } catch (requestError) { setError(incomingCallErrorMessage(requestError)) } finally { setExporting("") }
+  }
+
+  return <div className="page-content"><div className="container-fluid">
+    <Breadcrumbs title="تماس‌های ورودی" breadcrumbItem="گزارش تماس‌ها" />
+    <Card><CardBody>
+      <Row className="g-3 align-items-end">
+        <Col xl="3" md="6"><SchoolPicker value={query.schoolId} onChange={(schoolId) => { setItems([]); updateQuery({ schoolId, page: 1 }) }} /></Col>
+        <Col xl="3" md="6"><Label>جستجوی عمومی</Label><Input value={draftSearch} onChange={(event) => setDraftSearch(event.target.value)} placeholder="شماره یا نام" /></Col>
+        <Col xl="2" md="4"><Label>وضعیت</Label><Input type="select" value={query.status} onChange={(event) => updateQuery({ status: event.target.value, page: 1 })}><option value="">همه</option>{["routing", "answered", "missed", "voice", "ended"].map((status) => <option key={status} value={status}>{statusView(status)[0]}</option>)}</Input></Col>
+        <Col xl="2" md="4"><Label>کد ملی دقیق</Label><Input value={query.ssn} onChange={(event) => updateQuery({ ssn: event.target.value.trim(), page: 1 })} /></Col>
+        <Col xl="2" md="4"><Label>نام کاربری دقیق</Label><Input value={query.username} onChange={(event) => updateQuery({ username: event.target.value.trim(), page: 1 })} /></Col>
+        <Col xl="3" md="4"><Label>فرم تماس</Label><Input type="select" value={query.formId} disabled={!query.schoolId} onChange={(event) => updateQuery({ formId: event.target.value, page: 1 })}><option value="">همه فرم‌ها</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.title || form.name || `فرم ${form.id}`}</option>)}</Input></Col>
+        <Col xl="2" md="4"><Label htmlFor="incoming-calls-from">از تاریخ</Label><DatePicker id="incoming-calls-from" calendar={persian} locale={persianFa}
+          value={pickerValue(query.from)} onChange={(date) => updateQuery({ from: apiDate(date), page: 1 })} format="YYYY/MM/DD"
+          inputClass="form-control" calendarPosition="bottom-right" placeholder="انتخاب تاریخ شمسی" /></Col>
+        <Col xl="2" md="4"><Label htmlFor="incoming-calls-to">تا پایان روز</Label><DatePicker id="incoming-calls-to" calendar={persian} locale={persianFa}
+          value={pickerValue(query.to)} onChange={(date) => updateQuery({ to: apiDate(date), page: 1 })} format="YYYY/MM/DD"
+          inputClass="form-control" calendarPosition="bottom-right" placeholder="انتخاب تاریخ شمسی" /></Col>
+        <Col xl="2" md="4"><Label>تعداد در صفحه</Label><Input type="select" value={query.limit} onChange={(event) => updateQuery({ limit: Number(event.target.value), page: 1 })}>{[10, 20, 50, 100].map((limit) => <option key={limit}>{limit}</option>)}</Input></Col>
+        {hasPermission("incoming-calls.export") && <Col xl="3" md="8" className="d-flex gap-2"><Button color="success" outline disabled={!!exporting || !query.schoolId || !!rangeError} onClick={() => download("csv")}>{exporting === "csv" ? "در حال دریافت..." : "خروجی CSV"}</Button><Button color="success" disabled={!!exporting || !query.schoolId || !!rangeError} onClick={() => download("xlsx")}>{exporting === "xlsx" ? "در حال دریافت..." : "خروجی Excel"}</Button></Col>}
+      </Row>
+      {rangeError && <Alert color="warning" className="mt-3 mb-0">{rangeError}</Alert>}
+      {!query.schoolId ? <div className="text-muted text-center py-5">مجموعه را انتخاب کنید.</div> : !rangeError && <RequestState loading={loading} error={error} empty={!items.length} onRetry={load} emptyText="تماسی مطابق فیلترها یافت نشد." />}
+      {!!items.length && !loading && !rangeError && <><div className="table-responsive mt-4"><Table bordered hover className="table-nowrap align-middle"><thead><tr>
+        <th>شماره مبدأ</th><th>شماره مقصد</th>{sortButton(sortHeaders[0])}<th>دانش‌آموز</th><th>نام کاربری</th><th>کد ملی</th><th>مشاور</th><th>پشتیبان</th><th>فرم تماس</th>{sortButton(sortHeaders[1])}{sortButton(sortHeaders[2])}{sortButton(sortHeaders[3])}<th>فایل صوتی</th>
+      </tr></thead><tbody>{items.map((item) => { const status = statusView(item.status); return <tr key={item.id}>
+        <td dir="ltr" className="text-end">{display(item.callerNumber)}</td><td dir="ltr" className="text-end">{display(item.destination)}</td><td><Badge color={status[1]}>{status[0]}</Badge></td>
+        <td>{personName(item.student, true)}</td><td>{display(item.student?.username)}</td><td>{display(item.student?.ssn)}</td><td>{personName(item.adviser)}</td><td>{personName(item.supporter)}</td><td>{display(item.supportForm?.title)}</td>
+        <td>{formatDuration(item.durationSeconds)}</td><td>{formatDateTime(item.startedAt)}</td><td>{formatDateTime(item.endedAt)}</td><td>{item.audioFiles.length ? <div className="d-grid gap-2">{item.audioFiles.map((audio) => <div key={audio.id || audio.url}><audio controls preload="none" src={audio.url} aria-label={audio.name || "فایل صوتی"} /><a href={audio.url} download={audio.name || true} className="small d-block">دانلود {audio.name || "فایل صوتی"}</a></div>)}</div> : "—"}</td>
+      </tr> })}</tbody></Table></div><Paginations perPageData={meta.limit} data={items} totalRecords={meta.total} currentPage={meta.page} setCurrentPage={(page) => updateQuery({ page })} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" /></>}
     </CardBody></Card>
-    <Modal isOpen={!!selected} toggle={() => setSelected(null)}><form onSubmit={submitResult}><ModalHeader toggle={() => setSelected(null)}>ثبت نتیجه تماس</ModalHeader><ModalBody><Label>نتیجه تماس</Label><Input required value={result} onChange={(e) => setResult(e.target.value)} placeholder="نتیجه را وارد کنید" /><Label className="mt-3">یادداشت (اختیاری)</Label><Input type="textarea" rows="4" value={note} onChange={(e) => setNote(e.target.value)} /></ModalBody><ModalFooter><Button type="submit" color="primary" disabled={saving}>ذخیره</Button><Button type="button" color="secondary" onClick={() => setSelected(null)}>انصراف</Button></ModalFooter></form></Modal>
-  </div></div>;
-};
-export default IncomingCallList;
+  </div></div>
+}
+export default IncomingCallList

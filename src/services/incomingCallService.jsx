@@ -4,6 +4,8 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 const options = { silent: true };
 const unwrap = (response) => response?.data?.data ?? response?.data;
 const INCOMING_CALL_DESTINATIONS = ["consultant", "supporter", "voice"];
+export const INCOMING_CALL_STATUSES = ["routing", "answered", "missed", "voice", "ended"];
+export const INCOMING_CALL_SORT_FIELDS = ["startedAt", "endedAt", "durationSeconds", "status"];
 export const normalizeIncomingCallPriorities = (priorities) => [
   ...new Set([
     ...(Array.isArray(priorities) ? priorities : []),
@@ -41,7 +43,41 @@ export const normalizeIncomingCall = (item = {}) => ({
   supporterId: item.supporterId ?? item.supporter_id,
   uniqueId: item.uniqueId ?? item.unique_id ?? item.cuid ?? item.routing_key,
   appName: item.appName ?? item.app_name ?? "",
+  student: item.student || null,
+  adviser: item.adviser || null,
+  supporter: item.supporter || null,
+  supportForm: item.supportForm ?? item.support_form ?? null,
+  audioFiles: Array.isArray(item.audioFiles ?? item.audio_files) ? (item.audioFiles ?? item.audio_files) : [],
 });
+
+const cleanText = (value) => typeof value === "string" ? value.trim() : value;
+const dateBoundary = (date, nextDay = false) => {
+  if (!date) return undefined;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date));
+  if (!match) return undefined;
+  const value = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + (nextDay ? 1 : 0));
+  return Number.isNaN(value.getTime()) ? undefined : value.toISOString();
+};
+
+export const buildIncomingCallParams = (params = {}, includePagination = true) => {
+  const status = INCOMING_CALL_STATUSES.includes(params.status) ? params.status : undefined;
+  const sortBy = INCOMING_CALL_SORT_FIELDS.includes(params.sortBy) ? params.sortBy : "startedAt";
+  const sortOrder = params.sortOrder === "ASC" ? "ASC" : "DESC";
+  const hasRange = Boolean(params.from && params.to);
+  return {
+    schoolId: schoolIdOf(params.schoolId),
+    ...(includePagination ? { page: Number(params.page) || 1, limit: Number(params.limit) || 20 } : {}),
+    search: cleanText(params.search) || undefined,
+    status,
+    ssn: cleanText(params.ssn) || undefined,
+    username: cleanText(params.username) || undefined,
+    formId: params.formId ? Number(params.formId) : undefined,
+    from: hasRange ? dateBoundary(params.from) : undefined,
+    to: hasRange ? dateBoundary(params.to, true) : undefined,
+    sortBy,
+    sortOrder,
+  };
+};
 
 export const getIncomingCallSettings = async (schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.settings), { params: { schoolId: schoolIdOf(schoolId) }, ...options }));
 export const getIncomingCallerProfile = async (callId, schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.incomingCalls.callerProfile(callId)), { params: { schoolId: schoolIdOf(schoolId) }, ...options }));
@@ -81,9 +117,29 @@ export const setIncomingAvailability = async (schoolId, isAvailable, config = op
     isAvailable: data?.isAvailable === true || Number(data?.is_available) === 1,
   };
 };
-export const getIncomingCalls = async ({ schoolId, page = 1, limit = 15, status = "", search = "" }) => {
-  const result = pageResult(await apiGet(getApiUrl(API_ROUTES.incomingCalls.list), { params: { schoolId: schoolIdOf(schoolId), page, limit, status: status || undefined, search: search.trim() || undefined }, ...options }), page, limit);
+export const getIncomingCalls = async (params = {}) => {
+  const requestParams = buildIncomingCallParams(params);
+  const result = pageResult(await apiGet(getApiUrl(API_ROUTES.incomingCalls.list), { params: requestParams, signal: params.signal, ...options }), requestParams.page, requestParams.limit);
   return { ...result, items: result.items.map(normalizeIncomingCall) };
+};
+const downloadFilename = (header, fallback) => {
+  const encoded = String(header || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  const plain = String(header || "").match(/filename="?([^";]+)"?/i)?.[1];
+  try { return decodeURIComponent(encoded || plain || fallback); } catch (_) { return fallback; }
+};
+export const exportIncomingCalls = async (format, params = {}) => {
+  const route = format === "xlsx" ? API_ROUTES.incomingCalls.exportXlsx : API_ROUTES.incomingCalls.exportCsv;
+  const response = await apiGet(getApiUrl(route), {
+    params: buildIncomingCallParams(params, false), responseType: "blob", timeout: 60000, ...options,
+  });
+  return {
+    blob: response.data,
+    filename: downloadFilename(response.headers?.["content-disposition"], `incoming-calls.${format === "xlsx" ? "xlsx" : "csv"}`),
+  };
+};
+export const saveIncomingCallsExport = ({ blob, filename }, documentRef = document, urlApi = window.URL) => {
+  const url = urlApi.createObjectURL(blob); const link = documentRef.createElement("a");
+  link.href = url; link.download = filename; documentRef.body.appendChild(link); link.click(); link.remove(); urlApi.revokeObjectURL(url);
 };
 export const saveIncomingCallResult = async (id, { schoolId, result, note }) => unwrap(await apiPatch(getApiUrl(API_ROUTES.incomingCalls.result(id)), { schoolId: schoolIdOf(schoolId), result: result.trim(), note: note?.trim() || undefined }, options));
 export const getIncomingStudents = async ({ schoolId, search = "", page = 1, limit = 15 }) => pageResult(await apiGet(getApiUrl(API_ROUTES.incomingCalls.students), { params: { schoolId: schoolIdOf(schoolId), search: search.trim() || undefined, page, limit }, ...options }), page, limit);

@@ -36,5 +36,13 @@ export const RequestState = ({ loading, error, empty, onRetry, emptyText = "دا
   return null;
 };
 
-export const formatDateTime = (value) => value ? new Intl.DateTimeFormat("fa-IR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value)) : "—";
-export const formatDuration = (seconds) => Number.isFinite(Number(seconds)) ? `${Math.floor(Number(seconds) / 60)}:${String(Number(seconds) % 60).padStart(2, "0")}` : "—";
+export const formatDateTime = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("fa-IR", { dateStyle: "short", timeStyle: "short" }).format(date);
+};
+export const formatDuration = (seconds) => {
+  if (!Number.isFinite(Number(seconds))) return "—";
+  const total = Math.max(0, Math.floor(Number(seconds)));
+  return `${String(Math.floor(total / 3600)).padStart(2, "0")}:${String(Math.floor((total % 3600) / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+};

@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Card, CardBody, CardHeader, Col, Container, Form, FormGroup, Input, Label, Row, Spinner } from "reactstrap";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { createUser, getUser, updateUser } from "../../services/userService.jsx";
-import { buildUserPayload, getUserApiErrors, isAdminUser, userDetailsToForm, validateUserForm } from "./userFormUtils.js";
+import { buildUserPayload, getUserApiErrors, isAdminUser, userDetailsToForm, validateUserForm, withAccountType } from "./userFormUtils.js";
+import { ACCOUNT_TYPE_OPTIONS } from "../../services/userCreateContract.js";
 
 const EMPTY_FORM = { name: "", email: "", username: "", ssn: "", phone: "", password: "", confirmPassword: "", accountType: "", isSuperAdviser: false, schoolIds: [] };
 
@@ -25,6 +26,7 @@ const UserForm = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEdit);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const submittingRef = useRef(false);
 
   document.title = `${isEdit ? "ویرایش کاربر" : "ایجاد کاربر"} | داشبورد آیسوق`;
 
@@ -55,7 +57,7 @@ const UserForm = () => {
   if (auth?.user && !permitted) return <Navigate to="/" replace />;
 
   const handleChange = ({ target: { name, value } }) => {
-    setForm((previous) => ({ ...previous, [name]: value, ...(name === "accountType" && value === "student" ? { isSuperAdviser: false } : {}) }));
+    setForm((previous) => name === "accountType" ? withAccountType(previous, value) : { ...previous, [name]: value });
     setErrors((previous) => ({ ...previous, [name]: undefined }));
   };
   const handleSchoolsChange = (event) => {
@@ -67,11 +69,12 @@ const UserForm = () => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (loading) return;
+    if (loading || submittingRef.current) return;
     setAlert(null);
     const validationErrors = validateUserForm(form, { isEdit, isAdmin });
     if (Object.keys(validationErrors).length) { setErrors(validationErrors); return; }
     setErrors({});
+    submittingRef.current = true;
     setLoading(true);
     try {
       const payload = buildUserPayload(form, { isEdit, isAdmin });
@@ -84,13 +87,16 @@ const UserForm = () => {
       const apiError = getUserApiErrors(error);
       setErrors(apiError.fieldErrors);
       setAlert({ type: "danger", message: apiError.message });
-    } finally { setLoading(false); }
+    } finally {
+      submittingRef.current = false;
+      setLoading(false);
+    }
   };
 
   return <div className="page-content"><Container fluid><Breadcrumbs title="کاربران" breadcrumbItem={isEdit ? "ویرایش کاربر" : "ایجاد کاربر"} /><Row><Col lg="8"><Card><CardHeader><h4 className="card-title mb-0">{isEdit ? "ویرایش کاربر" : "ایجاد کاربر جدید"}</h4></CardHeader><CardBody>
     {alert && <Alert color={alert.type}>{alert.message}</Alert>}
     {initialLoading ? <div className="text-center py-5"><Spinner /></div> : <Form onSubmit={handleSubmit} noValidate><Row className="g-3">
-      <Col md="6"><FormGroup><Label for="accountType">نوع کاربر <span className="text-danger">*</span></Label><Input id="accountType" name="accountType" type="select" value={form.accountType} onChange={handleChange} disabled={isEdit || loading}><option value="">انتخاب کنید</option><option value="student">دانش‌آموز</option><option value="adviser">مشاور</option></Input>{renderError("accountType")}</FormGroup></Col>
+      <Col md="6"><FormGroup><Label for="accountType">نوع کاربر <span className="text-danger">*</span></Label><Input id="accountType" name="accountType" type="select" value={form.accountType} onChange={handleChange} disabled={isEdit || loading}><option value="">انتخاب کنید</option>{ACCOUNT_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Input>{renderError("accountType")}</FormGroup></Col>
       {form.accountType === "adviser" && <Col md="6"><FormGroup><Label for="adviserLevel">سطح مشاور</Label><Input id="adviserLevel" type="select" value={form.isSuperAdviser ? "super" : "adviser"} disabled={loading} onChange={(event) => setForm((previous) => ({ ...previous, isSuperAdviser: event.target.value === "super" }))}><option value="adviser">مشاور</option><option value="super">سرمشاور</option></Input></FormGroup></Col>}
       {isAdmin && <Col md="12"><FormGroup><Label for="schoolIds">مجموعه <span className="text-danger">*</span></Label><Input id="schoolIds" type="select" multiple value={form.schoolIds} onChange={handleSchoolsChange} disabled={schoolsLoading || loading} style={{ minHeight: 120 }}>{schools.map((school) => <option key={school.id} value={String(school.id)}>{school.name || school.title || `مجموعه ${school.id}`}</option>)}</Input>{schoolsLoading && <div className="text-muted small mt-1">در حال دریافت مجموعه‌ها...</div>}{renderError("schoolIds")}</FormGroup></Col>}
       <Col md="6"><FormGroup><Label for="name">نام <span className="text-danger">*</span></Label><Input id="name" name="name" value={form.name} onChange={handleChange} disabled={loading} />{renderError("name")}</FormGroup></Col>
