@@ -1,3 +1,5 @@
+import { toUserCreatePayload, validateCreateUserPayload } from "../../services/userCreateContract.js";
+
 const USER_WRITABLE_FIELDS = ["name", "email", "username", "ssn", "phone"];
 
 export function normalizeDigits(value) {
@@ -11,15 +13,20 @@ export function isAdminUser(user) {
   });
 }
 
+export function withAccountType(form = {}, accountType) {
+  const next = { ...form, accountType };
+  if (accountType === "student") delete next.isSuperAdviser;
+  return next;
+}
+
 export function buildUserPayload(form = {}, { isEdit = false, isAdmin = false } = {}) {
+  if (!isEdit) return toUserCreatePayload(form, { includeSchoolIds: isAdmin });
   const payload = USER_WRITABLE_FIELDS.reduce((result, field) => {
     const value = field === "phone" || field === "ssn" ? normalizeDigits(form[field]).trim() : String(form[field] ?? "").trim();
     result[field] = value || null;
     return result;
   }, {});
-  if (form.password?.trim()) payload.password = form.password.trim();
-  if (!isEdit) payload.accountType = form.accountType;
-  if (form.accountType === "adviser") payload.isSuperAdviser = Boolean(form.isSuperAdviser);
+  if (form.password?.trim()) payload.password = form.password;
   if (isAdmin) payload.schoolIds = (form.schoolIds || []).map(Number).filter((id) => Number.isInteger(id) && id > 0);
   return payload;
 }
@@ -40,6 +47,14 @@ export function userDetailsToForm(user = {}) {
 }
 
 export function validateUserForm(form = {}, { isEdit = false, isAdmin = false } = {}) {
+  if (!isEdit) {
+    const payload = toUserCreatePayload(form, { includeSchoolIds: isAdmin });
+    const errors = validateCreateUserPayload(payload, { requireSchoolIds: isAdmin });
+    if (form.password !== String(form.confirmPassword ?? "")) errors.confirmPassword = ["تکرار رمز عبور با رمز عبور مطابقت ندارد"];
+    const email = String(form.email ?? "").trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = ["ایمیل معتبر وارد کنید"];
+    return errors;
+  }
   const errors = {};
   const username = String(form.username ?? "").trim();
   const password = String(form.password ?? "");
@@ -53,8 +68,6 @@ export function validateUserForm(form = {}, { isEdit = false, isAdmin = false } 
   if (!phone) errors.phone = ["شماره موبایل الزامی است"];
   if (ssn && !/^\d{10}$/.test(ssn)) errors.ssn = ["کد ملی باید دقیقاً ۱۰ رقم باشد"];
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = ["ایمیل معتبر وارد کنید"];
-  if (!["student", "adviser"].includes(form.accountType)) errors.accountType = ["نوع کاربر را انتخاب کنید"];
-  if (isAdmin && !(form.schoolIds || []).length) errors.schoolIds = ["انتخاب حداقل یک مجموعه الزامی است"];
   return errors;
 }
 
@@ -70,7 +83,9 @@ export function getUserApiErrors(error) {
   if (!fieldErrors.username && lower.includes("username")) fieldErrors.username = ["این نام کاربری قبلاً ثبت شده است"];
   if (!fieldErrors.phone && lower.includes("phone")) fieldErrors.phone = ["این شماره موبایل قبلاً ثبت شده است"];
   if (!fieldErrors.schoolIds && (lower.includes("school") || message.includes("مدرسه"))) fieldErrors.schoolIds = [message || "مجموعه انتخاب‌شده معتبر نیست"];
-  if (!fieldErrors.accountType && lower.includes("accounttype")) fieldErrors.accountType = ["نوع کاربر بعد از ساخت قابل تغییر نیست"];
+  const invalidAccountType = lower.includes("accounttype");
+  if (!fieldErrors.accountType && invalidAccountType) fieldErrors.accountType = ["نوع حساب ارسالی نامعتبر است؛ صفحه را تازه‌سازی کنید"];
+  if (error?.fieldErrors) Object.assign(fieldErrors, error.fieldErrors);
   const statusMessages = { 400: "اطلاعات فرم معتبر نیست.", 403: "شما مجوز انجام این عملیات را ندارید.", 404: "کاربر یا مجموعه موردنظر یافت نشد.", 409: "اطلاعات واردشده با یک رکورد موجود تداخل دارد." };
-  return { fieldErrors, message: message || statusMessages[error?.response?.status] || "ذخیره اطلاعات کاربر انجام نشد. لطفاً دوباره تلاش کنید." };
+  return { fieldErrors, message: invalidAccountType ? "نوع حساب ارسالی نامعتبر است؛ صفحه را تازه‌سازی کنید" : message || statusMessages[error?.response?.status] || "ذخیره اطلاعات کاربر انجام نشد. لطفاً دوباره تلاش کنید." };
 }

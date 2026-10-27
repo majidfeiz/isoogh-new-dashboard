@@ -43,6 +43,9 @@ export const API_ROUTES = {
   },
   users: {
     list: "/users",
+    create: "/users",
+    detail: (id) => `/users/${id}`,
+    update: (id) => `/users/${id}`,
     importRoles: "/authorization/users/roles/import",
     importRolesTemplate: "/authorization/users/roles/import/template",
   },

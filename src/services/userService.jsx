@@ -6,6 +6,7 @@ import {
   apiDelete,
 } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
+import { assertCreateUserPayload } from "./userCreateContract.js";
 
 // گرفتن لیست کاربران
 export async function getUsers({
@@ -85,8 +86,17 @@ export async function exportUsers({
 // ساخت کاربر جدید
 export async function createUser(payload, config = {}) {
   const url = getApiUrl(API_ROUTES.users.create);
-  const res = await apiPost(url, payload, config);
-  return res.data;
+  let validatedPayload;
+  try {
+    validatedPayload = assertCreateUserPayload(payload, {
+      requireSchoolIds: Object.prototype.hasOwnProperty.call(payload || {}, "schoolIds"),
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV === "development" && error?.fieldErrors?.accountType) console.debug("Invalid POST /users payload", payload);
+    throw error;
+  }
+  const res = await apiPost(url, validatedPayload, config);
+  return res?.data?.data || res?.data;
 }
 
 // گرفتن جزئیات یک کاربر
