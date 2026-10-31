@@ -59,6 +59,11 @@ const SidebarContent = (props) => {
     [permissionList]
   );
 
+  const roleList = useMemo(() => (auth?.user?.roles || [])
+    .map((role) => typeof role === "string" ? role : role?.name)
+    .filter(Boolean), [auth?.user?.roles]);
+  const hasAnyRole = useCallback((roles) => !roles?.length || roles.some((role) => roleList.includes(role)), [roleList]);
+
   const permissionsReady =
     permissionList.length > 0 ||
     Array.isArray(auth?.permissions) ||
@@ -197,6 +202,17 @@ const SidebarContent = (props) => {
         icon: "bx bx-chat",
         to: "/chat",
         permission: null,
+      },
+      {
+        type: "group",
+        label: "مالی و اشتراک",
+        icon: "bx bx-receipt",
+        permissionAny: ["billing.invoices.index", "billing.pricing.show"],
+        roles: ["admin", "super_manager", "manager"],
+        children: [
+          { label: "فاکتورها", to: "/billing/invoices", permission: "billing.invoices.index" },
+          { label: "تنظیم قیمت", to: "/billing/pricing", permission: "billing.pricing.show", roles: ["admin", "super_manager"] },
+        ],
       },
       {
         type: "group",
@@ -652,22 +668,22 @@ const SidebarContent = (props) => {
       .map((item) => {
         if (item.type === "group") {
           const children = (item.children || []).filter(
-            (ch) => !ch.permission || hasPermission(ch.permission)
+            (ch) => hasAnyRole(ch.roles) && (!ch.permission || hasPermission(ch.permission))
           );
 
           const groupAllowed = item.permissionAny
             ? hasAnyPermission(item.permissionAny)
             : children.length > 0;
 
-          if (!groupAllowed) return null;
+          if (!groupAllowed || !hasAnyRole(item.roles)) return null;
           return { ...item, children };
         }
 
-        if (item.permission && !hasPermission(item.permission)) return null;
+        if (!hasAnyRole(item.roles) || (item.permission && !hasPermission(item.permission))) return null;
         return item;
       })
       .filter(Boolean);
-  }, [menuItems, permissionsReady, hasPermission, hasAnyPermission]);
+  }, [menuItems, permissionsReady, hasPermission, hasAnyPermission, hasAnyRole]);
 
   // نگه داشتن instance در ref تا dispose همیشه درست انجام بشه
   const menuInstanceRef = useRef(null);
