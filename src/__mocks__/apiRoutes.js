@@ -120,6 +120,17 @@ export const API_ROUTES = {
     cancel: (id) => `/backups/${id}/cancel`,
     finalize: (id) => `/backups/${id}/finalize`,
   },
+  billing: {
+    invoices: "/billing/invoices",
+    invoice: (id) => `/billing/invoices/${id}`,
+    downloadInvoice: (id) => `/billing/invoices/${id}/download`,
+    pricing: "/billing/pricing",
+    requestPayment: (id) => `/billing/invoices/${id}/payments/request`,
+    manualPayment: (id) => `/billing/invoices/${id}/payments/manual`,
+    verifyPayment: (id) => `/billing/invoices/${id}/payments/verify`,
+    executeReminders: "/billing/reminders/execute",
+    executeRestrictions: "/billing/restrictions/execute",
+  },
   adviserPortal: {
     schoolSupportForms: (schoolId) => `/adviser-portal/schools/${schoolId}/support-forms`,
     supportFormDetail: (formId) => `/adviser-portal/support-forms/${formId}`,

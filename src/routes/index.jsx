@@ -323,11 +323,19 @@ import IncomingSupporterPanel from "../pages/IncomingCalls/IncomingSupporterPane
 import IncomingCallList from "../pages/IncomingCalls/IncomingCallList.jsx";
 import IncomingStudents from "../pages/IncomingCalls/IncomingStudents.jsx";
 import IncomingStudentProfile from "../pages/IncomingCalls/IncomingStudentProfile.jsx";
+import BillingInvoices from "../pages/Billing/BillingInvoices.jsx";
+import BillingInvoiceDetail from "../pages/Billing/BillingInvoiceDetail.jsx";
+import BillingPricing from "../pages/Billing/BillingPricing.jsx";
+import BillingPaymentCallback from "../pages/Billing/BillingPaymentCallback.jsx";
 
 
 const authProtectedRoutes = [
   { path: "/403", component: <AccessDenied /> },
   { path: "/dashboard", component: <Dashboard /> },
+  { path: "/billing/invoices", component: <ProtectedRoute roles={["admin", "super_manager", "manager"]} permission="billing.invoices.index"><BillingInvoices /></ProtectedRoute> },
+  { path: "/billing/invoices/:id", component: <ProtectedRoute roles={["admin", "super_manager", "manager"]} permission="billing.invoices.show"><BillingInvoiceDetail /></ProtectedRoute> },
+  { path: "/billing/pricing", component: <ProtectedRoute roles={["admin", "super_manager"]} permission="billing.pricing.show"><BillingPricing /></ProtectedRoute> },
+  { path: "/billing/payment/callback", component: <ProtectedRoute roles={["admin", "super_manager", "manager"]} permission="billing.payments.verify"><BillingPaymentCallback /></ProtectedRoute> },
   { path: "/dashboard-saas", component: <DashboardSaas /> },
   { path: "/dashboard-crypto", component: <DashboardCrypto /> },
   { path: "/blog", component: <Blog /> },
