@@ -23,6 +23,7 @@ Compact locator for active product features. Routes not listed here are mostly i
 | Audit logs | `pages/AuditLogs` | `auditLogService` | `auditLogs` | `/audit-logs` |
 | Import logs | `pages/ImportLogs` | `importLogService` | `importLogs` | `/import-logs*` |
 | Local backups | `pages/Backups` | `backupService`, `backupController`, `backupDirectoryStore` | `backups` | `/backups` |
+| Billing and subscriptions | `pages/Billing` | `billingService` | `billing` | `/billing/invoices`, `/billing/invoices/:id`, `/billing/pricing`, `/billing/payment/callback` |
 | VoIP history/live/traces/call queue/duration processing | `pages/Voip` | `voipService`, `callQueueService`, `voipDurationProcessingService` | `voip` | `/voip/outbound-call-histories*`, `/voip/call-traces`, `/voip/call-queue`, `/voip/duration-processing` |
 | VoIP analytics | `pages/Voip/Analytics` | `voipAnalyticsService` | `voipAnalytics` | `/voip/analytics` |
 | VoIP webhooks | `pages/VoipWebhooks` | `voipWebhookService` | `voipWebhooks` | `/voip-webhooks*` |

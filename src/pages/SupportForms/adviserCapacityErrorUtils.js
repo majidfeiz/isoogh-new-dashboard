@@ -5,7 +5,7 @@ export function adviserCapacityConflict(error) {
   const payload = error?.response?.data?.data ?? error?.response?.data ?? {}
   return {
     payload,
-    message: `ظرفیت این مشاور در فرم تکمیل است. تعداد فعلی: ${number(payload.activeCount)}، ظرفیت باقی‌مانده: ${number(payload.remainingCapacity)}، تعداد درخواستی: ${number(payload.requested)}.`,
+    message: `ظرفیت این مشاور تکمیل است. ظرفیت کل: ${number(payload.capacity)}، تعداد فعال یکتا: ${number(payload.activeCount)}، ظرفیت باقی‌مانده: ${number(payload.remainingCapacity)}، تعداد درخواستی: ${number(payload.requested)}، دانش‌آموز جدید مصرف‌کننده ظرفیت: ${number(payload.newStudents)}.`,
   }
 }
 
