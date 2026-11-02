@@ -6,7 +6,9 @@ import { formatBillingPeriodRange } from "./billingPeriodDate.js";
 
 const emptySnapshot = { fullName: "", nationalId: "", companyName: "", nationalCode: "", address: "" };
 const PAGE_SIZE = 20;
-export const billingPreviewKey = ({ schoolId, durationMonths, adviserId = null }) => ["billing", "invoice-preview", Number(schoolId), Number(durationMonths), adviserId == null ? null : Number(adviserId)];
+const JALALI_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
+const JALALI_YEARS = Array.from({ length: 8 }, (_, index) => 1403 + index);
+export const billingPreviewKey = ({ schoolId, jalaliYear, jalaliMonth, durationMonths, adviserId = null }) => ["billing", "invoice-preview", Number(schoolId), Number(jalaliYear), Number(jalaliMonth), Number(durationMonths), adviserId == null ? null : Number(adviserId)];
 const minimumTarget = (adviser, included) => Math.max(Number(included) || 0, Number(adviser?.peakStudentCount) || 0);
 const unixDate = (value) => value == null ? "—" : formatJalali(Number(value) < 1_000_000_000_000 ? Number(value) * 1000 : Number(value));
 const isPartMonth = (form, month) => {
@@ -25,7 +27,7 @@ function UsageDetails({ adviser, period }) {
 }
 
 export default function InvoiceCreateModal({ open, toggle, schools, fixedSchoolId, allowOverrides = false, onCreated }) {
-  const [form, setForm] = useState({ schoolId: fixedSchoolId || "", durationMonths: 1, customerType: "individual", customerSnapshot: emptySnapshot, advisers: {} });
+  const [form, setForm] = useState({ schoolId: fixedSchoolId || "", jalaliYear: "", jalaliMonth: "", durationMonths: 1, customerType: "individual", customerSnapshot: emptySnapshot, advisers: {} });
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
@@ -40,15 +42,15 @@ export default function InvoiceCreateModal({ open, toggle, schools, fixedSchoolI
 
   useEffect(() => { if (open) { setForm((current) => ({ ...current, schoolId: fixedSchoolId || current.schoolId, advisers: {} })); setManualPricing(false); setDiscountToman(""); setAdjustmentNote(""); setSearch(""); setPage(1); setError(""); } }, [open, fixedSchoolId]);
   useEffect(() => {
-    if (!open || !form.schoolId) { setPreview(null); setPreviewError(""); return undefined; }
+    if (!open || !form.schoolId || !form.jalaliYear || !form.jalaliMonth || ![1, 3].includes(Number(form.durationMonths))) { setPreview(null); setPreviewError(""); setPreviewLoading(false); return undefined; }
     let active = true; const controller = new AbortController();
     setPreviewLoading(true); setPreviewError(""); setPreview(null);
-    getBillingInvoicePreview({ schoolId: form.schoolId, durationMonths: form.durationMonths, signal: controller.signal }).then((result) => {
+    getBillingInvoicePreview({ schoolId: form.schoolId, jalaliYear: form.jalaliYear, jalaliMonth: form.jalaliMonth, durationMonths: form.durationMonths, signal: controller.signal }).then((result) => {
       if (!active) return; setPreview(result);
       setForm((current) => { const next = {}; result.advisers.forEach((adviser) => { const key = String(adviser.adviserId); const previous = current.advisers[key]; next[key] = { ...previous, selected: previous?.selected || false, targetStudentCapacity: previous?.targetStudentCapacity ?? adviser.suggestedTargetCapacity }; }); return { ...current, advisers: next }; });
     }).catch((requestError) => { if (active && requestError?.code !== "ERR_CANCELED") setPreviewError(billingErrorMessage(requestError)); }).finally(() => { if (active) setPreviewLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [form.durationMonths, form.schoolId, open, previewRevision]);
+  }, [form.durationMonths, form.jalaliMonth, form.jalaliYear, form.schoolId, open, previewRevision]);
 
   const filtered = useMemo(() => { const query = search.trim().toLocaleLowerCase("fa-IR"); return (preview?.advisers || []).filter((item) => !query || String(item.adviserName || "").toLocaleLowerCase("fa-IR").includes(query)); }, [preview, search]);
   const lastPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -69,7 +71,7 @@ export default function InvoiceCreateModal({ open, toggle, schools, fixedSchoolI
     event.preventDefault(); if (!valid || submitting) return; setSubmitting(true); setError("");
     const snapshot = form.customerType === "individual" ? { fullName: form.customerSnapshot.fullName.trim(), nationalId: form.customerSnapshot.nationalId.trim(), address: form.customerSnapshot.address.trim() || undefined } : { companyName: form.customerSnapshot.companyName.trim(), nationalCode: form.customerSnapshot.nationalCode.trim(), address: form.customerSnapshot.address.trim() || undefined };
     try {
-      const payload = { schoolId: Number(form.schoolId), durationMonths: Number(form.durationMonths), customerType: form.customerType, customerSnapshot: snapshot, advisers: selected.map((item) => { const value = form.advisers[String(item.adviserId)]; return { adviserId: Number(item.adviserId), targetStudentCapacity: Number(value.targetStudentCapacity), ...(allowOverrides && manualPricing && value.manualFinalAmountToman !== "" ? { manualFinalAmount: tomanToRial(value.manualFinalAmountToman) } : {}) }; }) };
+      const payload = { schoolId: Number(form.schoolId), jalaliYear: Number(form.jalaliYear), jalaliMonth: Number(form.jalaliMonth), durationMonths: Number(form.durationMonths), customerType: form.customerType, customerSnapshot: snapshot, advisers: selected.map((item) => { const value = form.advisers[String(item.adviserId)]; return { adviserId: Number(item.adviserId), targetStudentCapacity: Number(value.targetStudentCapacity), ...(allowOverrides && manualPricing && value.manualFinalAmountToman !== "" ? { manualFinalAmount: tomanToRial(value.manualFinalAmountToman) } : {}) }; }) };
       if (allowOverrides && Number(discountToman) > 0) payload.discountAmount = tomanToRial(discountToman);
       if (allowOverrides && adjustmentRequired) payload.adjustmentNote = adjustmentNote.trim();
       await createBillingInvoice(payload); invalidateBillingCache(); invalidateCapacityReport(); window.dispatchEvent(new CustomEvent("billing-invoice-preview:invalidate")); onCreated?.(); toggle();
@@ -79,7 +81,9 @@ export default function InvoiceCreateModal({ open, toggle, schools, fixedSchoolI
   return <Modal isOpen={open} toggle={submitting ? undefined : toggle} centered size="xl" dir="rtl"><form onSubmit={submit}><ModalHeader toggle={submitting ? undefined : toggle}>صدور فاکتور دوره‌ای</ModalHeader><ModalBody>
     {error && <Alert color="danger">{error}</Alert>}
     <FormGroup><Label for="billing-school">مجموعه</Label><Input id="billing-school" type="select" value={form.schoolId} disabled={!!fixedSchoolId} onChange={(event) => { setForm({ ...form, schoolId: event.target.value, advisers: {} }); setPage(1); }} required><option value="">انتخاب کنید</option>{schools.map((item) => <option key={item.id} value={item.id}>{item.name || item.title}</option>)}</Input></FormGroup>
+    <div className="row g-3"><FormGroup className="col-md-6"><Label for="billing-jalali-year">سال صورتحساب</Label><Input id="billing-jalali-year" type="select" value={form.jalaliYear} onChange={(event) => { setForm({ ...form, jalaliYear: event.target.value, advisers: {} }); setPage(1); }} required><option value="">انتخاب سال</option>{JALALI_YEARS.map((year) => <option key={year} value={year}>{year.toLocaleString("fa-IR", { useGrouping: false })}</option>)}</Input></FormGroup><FormGroup className="col-md-6"><Label for="billing-jalali-month">ماه شروع صورتحساب</Label><Input id="billing-jalali-month" type="select" value={form.jalaliMonth} onChange={(event) => { setForm({ ...form, jalaliMonth: event.target.value, advisers: {} }); setPage(1); }} required><option value="">انتخاب ماه</option>{JALALI_MONTHS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</Input></FormGroup></div>
     <FormGroup><Label for="billing-duration">مدت اشتراک</Label><Input id="billing-duration" type="select" value={form.durationMonths} onChange={(event) => { setForm({ ...form, durationMonths: Number(event.target.value), advisers: {} }); setPage(1); }}><option value={1}>یک‌ماهه</option><option value={3}>سه‌ماهه</option></Input></FormGroup>
+    {!form.jalaliYear || !form.jalaliMonth ? <Alert color="secondary">برای مشاهده پیش‌نمایش، سال و ماه شروع صورتحساب را انتخاب کنید.</Alert> : null}
     {previewLoading && <div aria-label="در حال دریافت پیش‌نمایش" className="border rounded p-3 mb-3"><span className="placeholder col-5 mb-3" /><span className="placeholder col-12 mb-2" /><span className="placeholder col-12 mb-2" /></div>}
     {previewError && <Alert color="danger">{previewError}<Button type="button" color="link" onClick={() => setPreviewRevision((value) => value + 1)}>تلاش دوباره</Button></Alert>}
     {preview && !previewLoading && <><div className="border rounded p-3 mb-3 bg-light"><div className="d-flex flex-wrap justify-content-between gap-2"><div><small className="text-muted d-block">دوره صورتحساب</small><strong>{preview.period?.jalaliLabel || "—"}</strong><small className="d-block mt-1">{formatBillingPeriodRange(preview.period?.periodStart, preview.period?.periodEnd)}</small></div><div><small className="text-muted d-block">ماه‌های دوره</small><strong>{(preview.period?.months || []).map((item) => item.jalaliLabel).join("، ") || "—"}</strong></div><div><small className="text-muted d-block">ظرفیت پایه</small><strong>{Number(preview.includedStudents || 0).toLocaleString("fa-IR")}</strong></div></div></div>
