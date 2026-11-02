@@ -1,4 +1,4 @@
-import { formatTicketChartDate, formatTicketDate, isGlobalTicketRole, isMessageAttachment, isTicketAdmin, isTicketAttachment, MAX_TICKET_FILE_SIZE, nextTicketStatus, sanitizeTicketStatus, validateTicketFile } from "./ticketUtils.js";
+import { appendTicketMessage, formatTicketChartDate, formatTicketDate, isGlobalTicketRole, isMessageAttachment, isTicketAdmin, isTicketAttachment, MAX_TICKET_FILE_SIZE, nextTicketStatus, sanitizeTicketStatus, ticketDetailQueryKey, ticketMessageIdentity, ticketOrganizationName, ticketUserName, validateTicketFile } from "./ticketUtils.js";
 
 describe("ticket rules", () => {
   test("only allows the next status in the workflow", () => {
@@ -41,5 +41,24 @@ describe("ticket rules", () => {
   test("maps polymorphic attachments to their ticket or message", () => {
     expect(isMessageAttachment({ model: "App\\Models\\TicketMessage", modelId: 7 }, 7)).toBe(true);
     expect(isTicketAttachment({ model: "App\\Models\\Ticket", modelId: 3 }, 3)).toBe(true);
+  });
+
+  test("uses only backend sender fields for message identity", () => {
+    expect(ticketMessageIdentity({ senderName: "سارا پشتیبان", senderOrganizationName: "آیسوق", senderSide: "isoogh" })).toEqual({ name: "سارا پشتیبان", organization: "آیسوق", badge: "آیسوق", side: "isoogh" });
+    expect(ticketMessageIdentity({ senderName: "علی مدیر", senderOrganizationName: "مدرسه دانا", senderSide: "school" })).toEqual({ name: "علی مدیر", organization: "مدرسه دانا", badge: "مدرسه دانا", side: "school" });
+  });
+
+  test("uses readable legacy fallbacks without inferring sender side", () => {
+    expect(ticketUserName(null)).toBe("کاربر نامشخص");
+    expect(ticketOrganizationName(null)).toBe("مجموعه نامشخص");
+    expect(ticketMessageIdentity({ senderName: null, senderOrganizationName: null, senderSide: null })).toEqual({ name: "کاربر نامشخص", organization: "مجموعه نامشخص", badge: "مجموعه نامشخص", side: "unknown" });
+    expect(ticketMessageIdentity({ initial: true }, { creatorName: "ثبت‌کننده", creatorOrganizationName: "مدرسه دانا" })).toEqual({ name: "ثبت‌کننده", organization: "مدرسه دانا", badge: "مدرسه دانا", side: "initial" });
+  });
+
+  test("detail key contains ticket and school and reply keeps the exact backend payload", () => {
+    expect(ticketDetailQueryKey(8, 94)).toEqual(["tickets", "detail", "8", "94"]);
+    const created = { id: 11, senderUserId: 3, senderName: "کارشناس واقعی", senderOrganizationName: "آیسوق", senderSide: "isoogh", message: "پاسخ", createdAt: null };
+    const next = appendTicketMessage({ id: 8, messages: [] }, created);
+    expect(next.messages[0]).toBe(created);
   });
 });

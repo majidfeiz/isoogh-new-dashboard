@@ -10,11 +10,19 @@ const buildScopeParams = ({ schoolId, allSchools } = {}) => {
   return {};
 };
 
-export async function getCallQueue({ schoolId, allSchools = false, status = "", page = 1, limit = 20, signal } = {}) {
+const buildReadParams = ({ schoolId, allSchools, from, to, ...values }) => {
+  if (Boolean(from) !== Boolean(to)) throw new Error("from and to must be provided together");
+  const params = new URLSearchParams();
+  Object.entries({ ...buildScopeParams({ schoolId, allSchools }), ...values, ...(from && to ? { from, to } : {}) })
+    .forEach(([key, value]) => { if (value !== undefined && value !== null && value !== "") params.set(key, String(value)); });
+  return params;
+};
+
+export async function getCallQueue({ schoolId, allSchools = false, status = "", page = 1, limit = 20, from, to, signal } = {}) {
   const response = await apiGet(getApiUrl(API_ROUTES.voip.callQueue), {
     signal,
     silent: true,
-    params: { ...buildScopeParams({ schoolId, allSchools }), status: status || undefined, page, limit },
+    params: buildReadParams({ schoolId, allSchools, status, page, limit, from, to }),
   });
   const data = unwrap(response);
   const items = Array.isArray(data.items) ? data.items : Array.isArray(data.data) ? data.data : [];
@@ -31,11 +39,11 @@ export async function getCallQueue({ schoolId, allSchools = false, status = "", 
   };
 }
 
-export async function getCallQueueStats({ schoolId, allSchools = false, signal } = {}) {
+export async function getCallQueueStats({ schoolId, allSchools = false, from, to, signal } = {}) {
   const response = await apiGet(getApiUrl(API_ROUTES.voip.callQueueStats), {
     signal,
     silent: true,
-    params: buildScopeParams({ schoolId, allSchools }),
+    params: buildReadParams({ schoolId, allSchools, from, to }),
   });
   return unwrap(response);
 }

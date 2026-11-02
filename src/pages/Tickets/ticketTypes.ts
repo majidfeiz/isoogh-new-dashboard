@@ -3,9 +3,14 @@ export const TICKET_STATUS_FLOW: TicketStatus[] = ["باز", "در حال برر
 
 export interface TicketTaxonomy { id: number | string; name: string }
 export interface TicketAttachment { id: number | string; ticketId: number | string; messageId?: number | string; fileName: string; fileSize?: number; fileType?: string; model: "App\\Models\\Ticket" | "App\\Models\\TicketMessage"; modelId: number | string; downloadUrl: string; createdAt: string }
-export interface TicketMessage { id: number | string; message: string; createdAt: string; sender?: { id?: number | string; name?: string; fullName?: string } }
+export interface TicketMessage {
+  id: number | string; senderUserId: number | string; senderName: string | null;
+  senderOrganizationName: string | null; senderSide: "isoogh" | "school";
+  message: string; createdAt: string | null;
+}
 export interface Ticket {
   id: number | string; ticketNumber: string; schoolId: number | string; creatorUserId: number | string;
+  schoolName: string | null; creatorName: string | null; creatorOrganizationName: string | null;
   title: string; description: string; status: TicketStatus; category?: TicketTaxonomy; result?: TicketTaxonomy;
   resolvedAt?: string; createdAt: string; messages?: TicketMessage[]; attachments?: TicketAttachment[];
 }

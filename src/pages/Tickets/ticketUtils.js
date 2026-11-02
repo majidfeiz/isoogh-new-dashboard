@@ -54,6 +54,27 @@ export const formatTicketChartDate = (value) => {
 };
 
 export const taxonomyName = (value) => (typeof value === "string" ? value : value?.name) || "تعیین نشده";
+export const ticketUserName = (value) => String(value || "").trim() || "کاربر نامشخص";
+export const ticketOrganizationName = (value) => String(value || "").trim() || "مجموعه نامشخص";
+
+export const ticketMessageIdentity = (message, ticket) => {
+  if (message?.initial) {
+    const organization = ticketOrganizationName(ticket?.creatorOrganizationName);
+    return { name: ticketUserName(ticket?.creatorName), organization, badge: organization, side: "initial" };
+  }
+  const side = message?.senderSide === "isoogh" ? "isoogh" : message?.senderSide === "school" ? "school" : "unknown";
+  const organization = ticketOrganizationName(message?.senderOrganizationName);
+  return {
+    name: ticketUserName(message?.senderName),
+    organization,
+    badge: side === "isoogh" ? "آیسوق" : organization,
+    side,
+  };
+};
+
+export const ticketDetailQueryKey = (ticketId, schoolId) => ["tickets", "detail", String(ticketId || ""), String(schoolId || "")];
+export const appendTicketMessage = (ticket, createdMessage) =>
+  ticket && createdMessage?.id ? { ...ticket, messages: [...(ticket.messages || []), createdMessage] } : ticket;
 
 export const isMessageAttachment = (attachment, messageId) =>
   String(attachment?.messageId || "") === String(messageId) ||
