@@ -30,9 +30,9 @@ describe("billing API contract", () => {
     const controller = new AbortController()
     const preview = { period: { jalaliLabel: "مهر ۱۴۰۵" }, advisers: [] }
     apiGet.mockResolvedValue({ data: { data: preview } })
-    await expect(getBillingInvoicePreview({ schoolId: 94, durationMonths: 3, adviserId: 12, signal: controller.signal })).resolves.toBe(preview)
-    expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/\/billing\/invoices\/preview$/), { params: { schoolId: 94, durationMonths: 3, adviserId: 12 }, signal: controller.signal, silent: true })
-    expect(billingPreviewQueryKey({ schoolId: 94, durationMonths: 3, adviserId: 12 })).toEqual(["billing", "invoice-preview", 94, 3, 12])
+    await expect(getBillingInvoicePreview({ schoolId: 94, jalaliYear: 1405, jalaliMonth: 8, durationMonths: 3, adviserId: 12, signal: controller.signal })).resolves.toBe(preview)
+    expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/\/billing\/invoices\/preview$/), { params: { schoolId: 94, jalaliYear: 1405, jalaliMonth: 8, durationMonths: 3, adviserId: 12 }, signal: controller.signal, silent: true })
+    expect(billingPreviewQueryKey({ schoolId: 94, jalaliYear: 1405, jalaliMonth: 8, durationMonths: 3, adviserId: 12 })).toEqual(["billing", "invoice-preview", 94, 1405, 8, 3, 12])
   })
 
   test.each([1, 3])("creates a %s month invoice without changing snapshot", async (durationMonths) => {
