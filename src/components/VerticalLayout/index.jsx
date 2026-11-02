@@ -17,6 +17,7 @@ import Header from "./Header";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import RightSidebar from "../CommonForBoth/RightSidebar";
+import ActiveCallBanner from "../ActiveCall/ActiveCallBanner.jsx";
 
 //redux
 import { useSelector, useDispatch } from "react-redux";
@@ -159,7 +160,7 @@ const Layout = (props) => {
           type={leftSideBarType}
           isMobile={isMobile}
         />
-        <div className="main-content">{props.children}</div>
+        <div className="main-content"><ActiveCallBanner />{props.children}</div>
         <Footer />
       </div>
       {showRightSidebar ? <RightSidebar /> : null}

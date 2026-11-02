@@ -28,6 +28,8 @@ import { getVoipCallDateDisplay } from "../../helpers/voipTime.js";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
 import CallTrackingWarningModal from "./CallTrackingWarningModal.jsx";
+import { useActiveCall } from "../../context/ActiveCallContext.jsx";
+import CallWaitingExperience from "../../components/ActiveCall/CallWaitingExperience.jsx";
 import { getCallTrace } from "../../services/voipService.jsx";
 import { isQueuedCallResponse, normalizeQueuedCall, pollQueuedCallTrace } from "./queuedCallUtils.js";
 import {
@@ -1002,10 +1004,13 @@ const StudentProfile = () => {
   const cooldown = useRef(false);
   const accessDeniedHandled = useRef(false);
   const [accountInactive, setAccountInactive] = useState(false);
+  const { activeCall, recentCall, countdown, recovering, hydrate, setSchoolId, setBlockedOpen } = useActiveCall();
 
   const canEdit = form?.canEdit === true;
   const canCall = form?.canCall === true && !accountInactive;
   const isReadOnly = Boolean(form) && (form.isClosed === true || !canEdit);
+  const currentSchoolId = Number(form?.schoolId ?? profile?.schoolId ?? location.state?.schoolId);
+  useEffect(() => { if (currentSchoolId) setSchoolId(currentSchoolId); }, [currentSchoolId, setSchoolId]);
 
   const handleFormEnded = useCallback((error) => {
     if (!isSupportFormEndedError(error)) return false;
@@ -1085,6 +1090,7 @@ const StudentProfile = () => {
 
   const handleCall = async () => {
     if (!canCall || cooldown.current || calling) return;
+    if (activeCall?.navigationLocked) { setBlockedOpen(true); return; }
     cooldown.current = true;
     setCallCooldownSeconds(CALL_COOLDOWN_SECONDS);
     setCalling(true);
@@ -1092,6 +1098,7 @@ const StudentProfile = () => {
       const result = await makeCall({ supportFormId: Number(formId), studentId: Number(studentId) });
       if (isQueuedCallResponse(result)) {
         const queued = normalizeQueuedCall(result);
+        hydrate({ ...result, ...queued, studentName: profile?.name, formTitle: profile?.supportFormTitle || form?.title }, { schoolId: currentSchoolId, supportFormId: Number(formId), studentId: Number(studentId) });
         const context = createAnswerCallContext({ formId, studentId, voipCallId: queued.voipCallId, isNewCall: true });
         if (!context) throw new Error("voipCallId is required");
         setQueuedCall(queued);
@@ -1122,6 +1129,13 @@ const StudentProfile = () => {
       setAnswerCallContext(context);
       setDrawerOpen(true);
     } catch (error) {
+      const conflict = error?.response?.data?.data ?? error?.response?.data;
+      if (error?.response?.status === 409 && conflict?.code === "ADVISER_CALL_ALREADY_QUEUED" && conflict.activeCall) {
+        hydrate(conflict.activeCall);
+        toast.info("تماس قبلی شما همچنان در صف است");
+        navigate(`/adviser-calls/forms/${conflict.activeCall.supportFormId}/students/${conflict.activeCall.studentId}`, { replace: true, state: { schoolId: conflict.activeCall.schoolId } });
+        return;
+      }
       if (!handleAccountInactive(error)) handleFormEnded(error);
       // The cooldown intentionally remains active after failed attempts as well.
     } finally {
@@ -1167,6 +1181,8 @@ const StudentProfile = () => {
   const breadcrumbTitle = profile?.supportFormTitle || `فرم ${formId}`;
   const initials = profile ? getInitials(profile.name) : "؟";
   const studentListPath = getAdviserStudentListPath(formId, location.state?.returnTo);
+  const currentQueuedCall = activeCall?.navigationLocked && Number(activeCall.supportFormId) === Number(formId) && Number(activeCall.studentId) === Number(studentId) ? activeCall : null;
+  const recentlyDispatchedCall = !currentQueuedCall && recentCall && Number(recentCall.supportFormId) === Number(formId) && Number(recentCall.studentId) === Number(studentId) ? recentCall : null;
 
   const tabs = [
     { id: "info",      label: "اطلاعات",       icon: "bx-user-circle"   },
@@ -1190,6 +1206,8 @@ const StudentProfile = () => {
 
         {isReadOnly && <Alert color="warning" className="d-flex align-items-center gap-2"><i className="bx bx-lock-alt font-size-18" />{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert>}
         {accountInactive && <Alert color="danger" className="d-flex align-items-center gap-2"><i className="bx bx-user-x font-size-18" />{ADVISER_ACCOUNT_INACTIVE_MESSAGE}</Alert>}
+
+        <CallWaitingExperience call={currentQueuedCall || recentlyDispatchedCall} countdown={currentQueuedCall ? countdown : null} recovering={currentQueuedCall ? recovering : false} submitting={calling && !currentQueuedCall && !recentlyDispatchedCall} studentName={profile?.name} />
 
         {/* ── Hero Card ──────────────────────────────────────────────────── */}
         <Card className="border-0 shadow-sm mb-4 overflow-hidden">
@@ -1227,7 +1245,7 @@ const StudentProfile = () => {
                 <Button
                   color="light"
                   size="sm"
-                  onClick={() => navigate(studentListPath)}
+                  onClick={() => activeCall?.navigationLocked ? setBlockedOpen(true) : navigate(studentListPath)}
                   className="d-flex align-items-center gap-1"
                 >
                   <i className="bx bx-arrow-back" />
@@ -1246,14 +1264,17 @@ const StudentProfile = () => {
                 <Button
                   color="success"
                   onClick={handleCall}
-                  disabled={!canCall || calling || profileLoading || callCooldownSeconds > 0}
+                  disabled={!canCall || activeCall?.navigationLocked || calling || profileLoading || callCooldownSeconds > 0}
+                  title={activeCall?.navigationLocked ? "ابتدا منتظر ارسال تماس فعلی بمانید" : "برقراری تماس"}
                   className="d-flex align-items-center gap-2 px-4"
                   style={{ fontWeight: 600 }}
                 >
-                  {callCooldownSeconds > 0 ? (
+                  {currentQueuedCall ? (
+                    <><i className="bx bx-time-five font-size-16" />تماس در صف است؛ لطفاً صبر کنید</>
+                  ) : callCooldownSeconds > 0 ? (
                     <>
                       {calling ? <Spinner size="sm" /> : <i className="bx bx-time-five font-size-16" />}
-                      تماس مجدد تا {callCooldownSeconds.toLocaleString("fa-IR")} ثانیه
+                      {calling ? "در حال ثبت درخواست تماس…" : `تماس مجدد تا ${callCooldownSeconds.toLocaleString("fa-IR")} ثانیه`}
                     </>
                   ) : (
                     <><i className="bx bx-phone-call font-size-16" />برقراری تماس</>
@@ -1333,7 +1354,6 @@ const StudentProfile = () => {
         </Card>
       </div>
 
-      {queuedCall ? <Alert color="info" className="mt-3">درخواست تماس در صف قرار دارد (شناسه صف: {queuedCall.queueJobId ?? "—"}، پیشرفت: {queuedCall.progress.toLocaleString("fa-IR")}٪). {queuedCall.traceId ? <Link to={`/voip/call-traces?traceId=${queuedCall.traceId}`}>مشاهده رهگیری</Link> : null}</Alert> : null}
 
       <AnswerDrawer
         open={drawerOpen}

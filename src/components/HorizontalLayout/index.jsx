@@ -20,6 +20,7 @@ import Navbar from "./Navbar";
 import Header from "./Header";
 import Footer from "./Footer";
 import RightSidebar from "../CommonForBoth/RightSidebar";
+import ActiveCallBanner from "../ActiveCall/ActiveCallBanner.jsx";
 import { useLocation } from "react-router-dom";
 
 const Layout = (props) => {
@@ -144,7 +145,7 @@ const Layout = (props) => {
           openLeftMenuCallBack={openMenu}
         />
         <Navbar menuOpen={isMenuOpened} />
-        <div className="main-content">{props.children}</div>
+        <div className="main-content"><ActiveCallBanner />{props.children}</div>
         <Footer />
       </div>
 
