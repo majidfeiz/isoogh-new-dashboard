@@ -24,6 +24,7 @@ import moment from "moment-jalaali";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { useActiveCall } from "../../context/ActiveCallContext.jsx";
 import CallTrackingWarningModal from "./CallTrackingWarningModal.jsx";
 import { getCallTrace } from "../../services/voipService.jsx";
 import { isQueuedCallResponse, normalizeQueuedCall, pollQueuedCallTrace } from "./queuedCallUtils.js";
@@ -495,12 +496,14 @@ const FormDetail = () => {
   const accessDeniedHandled = useRef(false);
   const [callingIds, setCallingIds] = useState({});
   const [accountInactive, setAccountInactive] = useState(false);
+  const { activeCall, hydrate, setSchoolId, setBlockedOpen } = useActiveCall();
 
   const canEdit = form?.canEdit === true;
   const canCall = form?.canCall === true && !accountInactive;
   const isReadOnly = Boolean(form) && (form.isClosed === true || !canEdit);
   const canUpdateStudentStatus = hasPermission("adviser-portal.students.update");
   const statusSchoolId = Number(form?.schoolId ?? location.state?.schoolId);
+  useEffect(() => { if (statusSchoolId) setSchoolId(statusSchoolId); }, [setSchoolId, statusSchoolId]);
 
   const handleFormEnded = useCallback((error) => {
     if (!isSupportFormEndedError(error)) return false;
@@ -626,6 +629,7 @@ const FormDetail = () => {
   const handleCallClick = async (student) => {
     if (!canCall) return;
     const id = student.studentId ?? student.id;
+    if (activeCall?.navigationLocked) { setBlockedOpen(true); return; }
     if (callCooldown.current[id]) return;
 
     callCooldown.current[id] = true;
@@ -640,6 +644,7 @@ const FormDetail = () => {
       const result = await makeCall({ supportFormId: Number(formId), studentId: id });
       if (isQueuedCallResponse(result)) {
         const queued = normalizeQueuedCall(result);
+        hydrate({ ...result, ...queued, studentName: student.name, formTitle: form?.title }, { schoolId: statusSchoolId, supportFormId: Number(formId), studentId: id });
         const context = createAnswerCallContext({ formId, studentId: id, voipCallId: queued.voipCallId, student, isNewCall: true });
         if (!context) throw new Error("voipCallId is required");
         setQueuedCall(queued);
@@ -672,6 +677,13 @@ const FormDetail = () => {
       fetchStudents(meta.page, search, callStatus, workShiftId, sort);
       fetchStats();
     } catch (error) {
+      const conflict = error?.response?.data?.data ?? error?.response?.data;
+      if (error?.response?.status === 409 && conflict?.code === "ADVISER_CALL_ALREADY_QUEUED" && conflict.activeCall) {
+        hydrate(conflict.activeCall);
+        toast.info("تماس قبلی شما همچنان در صف است");
+        navigate(`/adviser-calls/forms/${conflict.activeCall.supportFormId}/students/${conflict.activeCall.studentId}`, { replace: true, state: { schoolId: conflict.activeCall.schoolId } });
+        return;
+      }
       if (!handleAccountInactive(error)) handleFormEnded(error);
       callCooldown.current[id] = false;
       setCallingIds((p) => ({ ...p, [id]: false }));
@@ -1100,12 +1112,12 @@ const FormDetail = () => {
                             <Button
                               color="primary"
                               size="sm"
-                              disabled={!canCall || callingIds[student.studentId ?? student.id]}
+                              disabled={!canCall || activeCall?.navigationLocked || callingIds[student.studentId ?? student.id]}
                               onClick={() => handleCallClick(student)}
-                              title="برقراری تماس"
+                              title={activeCall?.navigationLocked ? "ابتدا منتظر ارسال تماس فعلی بمانید" : "برقراری تماس"}
                             >
                               {callingIds[student.studentId ?? student.id] ? (
-                                <Spinner size="sm" />
+                                <><Spinner size="sm" className="me-1" />در حال ثبت درخواست تماس…</>
                               ) : (
                                 <i className="bx bx-phone" />
                               )}

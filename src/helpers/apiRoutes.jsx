@@ -160,6 +160,7 @@ export const API_ROUTES = {
   },
   billing: {
     invoices: "/billing/invoices",
+    invoicePreview: "/billing/invoices/preview",
     invoice: (id) => `/billing/invoices/${id}`,
     downloadInvoice: (id) => `/billing/invoices/${id}/download`,
     pricing: "/billing/pricing",
@@ -353,6 +354,7 @@ export const API_ROUTES = {
       `/adviser-portal/support-forms/${formId}/students/${studentId}/contacts/${contactId}`,
     contactSubjects: "/adviser-portal/contact-subjects",
     call: "/adviser-portal/call",
+    activeCall: "/adviser-portal/calls/active",
     callLogs: "/adviser-portal/call-logs",
     stats: "/adviser-portal/stats",
   },

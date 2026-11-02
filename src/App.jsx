@@ -22,6 +22,7 @@ import NonAuthLayout from "./components/NonAuthLayout";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import ImpersonationBanner from "./components/Common/ImpersonationBanner.jsx";
 import IncomingCallRealtime from "./components/IncomingCalls/IncomingCallRealtime.jsx";
+import { ActiveCallProvider } from "./context/ActiveCallContext.jsx";
 
 // Import scss
 import "./assets/scss/theme.scss";
@@ -60,7 +61,7 @@ const App = (props) => {
     <AuthProvider>
       <>
         <ImpersonationBanner />
-        <Routes>
+        <ActiveCallProvider><Routes>
           {publicRoutes.map((route, idx) => (
             <Route
               path={route.path}
@@ -82,7 +83,7 @@ const App = (props) => {
               exact={true}
             />
           ))}
-        </Routes>
+        </Routes></ActiveCallProvider>
         <IncomingCallRealtime />
         <ToastContainer position="top-right" rtl autoClose={5000} />
       </>

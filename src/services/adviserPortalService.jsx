@@ -455,6 +455,23 @@ export async function makeCall({ supportFormId, studentId, priority }) {
   };
 }
 
+export async function getActiveAdviserCall(schoolId, signal) {
+  const normalizedSchoolId = Number(schoolId);
+  if (!Number.isInteger(normalizedSchoolId) || normalizedSchoolId <= 0) {
+    throw new Error("schoolId is required");
+  }
+  const res = await apiGet(getApiUrl(API_ROUTES.adviserPortal.activeCall), {
+    params: { schoolId: normalizedSchoolId },
+    signal,
+    silent: true,
+  });
+  const data = res?.data?.data || res?.data || {};
+  if (!Object.prototype.hasOwnProperty.call(data, "activeCall")) {
+    throw new Error("Invalid active call response");
+  }
+  return data.activeCall || null;
+}
+
 export async function submitAnswers({ formId, studentId, answers, voipCallId, callSuccessful }) {
   const normalizedVoipCallId = Number(voipCallId);
   if (!Number.isInteger(normalizedVoipCallId) || normalizedVoipCallId <= 0) {

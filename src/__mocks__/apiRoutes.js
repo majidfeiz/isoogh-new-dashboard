@@ -122,6 +122,7 @@ export const API_ROUTES = {
   },
   billing: {
     invoices: "/billing/invoices",
+    invoicePreview: "/billing/invoices/preview",
     invoice: (id) => `/billing/invoices/${id}`,
     downloadInvoice: (id) => `/billing/invoices/${id}/download`,
     pricing: "/billing/pricing",
@@ -132,6 +133,7 @@ export const API_ROUTES = {
     executeRestrictions: "/billing/restrictions/execute",
   },
   adviserPortal: {
+    activeCall: "/adviser-portal/calls/active",
     schoolSupportForms: (schoolId) => `/adviser-portal/schools/${schoolId}/support-forms`,
     supportFormDetail: (formId) => `/adviser-portal/support-forms/${formId}`,
     supportFormStudents: (formId) => `/adviser-portal/support-forms/${formId}/students`,
