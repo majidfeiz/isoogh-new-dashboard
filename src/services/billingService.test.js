@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { createBillingInvoice, createManualBillingPayment, downloadBillingInvoice, getBillingInvoice, getBillingInvoices, requestBillingPayment, updateBillingPricing, verifyBillingPayment } from "./billingService.jsx"
+import { billingPreviewQueryKey, createBillingInvoice, createManualBillingPayment, downloadBillingInvoice, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, requestBillingPayment, updateBillingPricing, verifyBillingPayment } from "./billingService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }))
 
@@ -24,6 +24,15 @@ describe("billing API contract", () => {
     apiGet.mockResolvedValue({ data: { data: { id: "4", items: [{ id: "4", adviser_id: "5389", adviser_name_snapshot: "سحر خوشبین", student_count: 183, target_student_capacity: 250, base_unit_amount: "20000000", pricing_snapshot: { extraSteps: 3 }, final_amount: "26000000" }] } } })
     const result = await getBillingInvoice(4, 94)
     expect(result.items[0]).toEqual(expect.objectContaining({ adviserId: "5389", adviserName: "سحر خوشبین", studentCount: 183, targetStudentCapacity: 250, baseAmount: "20000000", calculatedSteps: 3, finalAmount: "26000000" }))
+  })
+
+  test("requests the server-authoritative Jalali period preview with an abort signal", async () => {
+    const controller = new AbortController()
+    const preview = { period: { jalaliLabel: "مهر ۱۴۰۵" }, advisers: [] }
+    apiGet.mockResolvedValue({ data: { data: preview } })
+    await expect(getBillingInvoicePreview({ schoolId: 94, durationMonths: 3, adviserId: 12, signal: controller.signal })).resolves.toBe(preview)
+    expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/\/billing\/invoices\/preview$/), { params: { schoolId: 94, durationMonths: 3, adviserId: 12 }, signal: controller.signal, silent: true })
+    expect(billingPreviewQueryKey({ schoolId: 94, durationMonths: 3, adviserId: 12 })).toEqual(["billing", "invoice-preview", 94, 3, 12])
   })
 
   test.each([1, 3])("creates a %s month invoice without changing snapshot", async (durationMonths) => {

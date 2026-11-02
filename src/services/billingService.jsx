@@ -21,6 +21,7 @@ const normalizeInvoiceLine = (line = {}) => ({
   periodStart: line.periodStart ?? line.period_start,
   periodEnd: line.periodEnd ?? line.period_end,
   baseAmount: line.baseAmount ?? line.base_amount ?? line.base_unit_amount,
+  discountAmount: line.discountAmount ?? line.discount_amount,
   pricingSnapshot: line.pricingSnapshot ?? line.pricing_snapshot,
   finalAmount: line.finalAmount ?? line.final_amount,
   calculatedFinalAmount: line.calculatedFinalAmount ?? line.calculated_final_amount,
@@ -76,6 +77,25 @@ export async function getBillingInvoices(params = {}) {
 export async function getBillingInvoice(id, schoolId) {
   const response = await apiGet(getApiUrl(API_ROUTES.billing.invoice(id)), { params: schoolParams(schoolId) });
   return normalizeBillingInvoice(unwrap(response));
+}
+
+export const billingPreviewQueryKey = ({ schoolId, durationMonths, adviserId } = {}) => [
+  "billing", "invoice-preview", Number(schoolId), Number(durationMonths), adviserId == null || adviserId === "" ? null : Number(adviserId),
+];
+
+export async function getBillingInvoicePreview({ schoolId, durationMonths, adviserId, signal } = {}) {
+  const response = await apiGet(getApiUrl(API_ROUTES.billing.invoicePreview), {
+    params: {
+      schoolId: Number(schoolId),
+      durationMonths: Number(durationMonths),
+      adviserId: adviserId == null || adviserId === "" ? undefined : Number(adviserId),
+    },
+    signal,
+    silent: true,
+  });
+  const data = unwrap(response);
+  if (!data?.period || !Array.isArray(data?.advisers)) throw new Error("Invalid billing preview response");
+  return data;
 }
 
 const filenameFromDisposition = (value, fallback) => {
