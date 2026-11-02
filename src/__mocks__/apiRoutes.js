@@ -122,6 +122,7 @@ export const API_ROUTES = {
   },
   billing: {
     invoices: "/billing/invoices",
+    invoicePreview: "/billing/invoices/preview",
     invoice: (id) => `/billing/invoices/${id}`,
     downloadInvoice: (id) => `/billing/invoices/${id}/download`,
     pricing: "/billing/pricing",
