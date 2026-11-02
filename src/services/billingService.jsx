@@ -79,14 +79,16 @@ export async function getBillingInvoice(id, schoolId) {
   return normalizeBillingInvoice(unwrap(response));
 }
 
-export const billingPreviewQueryKey = ({ schoolId, durationMonths, adviserId } = {}) => [
-  "billing", "invoice-preview", Number(schoolId), Number(durationMonths), adviserId == null || adviserId === "" ? null : Number(adviserId),
+export const billingPreviewQueryKey = ({ schoolId, jalaliYear, jalaliMonth, durationMonths, adviserId } = {}) => [
+  "billing", "invoice-preview", Number(schoolId), Number(jalaliYear), Number(jalaliMonth), Number(durationMonths), adviserId == null || adviserId === "" ? null : Number(adviserId),
 ];
 
-export async function getBillingInvoicePreview({ schoolId, durationMonths, adviserId, signal } = {}) {
+export async function getBillingInvoicePreview({ schoolId, jalaliYear, jalaliMonth, durationMonths, adviserId, signal } = {}) {
   const response = await apiGet(getApiUrl(API_ROUTES.billing.invoicePreview), {
     params: {
       schoolId: Number(schoolId),
+      jalaliYear: Number(jalaliYear),
+      jalaliMonth: Number(jalaliMonth),
       durationMonths: Number(durationMonths),
       adviserId: adviserId == null || adviserId === "" ? undefined : Number(adviserId),
     },
