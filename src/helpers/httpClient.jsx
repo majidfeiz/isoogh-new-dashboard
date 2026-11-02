@@ -93,7 +93,8 @@ http.interceptors.response.use(
     // config.silent = true باعث می‌شود toast نمایش داده نشود (مثلاً در فرم لاگین)
     const errorPayload = error?.response?.data?.data ?? error?.response?.data;
     const isSupportFormEnded = status === 403 && errorPayload?.code === "SUPPORT_FORM_ENDED";
-    if (!error.config?.silent && !isSupportFormEnded) {
+    const isActiveAdviserCall = status === 409 && errorPayload?.code === "ADVISER_CALL_ALREADY_QUEUED";
+    if (!error.config?.silent && !isSupportFormEnded && !isActiveAdviserCall) {
       toast.error(msg, { autoClose: 4000 });
     }
 

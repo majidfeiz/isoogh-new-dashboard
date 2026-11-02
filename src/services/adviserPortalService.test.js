@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { getAdviserFormStudents, getAdviserSupportFormDetail, getStudentAnswers, getStudentCallLogs, getStudentProfile, makeCall, submitAnswers, updateAdviserStudentStatus, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
+import { getActiveAdviserCall, getAdviserFormStudents, getAdviserSupportFormDetail, getStudentAnswers, getStudentCallLogs, getStudentProfile, makeCall, submitAnswers, updateAdviserStudentStatus, updateAdviserStudentWorkShift } from "./adviserPortalService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({
   apiGet: jest.fn(),
@@ -67,6 +67,21 @@ test("normalizes the new VoIP call id from snake-case call responses", async () 
     voipCallId: 456,
     callGroupId: "group-1",
   }))
+})
+
+test("loads the school-scoped active adviser call with an abort signal", async () => {
+  const controller = new AbortController()
+  apiGet.mockResolvedValue({ data: { data: { activeCall: { queueJobId: 8, schoolId: 5 } } } })
+  await expect(getActiveAdviserCall(5, controller.signal)).resolves.toEqual({ queueJobId: 8, schoolId: 5 })
+  expect(apiGet).toHaveBeenCalledWith(
+    "http://127.0.0.1:8040/adviser-portal/calls/active",
+    { params: { schoolId: 5 }, signal: controller.signal, silent: true }
+  )
+})
+
+test("rejects malformed active-call payloads instead of unlocking", async () => {
+  apiGet.mockResolvedValue({ data: { data: {} } })
+  await expect(getActiveAdviserCall(5)).rejects.toThrow("Invalid active call response")
 })
 
 test("uses the call-log row id as voipCallId for historical questionnaires", async () => {
