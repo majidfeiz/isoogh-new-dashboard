@@ -326,16 +326,24 @@ import IncomingStudentProfile from "../pages/IncomingCalls/IncomingStudentProfil
 import BillingInvoices from "../pages/Billing/BillingInvoices.jsx";
 import BillingInvoiceDetail from "../pages/Billing/BillingInvoiceDetail.jsx";
 import BillingPricing from "../pages/Billing/BillingPricing.jsx";
-import BillingPaymentCallback from "../pages/Billing/BillingPaymentCallback.jsx";
+import BillingCallbackRouter from "../pages/Billing/BillingCallbackRouter.jsx";
+import BillingWallet from "../pages/Billing/BillingWallet.jsx";
+import BillingWalletCallback from "../pages/Billing/BillingWalletCallback.jsx";
+import BillingAutoInvoices from "../pages/Billing/BillingAutoInvoices.jsx";
+import PaymentAuditLogs from "../pages/Billing/PaymentAuditLogs.jsx";
 
 
 const authProtectedRoutes = [
   { path: "/403", component: <AccessDenied /> },
   { path: "/dashboard", component: <Dashboard /> },
-  { path: "/billing/invoices", component: <ProtectedRoute roles={["admin", "super_manager", "manager"]} permission="billing.invoices.index"><BillingInvoices /></ProtectedRoute> },
-  { path: "/billing/invoices/:id", component: <ProtectedRoute roles={["admin", "super_manager", "manager"]} permission="billing.invoices.show"><BillingInvoiceDetail /></ProtectedRoute> },
-  { path: "/billing/pricing", component: <ProtectedRoute roles={["admin", "super_manager"]} permission="billing.pricing.show"><BillingPricing /></ProtectedRoute> },
-  { path: "/billing/payment/callback", component: <ProtectedRoute roles={["admin", "super_manager", "manager"]} permission="billing.payments.verify"><BillingPaymentCallback /></ProtectedRoute> },
+  { path: "/billing/invoices", component: <ProtectedRoute permission="billing.invoices.index"><BillingInvoices /></ProtectedRoute> },
+  { path: "/billing/invoices/:id", component: <ProtectedRoute permission="billing.invoices.show"><BillingInvoiceDetail /></ProtectedRoute> },
+  { path: "/billing/pricing", component: <ProtectedRoute permission="billing.pricing.show"><BillingPricing /></ProtectedRoute> },
+  { path: "/billing/payment/callback", component: <ProtectedRoute permissionAny={["billing.payments.verify", "billing.wallet.topup"]}><BillingCallbackRouter /></ProtectedRoute> },
+  { path: "/billing/wallet", component: <ProtectedRoute permission="billing.wallet.show"><BillingWallet /></ProtectedRoute> },
+  { path: "/billing/wallet/callback", component: <ProtectedRoute permission="billing.wallet.topup"><BillingWalletCallback /></ProtectedRoute> },
+  { path: "/billing/auto-invoices", component: <ProtectedRoute permission="billing.auto-invoices.index"><BillingAutoInvoices /></ProtectedRoute> },
+  { path: "/billing/payment-logs", component: <ProtectedRoute permission="audit-logs.index"><PaymentAuditLogs /></ProtectedRoute> },
   { path: "/dashboard-saas", component: <DashboardSaas /> },
   { path: "/dashboard-crypto", component: <DashboardCrypto /> },
   { path: "/blog", component: <Blog /> },

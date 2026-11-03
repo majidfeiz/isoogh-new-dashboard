@@ -7,16 +7,26 @@ export const SchoolPicker = ({ value, onChange, disabled = false }) => {
   const { user, hasPermission, setSelectedSchoolId } = useAuth();
   const [schools, setSchools] = useState([]);
   const [error, setError] = useState(false);
+  const selectOnlySchool = (items) => {
+    if (value || items.length !== 1) return;
+    const id = String(items[0].id);
+    setSelectedSchoolId(id);
+    onChange(id);
+  };
   const load = () => {
     setError(false);
     if (!hasPermission("schools.index")) {
       const ownSchoolId = user?.schoolId ?? user?.school_id;
       const scoped = user?.schools || (user?.school ? [user.school] : ownSchoolId ? [{ id: ownSchoolId, name: user.schoolName || user.school_name || "مجموعه من" }] : []);
       setSchools(scoped);
-      if (!value && scoped.length === 1) { const id = String(scoped[0].id); setSelectedSchoolId(id); onChange(id); }
+      selectOnlySchool(scoped);
       return;
     }
-    getSchools({ page: 1, limit: 100 }).then((res) => setSchools(res.items || [])).catch(() => setError(true));
+    getSchools({ page: 1, limit: 100 }).then((res) => {
+      const permittedSchools = res.items || [];
+      setSchools(permittedSchools);
+      selectOnlySchool(permittedSchools);
+    }).catch(() => setError(true));
   };
   useEffect(load, []);
   return <div>

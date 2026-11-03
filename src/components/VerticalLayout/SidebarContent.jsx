@@ -207,11 +207,13 @@ const SidebarContent = (props) => {
         type: "group",
         label: "مالی و اشتراک",
         icon: "bx bx-receipt",
-        permissionAny: ["billing.invoices.index", "billing.pricing.show"],
-        roles: ["admin", "super_manager", "manager"],
+        permissionAny: ["billing.invoices.index", "billing.pricing.show", "billing.wallet.show", "billing.auto-invoices.index", "audit-logs.index"],
         children: [
           { label: "فاکتورها", to: "/billing/invoices", permission: "billing.invoices.index" },
-          { label: "تنظیم قیمت", to: "/billing/pricing", permission: "billing.pricing.show", roles: ["admin", "super_manager"] },
+          { label: "کیف پول", to: "/billing/wallet", permission: "billing.wallet.show" },
+          { label: "لاگ عملیات پرداخت", to: "/billing/payment-logs", permission: "audit-logs.index" },
+          { label: "صدور خودکار", to: "/billing/auto-invoices", permission: "billing.auto-invoices.index" },
+          { label: "تنظیم قیمت", to: "/billing/pricing", permission: "billing.pricing.show" },
         ],
       },
       {

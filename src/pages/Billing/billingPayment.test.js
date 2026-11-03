@@ -6,7 +6,7 @@ describe("provider-independent billing payment flow", () => {
   test.each(["zarinpal", "sadad"])("validates and stores %s payment before redirect", (provider) => {
     const result = validatePaymentRequestResult({ provider, authority: "sensitive-authority", paymentUrl: "https://psp.example/pay", amount: 200000, invoiceNumber: "INV-1" })
     savePendingPayment({ invoiceId: 3, schoolId: 145, provider: result.provider, authority: result.authority })
-    expect(getPendingPayment()).toEqual({ invoiceId: "3", schoolId: 145, provider, authority: "sensitive-authority" })
+    expect(getPendingPayment()).toEqual({ invoiceId: "3", schoolId: 145, provider, authority: "sensitive-authority", paymentType: "invoice_payment" })
   })
 
   test("parses Zarinpal callback fields", () => {

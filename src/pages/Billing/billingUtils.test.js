@@ -1,4 +1,4 @@
-import { billingErrorMessage, calculateCapacitySteps, hasBillingRole, invalidateBillingCache, moneyDisplay, subscribeBillingCache, tomanToRial, validateInvoiceAdjustment } from "./billingUtils.js"
+import { billingErrorMessage, calculateCapacitySteps, formatIntegerInput, hasBillingRole, insufficientWalletBalance, invalidateBillingCache, moneyDisplay, normalizePositiveIntegerInput, numberToPersianWords, subscribeBillingCache, tomanToRial, validateInvoiceAdjustment, walletPaymentSummary } from "./billingUtils.js"
 
 describe("billing UI rules", () => {
   test("allows only declared billing roles", () => {
@@ -18,6 +18,28 @@ describe("billing UI rules", () => {
     expect(tomanToRial("12,500")).toBe(125000)
     expect(moneyDisplay(125000)).toContain("ریال")
     expect(moneyDisplay(125000)).toContain("تومان")
+  })
+
+  test("writes wallet amounts in Persian words", () => {
+    expect(numberToPersianWords(5000000)).toBe("پنج میلیون")
+    expect(numberToPersianWords(125000)).toBe("صد و بیست و پنج هزار")
+    expect(numberToPersianWords(0)).toBe("صفر")
+  })
+
+  test("normalizes and formats positive rial inputs", () => {
+    expect(normalizePositiveIntegerInput("۵۰۰,۰۰۰ ریال")).toBe("500000")
+    expect(formatIntegerInput("500000")).toBe("۵۰۰٬۰۰۰")
+  })
+
+  test("blocks wallet payments that would make the balance negative", () => {
+    expect(walletPaymentSummary(20000000, 20000000)).toEqual({ balance: 20000000, invoiceAmount: 20000000, shortfall: 0, canPay: true, balanceAfter: 0 })
+    expect(walletPaymentSummary(5000000, 20000000)).toEqual(expect.objectContaining({ shortfall: 15000000, canPay: false, balanceAfter: null }))
+    expect(walletPaymentSummary(-15000000, 20000000)).toEqual(expect.objectContaining({ shortfall: 35000000, canPay: false }))
+  })
+
+  test("recognizes the structured insufficient wallet error", () => {
+    expect(insufficientWalletBalance({ response: { status: 409, data: { code: "INSUFFICIENT_WALLET_BALANCE", balance: 5, requiredAmount: 20, shortfall: 15, invoiceId: 7 } } })).toEqual(expect.objectContaining({ balance: 5, shortfall: 15, invoiceId: 7 }))
+    expect(insufficientWalletBalance({ response: { status: 409, data: { code: "OTHER" } } })).toBeNull()
   })
 
   test("previews capacity steps without treating it as a final amount", () => {

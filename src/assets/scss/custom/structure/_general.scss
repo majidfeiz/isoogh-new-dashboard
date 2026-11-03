@@ -1,0 +1,28 @@
+.billing-wallet-summary { border: 1px solid #e8edf3; border-radius: 16px; box-shadow: 0 5px 22px rgba(30, 42, 60, .06); }
+.billing-wallet-summary--negative { border-color: rgba(244, 106, 106, .35); }
+.billing-wallet-summary__row { align-items: center; display: grid; gap: 22px; grid-template-columns: minmax(260px, .9fr) minmax(320px, 1.35fr) auto; }
+.billing-wallet-summary__balance { align-items: center; display: flex; gap: 14px; min-width: 0; }
+.billing-wallet-summary__balance strong { font-size: 1.35rem; white-space: nowrap; }
+.billing-wallet-summary__icon { align-items: center; background: #e8f8f2; border-radius: 13px; color: #25a97b; display: inline-flex; flex: 0 0 48px; font-size: 27px; height: 48px; justify-content: center; }
+.billing-wallet-summary__amount { min-width: 0; }
+.billing-wallet-summary__actions { align-items: center; display: flex; gap: 10px; padding-top: 22px; white-space: nowrap; }
+.amount-in-words { color: #8a94a6; display: block; font-size: 11px; min-height: 18px; padding-top: 5px; }
+.amount-in-words.is-visible { color: #198754; font-weight: 600; }
+.billing-wallet-filter, .billing-wallet-transactions { border: 0; border-radius: 16px; box-shadow: 0 5px 22px rgba(30, 42, 60, .06); }
+.billing-wallet-transactions { overflow: hidden; }
+.billing-wallet-transactions .card-header { background: var(--bs-card-bg); border-bottom: 1px solid #eef1f5; padding: 18px 22px; }
+.billing-wallet-transactions thead th { background: #f7f9fc; border: 0; color: #74788d; font-size: 12px; padding-block: 14px; white-space: nowrap; }
+.billing-wallet-transactions tbody td { border-color: #f1f3f6; padding-block: 15px; }
+.billing-wallet-empty { align-items: center; display: flex; flex-direction: column; min-height: 250px; justify-content: center; }
+.billing-wallet-empty i { background: #f1f5f9; border-radius: 50%; color: #8b95a5; font-size: 38px; margin-bottom: 12px; padding: 17px; }
+
+@media (max-width: 767.98px) {
+  .billing-wallet-summary__row { grid-template-columns: 1fr; }
+  .billing-wallet-summary__actions { padding-top: 0; }
+  .billing-wallet-summary__actions .btn { flex: 1; }
+}
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .billing-wallet-summary__row { grid-template-columns: 1fr 1.4fr; }
+  .billing-wallet-summary__actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 0; }
+}
