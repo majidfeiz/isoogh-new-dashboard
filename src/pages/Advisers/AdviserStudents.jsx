@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import Select from "react-select";
 import {
   Alert,
   Badge,
@@ -34,9 +35,10 @@ import {
   getAdviserStudents,
   updateAdviserAccountStatus,
 } from "../../services/adviserService.jsx";
-import { getParentTags, getParentTagValues } from "../../services/parentTagService.jsx";
+import { getAllParentTagValues, getParentTags } from "../../services/parentTagService.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { adviserAccountActive, adviserAccountErrorMessage, INACTIVE_CONFIRMATION, withAdviserAccountStatus } from "./adviserAccountStatusUtils.js";
+import { TAG_SELECT_STYLES } from "../SupportForms/tagSelectStyles.js";
 
 const AdviserStudents = () => {
   const { adviserId } = useParams();
@@ -82,8 +84,14 @@ const AdviserStudents = () => {
   const [selectedParentTag, setSelectedParentTag] = useState("");
   const [tagValues, setTagValues] = useState([]);
   const [selectedTagValue, setSelectedTagValue] = useState("");
-  const [tagLoading, setTagLoading] = useState(false);
+  const [parentTagsLoading, setParentTagsLoading] = useState(false);
+  const [parentTagsPagination, setParentTagsPagination] = useState({ page: 1, lastPage: 1, total: 0 });
+  const [parentTagSearch, setParentTagSearch] = useState("");
+  const [tagValuesLoading, setTagValuesLoading] = useState(false);
   const [tagAlert, setTagAlert] = useState(null);
+  const parentTagsRequest = useRef(0);
+  const tagValuesRequest = useRef(0);
+  const parentTagSearchTimer = useRef(null);
 
   const fetchData = useCallback(
     async (page = 1, currentFilters = {}, currentSort = sort, options = {}) => {
@@ -337,32 +345,43 @@ const AdviserStudents = () => {
     }
   };
 
-  const fetchParentTags = useCallback(async () => {
-    setTagLoading(true);
+  const fetchParentTags = useCallback(async (page = 1, search = "", append = false) => {
+    const requestId = ++parentTagsRequest.current;
+    setParentTagsLoading(true);
     try {
-      const res = await getParentTags({ page: 1, limit: 50 });
-      setParentTags(res.items || []);
+      const res = await getParentTags({ page, limit: 200, search, schoolId, rootOnly: 1, sortBy: "name", sortOrder: "ASC" });
+      if (requestId !== parentTagsRequest.current) return;
+      const nextItems = res.items || [];
+      setParentTags((current) => {
+        if (!append) return nextItems;
+        const byId = new Map(current.map((tag) => [String(tag.id), tag]));
+        nextItems.forEach((tag) => byId.set(String(tag.id), tag));
+        return Array.from(byId.values());
+      });
+      setParentTagsPagination(res.pagination || { page, lastPage: 1, total: nextItems.length });
     } catch (e) {
-      console.error("خطا در دریافت تگ‌ها", e);
+      if (requestId === parentTagsRequest.current) setTagAlert({ type: "danger", message: "خطا در دریافت تگ‌ها." });
     } finally {
-      setTagLoading(false);
+      if (requestId === parentTagsRequest.current) setParentTagsLoading(false);
     }
-  }, []);
+  }, [schoolId]);
 
   const fetchTagValues = useCallback(async (parentTagId) => {
+    const requestId = ++tagValuesRequest.current;
     if (!parentTagId) {
       setTagValues([]);
+      setTagValuesLoading(false);
       return;
     }
 
-    setTagLoading(true);
+    setTagValuesLoading(true);
     try {
-      const res = await getParentTagValues(parentTagId, { page: 1, limit: 50 });
-      setTagValues(res.items || []);
+      const items = await getAllParentTagValues(parentTagId);
+      if (requestId === tagValuesRequest.current) setTagValues(items || []);
     } catch (e) {
-      console.error("خطا در دریافت مقادیر زیرتگ", e);
+      if (requestId === tagValuesRequest.current) setTagAlert({ type: "danger", message: "خطا در دریافت زیرتگ‌ها." });
     } finally {
-      setTagLoading(false);
+      if (requestId === tagValuesRequest.current) setTagValuesLoading(false);
     }
   }, []);
 
@@ -370,10 +389,47 @@ const AdviserStudents = () => {
     setTagModal(true);
     setSelectedParentTag("");
     setSelectedTagValue("");
+    setParentTags([]);
     setTagValues([]);
     setTagAlert(null);
-    fetchParentTags();
+    setParentTagSearch("");
+    setParentTagsPagination({ page: 1, lastPage: 1, total: 0 });
+    fetchParentTags(1, "", false);
   };
+
+  const closeTagModal = () => {
+    clearTimeout(parentTagSearchTimer.current);
+    parentTagsRequest.current += 1;
+    tagValuesRequest.current += 1;
+    setParentTagsLoading(false);
+    setTagValuesLoading(false);
+    setTagModal(false);
+  };
+
+  const searchParentTags = (inputValue, actionMeta) => {
+    if (actionMeta.action !== "input-change") return inputValue;
+    setParentTagSearch(inputValue);
+    clearTimeout(parentTagSearchTimer.current);
+    parentTagSearchTimer.current = setTimeout(() => fetchParentTags(1, inputValue.trim(), false), 350);
+    return inputValue;
+  };
+
+  const loadMoreParentTags = () => {
+    const page = Number(parentTagsPagination.page || 1);
+    const lastPage = Number(parentTagsPagination.lastPage || 1);
+    if (parentTagsLoading || page >= lastPage) return;
+    fetchParentTags(page + 1, parentTagSearch.trim(), true);
+  };
+
+  const parentTagOptions = useMemo(() => parentTags.map((tag) => ({
+    value: String(tag.id),
+    label: tag.name || tag.title || `تگ ${tag.id}`,
+    description: tag.description,
+  })), [parentTags]);
+  const tagValueOptions = useMemo(() => tagValues.map((tag) => ({
+    value: String(tag.id),
+    label: tag.value || tag.name || tag.title || `زیرتگ ${tag.id}`,
+  })), [tagValues]);
 
   const handleAttachByTag = async () => {
     if (!selectedParentTag) {
@@ -405,7 +461,7 @@ const AdviserStudents = () => {
       setTagAlert(success);
 
       await fetchData(meta.page, filters, sort, { preserveAlert: true });
-      setTagModal(false);
+      closeTagModal();
     } catch (e) {
       console.error("خطا در افزودن دانش‌آموز بر اساس تگ", e);
       const error = { type: "danger", message: "خطا در افزودن بر اساس تگ." };
@@ -802,8 +858,8 @@ const AdviserStudents = () => {
         </Row>
       </div>
 
-      <Modal isOpen={tagModal} toggle={() => setTagModal(false)} centered>
-        <ModalHeader toggle={() => setTagModal(false)}>افزودن با تگ</ModalHeader>
+      <Modal isOpen={tagModal} toggle={closeTagModal} centered size="lg">
+        <ModalHeader toggle={closeTagModal}>افزودن دانش‌آموز بر اساس تگ</ModalHeader>
         <ModalBody>
           {tagAlert && (
             <Alert color={tagAlert.type} className="mb-3">
@@ -819,47 +875,65 @@ const AdviserStudents = () => {
           >
             <Row className="g-3">
               <Col md="12">
-                <Label className="form-label">سرتگ</Label>
-                <Input
-                  type="select"
-                  value={selectedParentTag}
-                  onChange={(e) => {
-                    const next = e.target.value;
+                <Label className="form-label fw-semibold">سرتگ</Label>
+                <Select
+                  inputId="adviser-students-parent-tag"
+                  isRtl
+                  isClearable
+                  isSearchable
+                  menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                  menuPosition="fixed"
+                  className="support-tag-select"
+                  classNamePrefix="support-tag-select"
+                  options={parentTagOptions}
+                  value={parentTagOptions.find((option) => option.value === String(selectedParentTag)) || null}
+                  isLoading={parentTagsLoading}
+                  isDisabled={parentTagsLoading && parentTagOptions.length === 0}
+                  placeholder={parentTagsLoading ? "در حال دریافت تگ‌ها..." : "نام تگ را جست‌وجو کنید..."}
+                  loadingMessage={() => "در حال دریافت تگ‌ها..."}
+                  noOptionsMessage={({ inputValue }) => inputValue ? "تگی مطابق جست‌وجو پیدا نشد" : "تگی برای این مجموعه تعریف نشده است"}
+                  onInputChange={searchParentTags}
+                  onMenuScrollToBottom={loadMoreParentTags}
+                  onChange={(option) => {
+                    const next = option?.value || "";
                     setSelectedParentTag(next);
                     setSelectedTagValue("");
+                    setTagAlert(null);
                     fetchTagValues(next);
                   }}
-                >
-                  <option value="">انتخاب سرتگ</option>
-                  {parentTags.map((tag) => (
-                    <option key={tag.id} value={tag.id}>
-                      {tag.name || tag.title || `تگ ${tag.id}`}
-                    </option>
-                  ))}
-                </Input>
+                  formatOptionLabel={(option) => <div><span>{option.label}</span>{option.description && <small className="d-block text-muted">{option.description}</small>}</div>}
+                  styles={TAG_SELECT_STYLES}
+                />
+                <small className="text-muted d-block mt-2"><i className="bx bx-search ms-1" />برای پیدا کردن سریع تگ، بخشی از نام آن را بنویسید.</small>
               </Col>
 
               <Col md="12">
-                <Label className="form-label">زیرتگ (اختیاری)</Label>
-                <Input
-                  type="select"
-                  value={selectedTagValue}
-                  onChange={(e) => setSelectedTagValue(e.target.value)}
-                  disabled={!selectedParentTag || tagLoading}
-                >
-                  <option value="">انتخاب زیرتگ</option>
-                  {tagValues.map((tagValue) => (
-                    <option key={tagValue.id} value={tagValue.id}>
-                      {tagValue.value || tagValue.name || `زیرتگ ${tagValue.id}`}
-                    </option>
-                  ))}
-                </Input>
+                <Label className="form-label fw-semibold">زیرتگ <span className="text-muted fw-normal">(اختیاری)</span></Label>
+                <Select
+                  inputId="adviser-students-child-tag"
+                  isRtl
+                  isClearable
+                  isSearchable
+                  menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                  menuPosition="fixed"
+                  className="support-tag-select"
+                  classNamePrefix="support-tag-select"
+                  options={tagValueOptions}
+                  value={tagValueOptions.find((option) => option.value === String(selectedTagValue)) || null}
+                  isLoading={tagValuesLoading}
+                  isDisabled={!selectedParentTag || tagValuesLoading}
+                  placeholder={!selectedParentTag ? "ابتدا سرتگ را انتخاب کنید" : tagValuesLoading ? "در حال دریافت زیرتگ‌ها..." : "جست‌وجو و انتخاب زیرتگ"}
+                  loadingMessage={() => "در حال دریافت زیرتگ‌ها..."}
+                  noOptionsMessage={() => "زیرتگی یافت نشد"}
+                  onChange={(option) => setSelectedTagValue(option?.value || "")}
+                  styles={TAG_SELECT_STYLES}
+                />
               </Col>
 
             </Row>
 
             <div className="d-flex justify-content-end gap-2 mt-4">
-              <Button color="light" type="button" onClick={() => setTagModal(false)}>
+              <Button color="light" type="button" onClick={closeTagModal}>
                 انصراف
               </Button>
               <Button color="primary" type="submit" disabled={submitLoading || !selectedParentTag}>

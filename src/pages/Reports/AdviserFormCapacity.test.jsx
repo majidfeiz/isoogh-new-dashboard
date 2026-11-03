@@ -9,6 +9,8 @@ import { getAdvisers } from "../../services/adviserService.jsx"
 jest.mock("../../services/adviserFormCapacityService.jsx", () => ({ getAdviserFormCapacity: jest.fn() }))
 jest.mock("../../services/supportFormService.jsx", () => ({ getSupportForms: jest.fn() }))
 jest.mock("../../services/adviserService.jsx", () => ({ getAdvisers: jest.fn() }))
+jest.mock("../../services/billingService.jsx", () => ({ purchaseBillingCapacity: jest.fn() }))
+jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ hasPermission: () => false }) }))
 jest.mock("../../components/Common/Breadcrumb.jsx", () => () => null)
 jest.mock("../../components/Common/Paginations.jsx", () => () => null)
 jest.mock("../IncomingCalls/IncomingCallsCommon.jsx", () => ({ SchoolPicker: ({ value, onChange }) => <select aria-label="مجموعه" value={value} onChange={(event) => onChange(event.target.value)}><option value="2">دو</option><option value="3">سه</option></select> }))

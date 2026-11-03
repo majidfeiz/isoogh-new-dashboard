@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { billingPreviewQueryKey, createBillingInvoice, createManualBillingPayment, downloadBillingInvoice, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, requestBillingPayment, updateBillingPricing, verifyBillingPayment } from "./billingService.jsx"
+import { billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, downloadBillingInvoice, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingWallet, normalizeInvoiceKpis, payBillingInvoiceFromWallet, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }))
 
@@ -18,6 +18,20 @@ describe("billing API contract", () => {
     apiGet.mockResolvedValue({ data: { data: { items: [{ id: "3", school_id: "145", invoice_number: "ISOOGH-3", issued_at: "2026-10-30", total_amount: "20000000", customer_snapshot: { schoolName: "گروه سلمان" } }], meta: {} } } })
     const result = await getBillingInvoices()
     expect(result.items[0]).toEqual(expect.objectContaining({ schoolId: "145", invoiceNumber: "ISOOGH-3", issuedAt: "2026-10-30", totalAmount: "20000000", schoolName: "گروه سلمان" }))
+  })
+
+  test("normalizes stats and by-status response variants", () => {
+    expect(normalizeInvoiceKpis({ stats: { paid: { invoiceCount: "2", total_amount: "52000" }, overdue: { count: 1, amount: 9000 } } })).toEqual(expect.objectContaining({ paid: { count: 2, amount: 52000 }, expired: { count: 1, amount: 9000 } }))
+    expect(normalizeInvoiceKpis({ byStatus: [{ status: "unpaid", count: "3", totalAmount: "12000" }] })).toEqual(expect.objectContaining({ unpaid: { count: 3, amount: 12000 } }))
+  })
+
+  test("derives exact KPI values when the complete invoice result is already loaded", () => {
+    const items = [{ status: "paid", totalAmount: 26000000 }, { status: "paid", totalAmount: 26000000 }, { status: "unpaid", totalAmount: 4110000 }, { status: "unpaid", totalAmount: 26000000 }]
+    expect(normalizeInvoiceKpis({}, items, { total: 4 })).toEqual({ unpaid: { count: 2, amount: 30110000 }, paid: { count: 2, amount: 52000000 }, expired: { count: 0, amount: 0 } })
+  })
+
+  test("does not show a false zero when the backend omits stats from a partial page", () => {
+    expect(normalizeInvoiceKpis({}, [{ status: "paid", totalAmount: 10 }], { total: 20 })).toEqual({})
   })
 
   test("normalizes adviser snapshot name and line pricing fields in invoice details", async () => {
@@ -82,5 +96,35 @@ describe("billing API contract", () => {
     const payload = { baseMonthlyAmount: 100000, includedStudents: 200, extraStudentStep: 5, extraStepPercent: 10, capacityStepPercent: 20, capacityStepAmount: 50000 }
     await updateBillingPricing(payload)
     expect(apiPatch).toHaveBeenCalledWith(expect.stringMatching(/\/billing\/pricing$/), payload)
+  })
+
+  test("uses school-scoped wallet routes and keeps backend balances authoritative", async () => {
+    apiGet.mockResolvedValue({ data: { data: { wallet: { balance: -100, isNegative: true }, transactions: [{ id: 1, balanceAfter: -100 }], meta: { page: 1, limit: 20, total: 1, lastPage: 1 } } } })
+    const result = await getBillingWallet({ schoolId: 94, page: 1, limit: 20 })
+    expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/\/billing\/wallet$/), expect.objectContaining({ params: { schoolId: 94, page: 1, limit: 20 } }))
+    expect(result.wallet.balance).toBe(-100)
+    expect(result.transactions[0].balanceAfter).toBe(-100)
+  })
+
+  test("supports wallet topup, verify, manual adjustment and invoice wallet payment contracts", async () => {
+    apiPost.mockResolvedValueOnce({ data: { data: { topupId: 73, paymentType: "wallet_topup", verifyPath: "/billing/wallet/topups/73/verify", provider: "zarinpal", authority: "A1", paymentUrl: "https://gateway.test", amount: 5000000 } } }).mockResolvedValue({ data: { data: { ok: true } } })
+    const topup = await requestWalletTopup({ schoolId: 94, amount: 5000000 })
+    await verifyWalletTopup(8, { schoolId: 94, authority: "A1", status: "OK" })
+    await createManualWalletTopup({ schoolId: 94, amount: 5000000, reference: "R1", note: "manual" })
+    await payBillingInvoiceFromWallet(3, 94)
+    expect(apiPost.mock.calls[0]).toEqual([expect.stringMatching(/wallet\/topups\/request$/), { schoolId: 94, amount: 5000000 }])
+    expect(topup).toEqual(expect.objectContaining({ topupId: 73, paymentType: "wallet_topup", verifyPath: "/billing/wallet/topups/73/verify" }))
+    expect(apiPost.mock.calls[1]).toEqual([expect.stringMatching(/wallet\/topups\/8\/verify$/), { schoolId: 94, authority: "A1", status: "OK" }])
+    expect(apiPost.mock.calls[2]).toEqual([expect.stringMatching(/wallet\/topups\/manual$/), { schoolId: 94, amount: 5000000, reference: "R1", note: "manual" }])
+    expect(apiPost.mock.calls[3]).toEqual([expect.stringMatching(/invoices\/3\/payments\/wallet$/), { schoolId: 94 }])
+  })
+
+  test("supports custom, automatic and capacity purchase routes", async () => {
+    apiPost.mockResolvedValue({ data: { data: {} } }); apiGet.mockResolvedValue({ data: { data: [] } })
+    const custom = { schoolId: 94, items: [{ description: "خدمت", quantity: 2, unitAmount: 500000 }] }
+    await createCustomBillingInvoice(custom); await getAutoInvoices(94); await purchaseBillingCapacity({ schoolId: 94, adviserId: 5, targetStudentCapacity: 240 })
+    expect(apiPost.mock.calls[0]).toEqual([expect.stringMatching(/invoices\/custom$/), custom])
+    expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/auto-invoices$/), { params: { schoolId: 94 } })
+    expect(apiPost.mock.calls[1]).toEqual([expect.stringMatching(/capacity\/purchase$/), { schoolId: 94, adviserId: 5, targetStudentCapacity: 240 }])
   })
 })

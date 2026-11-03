@@ -14,7 +14,7 @@ export const validatePaymentRequestResult = (value) => {
 };
 
 export const savePendingPayment = ({ invoiceId, schoolId, provider, authority }) => {
-  const context = { invoiceId: String(invoiceId), schoolId: Number(schoolId), provider, authority };
+  const context = { invoiceId: String(invoiceId), schoolId: Number(schoolId), provider, authority, paymentType: "invoice_payment" };
   if (!context.invoiceId || !Number.isFinite(context.schoolId) || !PAYMENT_PROVIDERS.includes(provider) || !authority) throw new Error("اطلاعات پرداخت برای ذخیره‌سازی معتبر نیست.");
   sessionStorage.setItem(PAYMENT_CONTEXT_KEY, JSON.stringify(context));
 };

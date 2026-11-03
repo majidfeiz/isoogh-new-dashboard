@@ -5,9 +5,10 @@ const compact = (params = {}) =>
   Object.fromEntries(Object.entries(params).filter(([, value]) => value !== "" && value != null));
 
 export async function getAuditLogs(params = {}) {
+  const { signal, ...queryParams } = params;
   const page = Number(params.page || 1);
   const limit = Number(params.limit || 20);
-  const res = await apiGet(getApiUrl(API_ROUTES.auditLogs.list), { params: compact(params) });
+  const res = await apiGet(getApiUrl(API_ROUTES.auditLogs.list), { params: compact(queryParams), signal });
   const payload = res?.data?.data ?? res?.data ?? {};
   const items = payload.items ?? [];
   const meta = payload.meta ?? {};
