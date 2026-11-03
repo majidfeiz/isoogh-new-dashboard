@@ -1,4 +1,5 @@
 import moment from "moment-jalaali";
+import { isValidCallQueueRange } from "./callQueueDateRange.js";
 
 export const QUEUE_STATUS = {
   pending: { label: "در صف", color: "warning" },
@@ -21,22 +22,26 @@ export const parseCallQueueQuery = (params, isAdminLike) => {
   const rawSchoolId = Number(params.get("schoolId"));
   const schoolId = Number.isInteger(rawSchoolId) && rawSchoolId > 0 ? rawSchoolId : null;
   const allSchools = isAdminLike && !schoolId && params.get("allSchools") === "true";
+  const candidateRange = { from: params.get("from"), to: params.get("to") };
+  const range = isValidCallQueueRange(candidateRange) ? candidateRange : { from: null, to: null };
   return {
     schoolId,
     allSchools,
     status: QUEUE_STATUS[params.get("status")] ? params.get("status") : "",
     page: Number.isInteger(rawPage) && rawPage > 0 ? rawPage : 1,
     limit: [15, 20, 50, 100].includes(rawLimit) ? rawLimit : 20,
+    ...range,
   };
 };
 
-export const serializeCallQueueQuery = ({ schoolId, allSchools, status, page, limit }) => {
+export const serializeCallQueueQuery = ({ schoolId, allSchools, status, page, limit, from, to }) => {
   const params = new URLSearchParams();
   if (schoolId) params.set("schoolId", String(schoolId));
   else if (allSchools === true) params.set("allSchools", "true");
   if (status) params.set("status", status);
   if (page > 1) params.set("page", String(page));
   if (limit !== 20) params.set("limit", String(limit));
+  if (isValidCallQueueRange({ from, to })) { params.set("from", from); params.set("to", to); }
   return params;
 };
 
@@ -62,3 +67,9 @@ export const oldestQueueWait = (oldestQueuedAt, now = Date.now()) => {
 
 export const shouldPollCallQueue = (hasScope, visibilityState = "visible") =>
   Boolean(hasScope) && visibilityState === "visible";
+
+export const callQueueListQueryKey = ({ schoolId, allSchools, status, page, limit, from, to }) =>
+  ["voip", "call-queue", schoolId || (allSchools ? "all" : "managed"), status || null, page, limit, from || null, to || null];
+
+export const callQueueStatsQueryKey = ({ schoolId, allSchools, from, to }) =>
+  ["voip", "call-queue-stats", schoolId || (allSchools ? "all" : "managed"), from || null, to || null];

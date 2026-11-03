@@ -22,8 +22,8 @@ export async function getTickets(params = {}) {
   };
 }
 
-export async function getTicket(id, schoolId) {
-  return unwrap(await apiGet(getApiUrl(API_ROUTES.tickets.detail(id)), { params: { schoolId } }));
+export async function getTicket(id, schoolId, signal) {
+  return unwrap(await apiGet(getApiUrl(API_ROUTES.tickets.detail(id)), { params: { schoolId }, signal }));
 }
 
 export async function createTicket(payload) {

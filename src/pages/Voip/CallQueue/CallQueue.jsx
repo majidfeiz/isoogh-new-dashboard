@@ -7,6 +7,7 @@ import Paginations from "../../../components/Common/Paginations.jsx";
 import { useAuth } from "../../../context/AuthContext.jsx";
 import { getSchools } from "../../../services/schoolService.jsx";
 import { cancelCallQueueJob, getCallQueue, getCallQueueStats, retryCallQueueJob } from "../../../services/callQueueService.jsx";
+import CallQueueDateRangeFilter from "./CallQueueDateRangeFilter.jsx";
 import { formatDuration, formatQueueDate, isCallQueueAdminLike, oldestQueueWait, parseCallQueueQuery, QUEUE_STATUS, serializeCallQueueQuery, shouldPollCallQueue } from "./callQueueUtils.js";
 
 const POLL_MS = 5000;
@@ -43,6 +44,8 @@ const CallQueue = () => {
   const [actionId, setActionId] = useState(null);
   const listAbortRef = useRef(null);
   const statsAbortRef = useRef(null);
+  const listLoadedRef = useRef(false);
+  const statsLoadedRef = useRef(false);
 
   const updateQuery = useCallback((updates) => {
     const next = { ...query, ...updates };
@@ -52,8 +55,8 @@ const CallQueue = () => {
 
   const resetUnauthorizedScope = useCallback(() => {
     setItems([]); setStats(null); setMeta((current) => ({ ...emptyMeta, limit: current.limit }));
-    setSearchParams(serializeCallQueueQuery({ schoolId: null, allSchools: isAdminLike, status: query.status, page: 1, limit: query.limit }));
-  }, [isAdminLike, query.limit, query.status, setSearchParams]);
+    setSearchParams(serializeCallQueueQuery({ schoolId: null, allSchools: isAdminLike, status: query.status, page: 1, limit: query.limit, from: query.from, to: query.to }));
+  }, [isAdminLike, query.from, query.limit, query.status, query.to, setSearchParams]);
 
   useEffect(() => {
     if (auth?.meLoading) return undefined;
@@ -71,41 +74,43 @@ const CallQueue = () => {
   const loadList = useCallback(async ({ background = false } = {}) => {
     listAbortRef.current?.abort();
     const controller = new AbortController(); listAbortRef.current = controller;
-    if (background) setListRefreshing(true); else setListLoading(true);
+    const keepPrevious = background || listLoadedRef.current;
+    if (keepPrevious) setListRefreshing(true); else setListLoading(true);
     setListError("");
     try {
-      const result = await getCallQueue({ ...scopeParams, status: query.status, page: query.page, limit: query.limit, signal: controller.signal });
+      const result = await getCallQueue({ ...scopeParams, status: query.status, page: query.page, limit: query.limit, from: query.from, to: query.to, signal: controller.signal });
       if (listAbortRef.current !== controller) return;
-      setItems(result.items || []); setMeta(result.pagination || emptyMeta);
+      setItems(result.items || []); setMeta(result.pagination || emptyMeta); listLoadedRef.current = true;
     } catch (error) {
       if (isCanceled(error) || listAbortRef.current !== controller) return;
       setItems([]);
       if (error?.response?.status === 403) { setListError("به محدوده انتخاب‌شده دسترسی ندارید؛ محدوده قبلی پاک شد."); resetUnauthorizedScope(); }
-      else if (error?.response?.status === 400) setListError("محدوده انتخاب‌شده معتبر نیست. لطفاً مجموعه را دوباره انتخاب کنید.");
+      else if (error?.response?.status === 400) setListError("بازه زمانی انتخاب‌شده معتبر نیست؛ تاریخ شروع باید قبل از پایان بازه باشد.");
       else setListError("دریافت درخواست‌های صف تماس انجام نشد.");
     } finally {
       if (listAbortRef.current === controller) { setListLoading(false); setListRefreshing(false); }
     }
-  }, [query.limit, query.page, query.status, resetUnauthorizedScope, scopeParams]);
+  }, [query.from, query.limit, query.page, query.status, query.to, resetUnauthorizedScope, scopeParams]);
 
   const loadStats = useCallback(async ({ background = false } = {}) => {
     statsAbortRef.current?.abort();
     const controller = new AbortController(); statsAbortRef.current = controller;
-    if (background) setStatsRefreshing(true); else setStatsLoading(true);
+    const keepPrevious = background || statsLoadedRef.current;
+    if (keepPrevious) setStatsRefreshing(true); else setStatsLoading(true);
     setStatsError("");
     try {
-      const result = await getCallQueueStats({ ...scopeParams, signal: controller.signal });
-      if (statsAbortRef.current === controller) setStats(result);
+      const result = await getCallQueueStats({ ...scopeParams, from: query.from, to: query.to, signal: controller.signal });
+      if (statsAbortRef.current === controller) { setStats(result); statsLoadedRef.current = true; }
     } catch (error) {
       if (isCanceled(error) || statsAbortRef.current !== controller) return;
       setStats(null);
       if (error?.response?.status === 403) { setStatsError("به آمار محدوده انتخاب‌شده دسترسی ندارید."); resetUnauthorizedScope(); }
-      else if (error?.response?.status === 400) setStatsError("محدوده آمار معتبر نیست.");
+      else if (error?.response?.status === 400) setStatsError("بازه زمانی آمار معتبر نیست؛ تاریخ شروع باید قبل از پایان بازه باشد.");
       else setStatsError("دریافت آمار صف تماس انجام نشد.");
     } finally {
       if (statsAbortRef.current === controller) { setStatsLoading(false); setStatsRefreshing(false); }
     }
-  }, [resetUnauthorizedScope, scopeParams]);
+  }, [query.from, query.to, resetUnauthorizedScope, scopeParams]);
 
   useEffect(() => { if (!auth?.meLoading) loadList(); return () => listAbortRef.current?.abort(); }, [auth?.meLoading, loadList]);
   useEffect(() => { if (!auth?.meLoading) loadStats(); return () => statsAbortRef.current?.abort(); }, [auth?.meLoading, loadStats]);
@@ -162,16 +167,16 @@ const CallQueue = () => {
         </Input></Col>
         <Col lg="3" md="3"><Label for="call-queue-status">وضعیت</Label><Input id="call-queue-status" type="select" value={query.status} onChange={(event) => updateQuery({ status: event.target.value, page: 1 })}><option value="">همه وضعیت‌ها</option>{Object.entries(QUEUE_STATUS).map(([value, config]) => <option key={value} value={value}>{config.label}</option>)}</Input></Col>
         <Col lg="2" md="3"><Label for="call-queue-limit">تعداد در صفحه</Label><Input id="call-queue-limit" type="select" value={query.limit} onChange={(event) => updateQuery({ limit: Number(event.target.value), page: 1 })}>{[15, 20, 50, 100].map((limit) => <option key={limit} value={limit}>{limit}</option>)}</Input></Col>
-      </Row></CardBody>
+      </Row><CallQueueDateRangeFilter range={{ from: query.from, to: query.to }} onChange={(range) => updateQuery({ ...range, page: 1 })} /></CardBody>
     </Card>
     {statsError ? <Alert color="warning">{statsError}<Button color="link" className="p-0 me-2" onClick={() => loadStats()}>تلاش مجدد</Button></Alert> : null}
     <Row>{statusCards.map(([key, label, color]) => <Col xl="3" lg="4" md="6" key={key}><Card className={`border-${color}`}><CardBody><div className="text-muted">{label}</div><div className={`fs-3 fw-bold text-${color}`}>{statsLoading ? <Spinner size="sm" /> : Number(stats?.byStatus?.[key] ?? 0).toLocaleString("fa-IR")}</div></CardBody></Card></Col>)}
       <Col xl="3" lg="4" md="6"><Card className="border-dark"><CardBody><div className="text-muted">مجموع منتظر ارسال</div><div className="fs-3 fw-bold">{statsLoading ? <Spinner size="sm" /> : Number(stats?.queued ?? 0).toLocaleString("fa-IR")}</div></CardBody></Card></Col>
     </Row>
     <Row><Col md="6"><Alert color="light" className="border"><strong>قدیمی‌ترین انتظار:</strong> {statsLoading ? "در حال دریافت…" : oldestQueueWait(stats?.oldestQueuedAt)}</Alert></Col><Col md="6"><Alert color="light" className="border"><strong>فاصله ارسال:</strong> {statsLoading ? "در حال دریافت…" : formatDuration(stats?.intervalMs)}</Alert></Col></Row>
-    <Card><CardHeader className="d-flex justify-content-between"><strong>درخواست‌های صف تماس</strong><span className="text-muted">{Number(meta.total || 0).toLocaleString("fa-IR")} مورد</span></CardHeader><CardBody>
+    <Card><CardHeader className="d-flex justify-content-between"><strong>درخواست‌های صف تماس {listRefreshing ? <Spinner size="sm" color="primary" className="me-2" /> : null}</strong><span className="text-muted">{Number(meta.total || 0).toLocaleString("fa-IR")} مورد</span></CardHeader><CardBody>
       {listError ? <Alert color="danger">{listError}<Button size="sm" color="danger" outline className="me-2" onClick={() => loadList()}>تلاش مجدد</Button></Alert> : null}
-      {listLoading ? <div className="text-center py-5"><Spinner color="primary" /><div className="mt-2">در حال دریافت صف تماس…</div></div> : !listError && !items.length ? <div className="text-center text-muted py-5">درخواستی با این وضعیت وجود ندارد.</div> : items.length ? <>
+      {listLoading ? <div aria-label="در حال دریافت صف تماس" className="py-4"><div className="placeholder-glow"><span className="placeholder col-12 mb-3" style={{ height: 36 }} /><span className="placeholder col-12 mb-3" style={{ height: 36 }} /><span className="placeholder col-12" style={{ height: 36 }} /></div></div> : !listError && !items.length ? <div className="text-center text-muted py-5"><div>{query.from ? "در این بازه درخواست تماسی ثبت نشده است" : "درخواستی با این وضعیت وجود ندارد."}</div>{query.from ? <Button type="button" color="primary" outline size="sm" className="mt-3" onClick={() => updateQuery({ from: null, to: null, page: 1 })}>پاک‌کردن فیلتر زمانی</Button> : null}</div> : items.length ? <>
         <div className="table-responsive"><table className="table table-bordered table-hover align-middle"><thead><tr><th>مجموعه</th><th>ID صف</th><th>ID تماس</th><th>وضعیت</th><th>اولویت</th><th>تلاش‌ها</th><th>زمان ایجاد</th><th>زمان ارسال</th><th>آخرین خطا</th><th>عملیات</th></tr></thead><tbody>
           {items.map((item) => { const config = QUEUE_STATUS[item.status] || { label: item.status || "نامشخص", color: "dark" }; return <tr key={item.id}>
             <td><Button color="link" className="p-0 text-start" onClick={() => updateQuery({ schoolId: item.schoolId, page: 1 })}>{schoolLabel(item)}</Button></td><td>{item.id ?? "—"}</td><td>{item.voipCallId ?? item.callId ?? "—"}</td><td><Badge color={config.color}>{config.label}</Badge></td><td>{Number(item.priority ?? 0).toLocaleString("fa-IR")}</td><td>{Number(item.attempts ?? 0).toLocaleString("fa-IR")} / {item.maxAttempts == null ? "—" : Number(item.maxAttempts).toLocaleString("fa-IR")}</td><td className="text-nowrap">{formatQueueDate(item.createdAt)}</td><td className="text-nowrap">{formatQueueDate(item.dispatchedAt ?? item.sentAt)}</td><td className="text-break" style={{ minWidth: 180 }}>{String(item.lastError || "—")}</td>
