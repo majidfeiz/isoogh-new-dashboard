@@ -2,6 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AllStudentsTab, StudentsTab } from "./SupportFormDetail.jsx";
 import { getSupportForm, getSupportFormAdvisers, getSupportFormAdviserStudents, getSupportFormAllStudents, setSupportFormAdviserStudentArchive } from "../../services/supportFormService.jsx";
+import { apiGet } from "../../helpers/httpClient.jsx";
 
 jest.mock("../../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPost: jest.fn(), apiPatch: jest.fn(), apiDelete: jest.fn() }));
 jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({
@@ -18,6 +19,13 @@ jest.mock("../../components/Common/TableContainer", () => ({ columns, data }) =>
 </tbody></table>);
 jest.mock("../../components/Common/Paginations.jsx", () => () => null);
 jest.mock("../../components/Common/DeleteModal.jsx", () => () => null);
+jest.mock("react-select", () => ({ inputId, options = [], value, onChange, isDisabled, isLoading, isSearchable, onMenuScrollToBottom }) => <div><select
+  aria-label={inputId}
+  data-searchable={String(Boolean(isSearchable))}
+  disabled={isDisabled}
+  value={value?.value || ""}
+  onChange={(event) => onChange(options.find((option) => option.value === event.target.value) || null)}
+><option value="">{isLoading ? "در حال دریافت..." : "انتخاب"}</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{onMenuScrollToBottom && <button type="button" aria-label={`${inputId}-load-more`} onClick={onMenuScrollToBottom}>بیشتر</button>}</div>);
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -92,4 +100,39 @@ test("incomplete calls tab requests status 2 and archives without changing call 
   fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "آرشیو" }));
   await waitFor(() => expect(setSupportFormAdviserStudentArchive).toHaveBeenCalledWith("10", 17, 503, 8, false));
   expect(getSupportFormAllStudents.mock.calls.at(-1)[1].status).toBe(2);
+});
+
+test("loads scoped root tags once and renders a searchable selector", async () => {
+  getSupportFormAdvisers.mockResolvedValue({ items: [{ adviser_id: 15, adviser: { user: { name: "مشاور" } } }] });
+  getSupportFormAdviserStudents.mockResolvedValue({ items: [], pagination: { page: 1, limit: 10, total: 0 } });
+  apiGet.mockResolvedValue({ data: { data: { items: [{ id: 71, name: "پیگیری ویژه" }], meta: { page: 1, limit: 200, total: 1, lastPage: 1 } } } });
+
+  render(<StudentsTab formId="10" schoolId={8} />);
+  fireEvent.change(await screen.findByRole("combobox"), { target: { value: "15" } });
+  fireEvent.click(await screen.findByRole("button", { name: "افزودن با تگ" }));
+
+  const tagSelect = await screen.findByLabelText("support-form-parent-tag");
+  await waitFor(() => expect(tagSelect).not.toBeDisabled());
+  expect(tagSelect).toHaveAttribute("data-searchable", "true");
+  expect(within(tagSelect).getByRole("option", { name: "پیگیری ویژه" })).toBeInTheDocument();
+  expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/\/parent-tags$/), { params: expect.objectContaining({ page: 1, limit: 200, schoolId: 8, rootOnly: 1 }) });
+});
+
+test("appends the next tag page when the selector reaches its end", async () => {
+  getSupportFormAdvisers.mockResolvedValue({ items: [{ adviser_id: 15, adviser: { user: { name: "مشاور" } } }] });
+  getSupportFormAdviserStudents.mockResolvedValue({ items: [], pagination: { page: 1, limit: 10, total: 0 } });
+  apiGet
+    .mockResolvedValueOnce({ data: { data: { items: [{ id: 71, name: "تگ صفحه اول" }], meta: { page: 1, limit: 200, total: 201, lastPage: 2 } } } })
+    .mockResolvedValueOnce({ data: { data: { items: [{ id: 72, name: "تگ صفحه دوم" }], meta: { page: 2, limit: 200, total: 201, lastPage: 2 } } } });
+
+  render(<StudentsTab formId="10" schoolId={8} />);
+  fireEvent.change(await screen.findByRole("combobox"), { target: { value: "15" } });
+  fireEvent.click(await screen.findByRole("button", { name: "افزودن با تگ" }));
+  const tagSelect = await screen.findByLabelText("support-form-parent-tag");
+  await waitFor(() => expect(within(tagSelect).getByRole("option", { name: "تگ صفحه اول" })).toBeInTheDocument());
+
+  fireEvent.click(screen.getByRole("button", { name: "support-form-parent-tag-load-more" }));
+
+  await waitFor(() => expect(within(tagSelect).getByRole("option", { name: "تگ صفحه دوم" })).toBeInTheDocument());
+  expect(apiGet).toHaveBeenLastCalledWith(expect.stringMatching(/\/parent-tags$/), { params: expect.objectContaining({ page: 2, limit: 200, schoolId: 8, rootOnly: 1 }) });
 });
