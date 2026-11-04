@@ -207,11 +207,12 @@ const SidebarContent = (props) => {
         type: "group",
         label: "مالی و اشتراک",
         icon: "bx bx-receipt",
-        permissionAny: ["billing.invoices.index", "billing.pricing.show", "billing.wallet.show", "billing.auto-invoices.index", "audit-logs.index"],
+        permissionAny: ["billing.invoices.index", "billing.pricing.show", "billing.wallet.show", "billing.auto-invoices.index", "audit-logs.index", "billing.gateway-logs.index"],
         children: [
           { label: "فاکتورها", to: "/billing/invoices", permission: "billing.invoices.index" },
           { label: "کیف پول", to: "/billing/wallet", permission: "billing.wallet.show" },
           { label: "لاگ عملیات پرداخت", to: "/billing/payment-logs", permission: "audit-logs.index" },
+          { label: "لاگ درگاه پرداخت", to: "/billing/gateway-logs", permission: "billing.gateway-logs.index" },
           { label: "صدور خودکار", to: "/billing/auto-invoices", permission: "billing.auto-invoices.index" },
           { label: "تنظیم قیمت", to: "/billing/pricing", permission: "billing.pricing.show" },
         ],
@@ -536,7 +537,7 @@ const SidebarContent = (props) => {
         icon: "bx bx-phone-incoming",
         permissionAny: ["incoming-calls.index", "incoming-calls.settings.show", "incoming-calls.supporters.index", "incoming-calls.availability.update", "incoming-calls.realtime.subscribe", "incoming-calls.students.index"],
         children: [
-          { label: "لیست تماس‌ها", to: "/incoming-calls", permission: "incoming-calls.index" },
+          { label: "گزارشات تماس ورودی", to: "/incoming-calls", permission: "incoming-calls.index" },
           { label: "آماده دریافت تماس", to: "/incoming-calls/panel", permission: "incoming-calls.availability.update" },
           { label: "دانش‌آموزان", to: "/incoming-calls/students", permission: "incoming-calls.students.index" },
           { label: "مدیریت پشتیبان‌ها", to: "/incoming-calls/supporters", permission: "incoming-calls.supporters.index" },
