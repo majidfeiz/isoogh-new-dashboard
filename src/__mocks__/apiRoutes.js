@@ -141,6 +141,7 @@ export const API_ROUTES = {
     capacityPurchase: "/billing/capacity/purchase",
     executeReminders: "/billing/reminders/execute",
     executeRestrictions: "/billing/restrictions/execute",
+    gatewayLogs: "/billing/gateway-logs",
   },
   tickets: {
     list: "/tickets",

@@ -331,6 +331,7 @@ import BillingWallet from "../pages/Billing/BillingWallet.jsx";
 import BillingWalletCallback from "../pages/Billing/BillingWalletCallback.jsx";
 import BillingAutoInvoices from "../pages/Billing/BillingAutoInvoices.jsx";
 import PaymentAuditLogs from "../pages/Billing/PaymentAuditLogs.jsx";
+import BillingGatewayLogs from "../pages/Billing/BillingGatewayLogs.jsx";
 
 
 const authProtectedRoutes = [
@@ -344,6 +345,7 @@ const authProtectedRoutes = [
   { path: "/billing/wallet/callback", component: <ProtectedRoute permission="billing.wallet.topup"><BillingWalletCallback /></ProtectedRoute> },
   { path: "/billing/auto-invoices", component: <ProtectedRoute permission="billing.auto-invoices.index"><BillingAutoInvoices /></ProtectedRoute> },
   { path: "/billing/payment-logs", component: <ProtectedRoute permission="audit-logs.index"><PaymentAuditLogs /></ProtectedRoute> },
+  { path: "/billing/gateway-logs", component: <ProtectedRoute permission="billing.gateway-logs.index"><BillingGatewayLogs /></ProtectedRoute> },
   { path: "/dashboard-saas", component: <DashboardSaas /> },
   { path: "/dashboard-crypto", component: <DashboardCrypto /> },
   { path: "/blog", component: <Blog /> },
