@@ -211,6 +211,7 @@ const SidebarContent = (props) => {
         children: [
           { label: "فاکتورها", to: "/billing/invoices", permission: "billing.invoices.index" },
           { label: "کیف پول", to: "/billing/wallet", permission: "billing.wallet.show" },
+          { label: "کیف پول مجموعه‌ها", to: "/billing/wallets", permission: "billing.wallet.show" },
           { label: "لاگ عملیات پرداخت", to: "/billing/payment-logs", permission: "audit-logs.index" },
           { label: "لاگ درگاه پرداخت", to: "/billing/gateway-logs", permission: "billing.gateway-logs.index" },
           { label: "صدور خودکار", to: "/billing/auto-invoices", permission: "billing.auto-invoices.index" },

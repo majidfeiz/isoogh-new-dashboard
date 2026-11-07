@@ -165,6 +165,7 @@ export async function downloadBillingInvoice(id, schoolId) {
 export const createBillingInvoice = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.invoices), payload));
 export const createCustomBillingInvoice = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.customInvoice), payload));
 export const getBillingPricing = async () => unwrap(await apiGet(getApiUrl(API_ROUTES.billing.pricing)));
+export const getBillingPricingHistory = async () => unwrap(await apiGet(getApiUrl(API_ROUTES.billing.pricingHistory)));
 export const updateBillingPricing = async (payload) => unwrap(await apiPatch(getApiUrl(API_ROUTES.billing.pricing), payload));
 export const requestBillingPayment = async (id, schoolId) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.requestPayment(id)), { schoolId }));
 export const createManualBillingPayment = async (id, payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.manualPayment(id)), payload));
@@ -179,6 +180,23 @@ export const getBillingWallet = async ({ schoolId, page = 1, limit = 20, signal 
   const meta = data.meta || data.pagination || {};
   return { wallet: data.wallet || {}, transactions, pagination: { page: Number(meta.page ?? page), limit: Number(meta.limit ?? limit), total: Number(meta.total ?? transactions.length), lastPage: Number(meta.lastPage ?? Math.max(1, Math.ceil(Number(meta.total || transactions.length) / Number(meta.limit || limit)))) } };
 };
+export const getBillingWallets = async ({ schoolId, page = 1, limit = 20, signal } = {}) => {
+  const data = unwrap(await apiGet(getApiUrl(API_ROUTES.billing.wallets), { params: { schoolId: schoolId || undefined, page, limit }, signal, silent: true })) || {};
+  const items = data.items || data.wallets || data.data || [];
+  const meta = data.meta || data.pagination || {};
+  return { items, pagination: { page: Number(meta.page ?? page), limit: Number(meta.limit ?? limit), total: Number(meta.total ?? items.length), lastPage: Number(meta.lastPage ?? Math.max(1, Math.ceil(Number(meta.total || items.length) / Number(meta.limit || limit)))) } };
+};
+export const getWalletTopups = async ({ schoolId, status, page = 1, limit = 20, signal } = {}) => {
+  const data = unwrap(await apiGet(getApiUrl(API_ROUTES.billing.walletTopups), { params: { schoolId: Number(schoolId), status: status || undefined, page, limit }, signal, silent: true })) || {};
+  const items = data.items || data.topups || data.data || [];
+  const meta = data.meta || data.pagination || {};
+  return { items, pagination: { page: Number(meta.page ?? page), limit: Number(meta.limit ?? limit), total: Number(meta.total ?? items.length), lastPage: Number(meta.lastPage ?? Math.max(1, Math.ceil(Number(meta.total || items.length) / Number(meta.limit || limit)))) } };
+};
+export const createWalletAdjustment = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.walletAdjustments), { schoolId: Number(payload.schoolId), type: payload.type, amount: Number(payload.amount), reference: payload.reference, reason: payload.reason }));
+export async function exportWalletTransactions(schoolId) {
+  const response = await apiGet(getApiUrl(API_ROUTES.billing.walletTransactionsExport), { params: { schoolId: Number(schoolId) }, responseType: "blob" });
+  return { blob: response.data, filename: filenameFromDisposition(response.headers?.["content-disposition"], `wallet-${schoolId}-transactions.csv`) };
+}
 /** @typedef {{topupId:number, paymentType:'wallet_topup', verifyPath:string, provider:'zarinpal'|'sadad'|string, authority:string, paymentUrl:string, amount:number}} WalletTopupRequestResult */
 /** @returns {Promise<WalletTopupRequestResult>} */
 export const requestWalletTopup = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.walletTopupRequest), { schoolId: Number(payload.schoolId), amount: Number(payload.amount) }));
@@ -190,7 +208,8 @@ export const getAutoInvoices = async (schoolId) => unwrap(await apiGet(getApiUrl
 export const createAutoInvoice = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.autoInvoices), payload));
 export const updateAutoInvoice = async (id, payload) => unwrap(await apiPatch(getApiUrl(API_ROUTES.billing.autoInvoice(id)), payload));
 export const executeAutoInvoices = async () => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.executeAutoInvoices)));
-export const purchaseBillingCapacity = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.capacityPurchase), { schoolId: Number(payload.schoolId), adviserId: Number(payload.adviserId), targetStudentCapacity: Number(payload.targetStudentCapacity) }));
+export const previewBillingCapacity = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.capacityPreview), { schoolId: Number(payload.schoolId), adviserId: Number(payload.adviserId), targetStudentCapacity: Number(payload.targetStudentCapacity) }));
+export const purchaseBillingCapacity = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.capacityPurchase), { schoolId: Number(payload.schoolId), adviserId: Number(payload.adviserId), targetStudentCapacity: Number(payload.targetStudentCapacity), idempotencyKey: payload.idempotencyKey }));
 export const executeBillingReminders = async () => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.executeReminders)));
 export const executeBillingRestrictions = async () => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.executeRestrictions)));
 

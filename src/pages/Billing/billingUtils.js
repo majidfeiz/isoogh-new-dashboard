@@ -90,12 +90,19 @@ export const formatJalali = (value) => {
 
 export const STATUS_LABELS = { unpaid: "پرداخت‌نشده", paid: "پرداخت‌شده", expired: "منقضی" };
 export const INVOICE_TYPE_LABELS = { adviser_subscription: "اشتراک مشاور", custom: "سفارشی", capacity_topup: "افزایش ظرفیت" };
+const backendErrorMessage = (error) => {
+  const message = error?.response?.data?.message;
+  if (Array.isArray(message)) return message.filter(Boolean).join("، ");
+  if (typeof message === "string" && message.trim()) return message;
+  const code = error?.response?.data?.code;
+  return typeof code === "string" && code.trim() ? code : "";
+};
 export const billingErrorMessage = (error) => {
   const status = error?.response?.status;
   if (status === 401) return "نشست کاربری معتبر نیست؛ ابتدا دوباره وارد شوید.";
   if (status === 403) return "خارج از دامنه دسترسی";
-  if (status === 409) return "برای این دوره یا پرداخت، رکورد تکراری وجود دارد.";
-  if (status === 400 || status === 422) return error?.response?.data?.message || "اطلاعات با قواعد کسب‌وکار مطابقت ندارد.";
+  if (status === 409) return backendErrorMessage(error) || "عملیات به‌دلیل تعارض با وضعیت فعلی انجام نشد.";
+  if (status === 400 || status === 422) return backendErrorMessage(error) || "اطلاعات با قواعد کسب‌وکار مطابقت ندارد.";
   if (status === 502) return "ارتباط با درگاه پرداخت موقتاً برقرار نشد؛ دوباره تلاش کنید.";
   return "دریافت اطلاعات با خطا روبه‌رو شد.";
 };
