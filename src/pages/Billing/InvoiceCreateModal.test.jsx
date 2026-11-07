@@ -85,6 +85,37 @@ test("submits the explicitly selected Aban 1405 without replacing it automatical
   await waitFor(() => expect(createBillingInvoice).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 94, jalaliYear: 1405, jalaliMonth: 8, durationMonths: 1 })));
 });
 
+test("keeps an adviser selectable and allows another invoice when the period was billed before", async () => {
+  const onCreated = jest.fn().mockResolvedValue(undefined);
+  const toggle = jest.fn();
+  getBillingInvoicePreview.mockResolvedValue({
+    ...preview,
+    advisers: [{ ...preview.advisers[0], hasInvoiceForPeriod: true, duplicatePeriod: true, previouslyBilled: true }],
+    billedAdviserIds: [12],
+  });
+  createBillingInvoice
+    .mockResolvedValueOnce({ id: 101, invoiceNumber: "INV-101" })
+    .mockResolvedValueOnce({ id: 102, invoiceNumber: "INV-102" });
+  render(<InvoiceCreateModal {...props} toggle={toggle} onCreated={onCreated} />);
+  selectAban1405();
+  await screen.findByText("مریم احمدی");
+  const adviserCheckbox = screen.getByLabelText("انتخاب مریم احمدی");
+  expect(adviserCheckbox).not.toBeDisabled();
+  expect(screen.queryByText(/برای مشاور انتخاب‌شده در این دوره قبلاً فاکتور صادر شده است/)).not.toBeInTheDocument();
+  fireEvent.click(adviserCheckbox);
+  fireEvent.change(screen.getByLabelText("نام و نام خانوادگی"), { target: { value: "کاربر تست" } });
+  fireEvent.change(screen.getByLabelText("کد ملی"), { target: { value: "0012345678" } });
+
+  fireEvent.click(screen.getByRole("button", { name: "صدور فاکتور" }));
+  await waitFor(() => expect(createBillingInvoice).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(toggle).toHaveBeenCalledTimes(1));
+  expect(onCreated).toHaveBeenLastCalledWith(expect.objectContaining({ id: 101, invoiceNumber: "INV-101" }));
+
+  fireEvent.click(screen.getByRole("button", { name: "صدور فاکتور" }));
+  await waitFor(() => expect(createBillingInvoice).toHaveBeenCalledTimes(2));
+  expect(onCreated).toHaveBeenLastCalledWith(expect.objectContaining({ id: 102, invoiceNumber: "INV-102" }));
+});
+
 test("renders a three-month backend period that crosses the Jalali year boundary", async () => {
   getBillingInvoicePreview.mockResolvedValue({ ...preview, durationMonths: 3, period: { ...preview.period, jalaliLabel: "بهمن ۱۴۰۵ تا فروردین ۱۴۰۶", months: [{ jalaliLabel: "بهمن ۱۴۰۵" }, { jalaliLabel: "اسفند ۱۴۰۵" }, { jalaliLabel: "فروردین ۱۴۰۶" }] } });
   render(<InvoiceCreateModal {...props} />);

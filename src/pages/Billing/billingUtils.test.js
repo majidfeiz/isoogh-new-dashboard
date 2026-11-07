@@ -9,7 +9,9 @@ describe("billing UI rules", () => {
   test("maps security, conflict and business errors to Persian", () => {
     expect(billingErrorMessage({ response: { status: 401 } })).toMatch(/وارد شوید/)
     expect(billingErrorMessage({ response: { status: 403 } })).toBe("خارج از دامنه دسترسی")
-    expect(billingErrorMessage({ response: { status: 409 } })).toMatch(/تکراری/)
+    expect(billingErrorMessage({ response: { status: 409 } })).not.toMatch(/تکراری|دوره/)
+    expect(billingErrorMessage({ response: { status: 409, data: { code: "INVOICE_STATE_CONFLICT", message: "وضعیت فاکتور اجازه این عملیات را نمی‌دهد" } } })).toBe("وضعیت فاکتور اجازه این عملیات را نمی‌دهد")
+    expect(billingErrorMessage({ response: { status: 409, data: { code: "INVOICE_STATE_CONFLICT" } } })).toBe("INVOICE_STATE_CONFLICT")
     expect(billingErrorMessage({ response: { status: 400, data: { message: "قبل از روز ۲۵ مجاز نیست" } } })).toBe("قبل از روز ۲۵ مجاز نیست")
     expect(billingErrorMessage({ response: { status: 502 } })).toMatch(/درگاه پرداخت/)
   })

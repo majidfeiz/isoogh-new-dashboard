@@ -9,7 +9,7 @@ import { getAdvisers } from "../../services/adviserService.jsx"
 import { getAdviserFormCapacity } from "../../services/adviserFormCapacityService.jsx"
 import { capacityView, parseCapacityQuery, serializeCapacityQuery } from "./adviserFormCapacityUtils.js"
 import { useAuth } from "../../context/AuthContext.jsx"
-import { purchaseBillingCapacity } from "../../services/billingService.jsx"
+import { previewBillingCapacity, purchaseBillingCapacity } from "../../services/billingService.jsx"
 import { billingErrorMessage, formatRial, insufficientWalletBalance, invalidateBillingCache, invalidateCapacityReport } from "../Billing/billingUtils.js"
 
 const headers = [
@@ -37,6 +37,8 @@ export default function AdviserFormCapacity() {
   const [purchase, setPurchase] = useState(null)
   const [targetCapacity, setTargetCapacity] = useState("")
   const [purchasing, setPurchasing] = useState(false)
+  const [purchasePreview, setPurchasePreview] = useState(null)
+  const idempotencyKeyRef = useRef("")
   const [purchaseNotice, setPurchaseNotice] = useState("")
   const [purchaseShortage, setPurchaseShortage] = useState(null)
   const updateQuery = useCallback((updates) => setSearchParams(serializeCapacityQuery({ ...query, ...updates })), [query, setSearchParams])
@@ -69,7 +71,18 @@ export default function AdviserFormCapacity() {
 
   const changeSchool = (schoolId) => { setForms([]); setAdvisers([]); setItems([]); updateQuery({ schoolId, formId: "", adviserId: "", page: 1 }) }
   const changeSort = (sortBy) => updateQuery({ sortBy, sortOrder: query.sortBy === sortBy && query.sortOrder === "ASC" ? "DESC" : "ASC", page: 1 })
-  const submitPurchase = async () => { if (!purchase || purchasing || Number(targetCapacity) <= Number(purchase.capacity)) return; setPurchasing(true); setError(""); setPurchaseNotice(""); setPurchaseShortage(null); try { await purchaseBillingCapacity({ schoolId: purchase.schoolId, adviserId: purchase.adviserId, targetStudentCapacity: targetCapacity }); setPurchase(null); invalidateBillingCache(); invalidateCapacityReport(); setPurchaseNotice("افزایش ظرفیت با موفقیت انجام شد."); } catch (caught) { const shortage = insufficientWalletBalance(caught); if (shortage) { setPurchase(null); setPurchaseShortage({ ...shortage, schoolId: purchase.schoolId }); setError(shortage.message); } else setError(billingErrorMessage(caught)); } finally { setPurchasing(false); } }
+  const submitPurchase = async () => {
+    if (!purchase || purchasing || Number(targetCapacity) <= Number(purchase.capacity)) return
+    setPurchasing(true); setError(""); setPurchaseNotice(""); setPurchaseShortage(null)
+    try {
+      const payload = { schoolId: purchase.schoolId, adviserId: purchase.adviserId, targetStudentCapacity: targetCapacity }
+      if (!purchasePreview) { setPurchasePreview(await previewBillingCapacity(payload)); return }
+      if (!idempotencyKeyRef.current) idempotencyKeyRef.current = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      await purchaseBillingCapacity({ ...payload, idempotencyKey: idempotencyKeyRef.current })
+      setPurchase(null); setPurchasePreview(null); idempotencyKeyRef.current = ""; invalidateBillingCache(); invalidateCapacityReport(); setPurchaseNotice("افزایش ظرفیت با موفقیت انجام شد.")
+    } catch (caught) { const shortage = insufficientWalletBalance(caught); if (shortage) { setPurchase(null); setPurchasePreview(null); setPurchaseShortage({ ...shortage, schoolId: purchase.schoolId }); setError(shortage.message); } else setError(billingErrorMessage(caught)) } finally { setPurchasing(false) }
+  }
+  const closePurchase = () => { if (purchasing) return; setPurchase(null); setPurchasePreview(null); idempotencyKeyRef.current = "" }
 
   return <div className="page-content"><div className="container-fluid"><Breadcrumbs title="گزارشات" breadcrumbItem="ظرفیت اتصال دانش‌آموز–فرم به مشاور" />
     <Card className="mb-4"><CardBody><Row className="g-3 align-items-end">
@@ -87,8 +100,8 @@ export default function AdviserFormCapacity() {
     {!loading && !error && items.length > 0 && <Card><CardBody><div className="table-responsive"><Table bordered hover className="table-nowrap align-middle mb-0"><thead><tr>{headers.map(([sortBy, label]) => <th key={label}>{sortBy ? <button type="button" className="btn btn-link text-reset text-decoration-none fw-semibold p-0" onClick={() => changeSort(sortBy)}>{label} {query.sortBy === sortBy ? query.sortOrder === "ASC" ? "▲" : "▼" : "↕"}</button> : label}</th>)}</tr></thead>
       <tbody>{items.map((item) => { const view = capacityView(item); return <tr key={`${item.schoolId}-${item.formId}-${item.adviserId}`}>
         <td>{item.schoolName || "—"}</td><td>{item.formTitle || "—"}</td><td>{item.adviserName || "—"}</td><td><Badge color={item.adviserFormActive ? "success" : "secondary"}>{item.adviserFormActive ? "فعال" : "غیرفعال"}</Badge></td>
-        <td><strong>{number(item.activeStudents)}</strong>{item.overCapacity && <Badge color="danger" className="ms-2">بیش از ظرفیت</Badge>}</td><td>{number(item.capacity)}</td><td style={{ minWidth: 190 }}><div className="d-flex justify-content-between gap-2 mb-1"><Badge color={view.color}>{view.label}</Badge><span>{number(view.remaining)}</span></div><Progress value={view.percent} color={view.color} style={{ height: 7 }} /></td><td>{hasPermission("billing.capacity.purchase") && <Button size="sm" color="primary" onClick={() => { setPurchase(item); setTargetCapacity(String(Number(item.capacity || 0) + 1)); }}>افزایش ظرفیت</Button>}</td>
+        <td><strong>{number(item.activeStudents)}</strong>{item.overCapacity && <Badge color="danger" className="ms-2">بیش از ظرفیت</Badge>}</td><td>{number(item.capacity)}</td><td style={{ minWidth: 190 }}><div className="d-flex justify-content-between gap-2 mb-1"><Badge color={view.color}>{view.label}</Badge><span>{number(view.remaining)}</span></div><Progress value={view.percent} color={view.color} style={{ height: 7 }} /></td><td>{hasPermission("billing.capacity.purchase") && <Button size="sm" color="primary" onClick={() => { setPurchase(item); setTargetCapacity(String(Number(item.capacity || 0) + 1)); setPurchasePreview(null); idempotencyKeyRef.current = "" }}>افزایش ظرفیت</Button>}</td>
       </tr> })}</tbody></Table></div><div className="mt-3"><Paginations perPageData={meta.limit} data={items} totalRecords={meta.total} currentPage={meta.page} setCurrentPage={(page) => updateQuery({ page })} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" /></div></CardBody></Card>}
-    <Modal isOpen={!!purchase} toggle={() => !purchasing && setPurchase(null)} centered><ModalHeader>افزایش ظرفیت مشاور</ModalHeader><ModalBody><p>ظرفیت فعلی: <strong>{number(purchase?.capacity)}</strong></p><Label for="target-capacity">ظرفیت هدف</Label><Input id="target-capacity" type="number" min={Number(purchase?.capacity || 0) + 1} value={targetCapacity} onChange={(event) => setTargetCapacity(event.target.value)} invalid={!!purchase && Number(targetCapacity) <= Number(purchase.capacity)} /><small className="text-muted">backend فاکتور را ایجاد و از کیف پول پرداخت می‌کند.</small></ModalBody><ModalFooter><Button onClick={() => setPurchase(null)} disabled={purchasing}>انصراف</Button><Button color="primary" onClick={submitPurchase} disabled={purchasing || Number(targetCapacity) <= Number(purchase?.capacity)}>خرید ظرفیت</Button></ModalFooter></Modal>
+    <Modal isOpen={!!purchase} toggle={closePurchase} centered><ModalHeader>افزایش ظرفیت مشاور</ModalHeader><ModalBody><p>ظرفیت فعلی: <strong>{number(purchase?.capacity)}</strong></p><Label for="target-capacity">ظرفیت هدف</Label><Input id="target-capacity" type="number" min={Number(purchase?.capacity || 0) + 1} value={targetCapacity} onChange={(event) => { setTargetCapacity(event.target.value); setPurchasePreview(null); idempotencyKeyRef.current = "" }} invalid={!!purchase && Number(targetCapacity) <= Number(purchase.capacity)} />{purchasePreview ? <div className="border rounded bg-light p-3 mt-3"><h6>پیش‌نمایش قطعی backend</h6><dl className="row mb-0 small"><dt className="col-6">ظرفیت فعلی</dt><dd className="col-6">{number(purchasePreview.currentCapacity)}</dd><dt className="col-6">ظرفیت افزوده</dt><dd className="col-6">{number(purchasePreview.addedCapacity)}</dd><dt className="col-6">اندازه پله</dt><dd className="col-6">{number(purchasePreview.capacityStepSeats)}</dd><dt className="col-6">تعداد پله</dt><dd className="col-6">{number(purchasePreview.steps)}</dd><dt className="col-6">قیمت هر پله</dt><dd className="col-6">{formatRial(purchasePreview.pricePerStep)}</dd><dt className="col-6">مبلغ نهایی</dt><dd className="col-6 fw-bold">{formatRial(purchasePreview.totalAmount)}</dd><dt className="col-6">تاریخ اعمال تعرفه</dt><dd className="col-6">{purchasePreview.pricingEffectiveAt || "—"}</dd></dl></div> : <small className="text-muted d-block mt-2">ابتدا مبلغ قطعی از backend دریافت می‌شود.</small>}</ModalBody><ModalFooter><Button onClick={closePurchase} disabled={purchasing}>انصراف</Button><Button color="primary" onClick={submitPurchase} disabled={purchasing || Number(targetCapacity) <= Number(purchase?.capacity)}>{purchasing ? "در حال پردازش…" : purchasePreview ? "تأیید و خرید ظرفیت" : "دریافت پیش‌نمایش"}</Button></ModalFooter></Modal>
   </div></div>
 }

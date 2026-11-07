@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, downloadBillingInvoice, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingWallet, normalizeInvoiceKpis, payBillingInvoiceFromWallet, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
+import { billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, createWalletAdjustment, downloadBillingInvoice, exportWalletTransactions, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingPricingHistory, getBillingWallet, getBillingWallets, getWalletTopups, normalizeInvoiceKpis, payBillingInvoiceFromWallet, previewBillingCapacity, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }))
 
@@ -18,6 +18,20 @@ describe("billing API contract", () => {
     apiGet.mockResolvedValue({ data: { data: { items: [{ id: "3", school_id: "145", invoice_number: "ISOOGH-3", issued_at: "2026-10-30", total_amount: "20000000", customer_snapshot: { schoolName: "گروه سلمان" } }], meta: {} } } })
     const result = await getBillingInvoices()
     expect(result.items[0]).toEqual(expect.objectContaining({ schoolId: "145", invoiceNumber: "ISOOGH-3", issuedAt: "2026-10-30", totalAmount: "20000000", schoolName: "گروه سلمان" }))
+  })
+
+  test("preserves two invoices for the same adviser and period as independent records", async () => {
+    const commonLine = { adviser_id: 5314, period_start: "2026-10-23", period_end: "2026-11-22" }
+    apiGet.mockResolvedValue({ data: { data: { items: [
+      { id: 101, invoice_number: "INV-101", status: "paid", items: [{ id: 1, ...commonLine }] },
+      { id: 102, invoice_number: "INV-102", status: "unpaid", items: [{ id: 2, ...commonLine }] },
+    ], meta: { total: 2 } } } })
+    const result = await getBillingInvoices()
+    expect(result.items).toHaveLength(2)
+    expect(result.items.map(({ id, invoiceNumber, status }) => ({ id, invoiceNumber, status }))).toEqual([
+      { id: 101, invoiceNumber: "INV-101", status: "paid" },
+      { id: 102, invoiceNumber: "INV-102", status: "unpaid" },
+    ])
   })
 
   test("normalizes stats and by-status response variants", () => {
@@ -77,6 +91,23 @@ describe("billing API contract", () => {
     expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/\/billing\/invoices\/10\/download$/), { params: { schoolId: 7 }, responseType: "blob" })
   })
 
+  test("targets payment and download operations by each invoice id independently", async () => {
+    apiPost.mockResolvedValue({ data: { data: { status: "paid" } } })
+    apiGet.mockResolvedValue({ data: new Blob(["invoice"]), headers: {} })
+    await payBillingInvoiceFromWallet(101, 94)
+    await payBillingInvoiceFromWallet(102, 94)
+    await downloadBillingInvoice(101, 94)
+    await downloadBillingInvoice(102, 94)
+    expect(apiPost.mock.calls.map(([url]) => url)).toEqual([
+      expect.stringMatching(/\/billing\/invoices\/101\/payments\/wallet$/),
+      expect.stringMatching(/\/billing\/invoices\/102\/payments\/wallet$/),
+    ])
+    expect(apiGet.mock.calls.map(([url]) => url)).toEqual([
+      expect.stringMatching(/\/billing\/invoices\/101\/download$/),
+      expect.stringMatching(/\/billing\/invoices\/102\/download$/),
+    ])
+  })
+
   test("sends manual payment fields only to its dedicated endpoint", async () => {
     apiPost.mockResolvedValue({ data: { data: { id: 2 } } })
     await createManualBillingPayment(10, { schoolId: 7, reference: "ref", note: "note" })
@@ -122,9 +153,35 @@ describe("billing API contract", () => {
   test("supports custom, automatic and capacity purchase routes", async () => {
     apiPost.mockResolvedValue({ data: { data: {} } }); apiGet.mockResolvedValue({ data: { data: [] } })
     const custom = { schoolId: 94, items: [{ description: "خدمت", quantity: 2, unitAmount: 500000 }] }
-    await createCustomBillingInvoice(custom); await getAutoInvoices(94); await purchaseBillingCapacity({ schoolId: 94, adviserId: 5, targetStudentCapacity: 240 })
+    await createCustomBillingInvoice(custom); await getAutoInvoices(94); await purchaseBillingCapacity({ schoolId: 94, adviserId: 5, targetStudentCapacity: 240, idempotencyKey: "uuid-1" })
     expect(apiPost.mock.calls[0]).toEqual([expect.stringMatching(/invoices\/custom$/), custom])
     expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/auto-invoices$/), { params: { schoolId: 94 } })
-    expect(apiPost.mock.calls[1]).toEqual([expect.stringMatching(/capacity\/purchase$/), { schoolId: 94, adviserId: 5, targetStudentCapacity: 240 }])
+    expect(apiPost.mock.calls[1]).toEqual([expect.stringMatching(/capacity\/purchase$/), { schoolId: 94, adviserId: 5, targetStudentCapacity: 240, idempotencyKey: "uuid-1" }])
+  })
+
+  test("supports wallet administration, topup history, export and accounting adjustments", async () => {
+    apiGet.mockResolvedValue({ data: { data: { items: [], meta: {} } }, headers: {} })
+    apiPost.mockResolvedValue({ data: { data: { id: 1 } } })
+    await getBillingWallets({ schoolId: 94, page: 1, limit: 20 })
+    await getWalletTopups({ schoolId: 94, status: "failed", page: 2, limit: 20 })
+    await createWalletAdjustment({ schoolId: 94, type: "deposit", amount: 500, reference: "R", reason: "اصلاح" })
+    apiGet.mockResolvedValueOnce({ data: new Blob(["csv"]), headers: { "content-disposition": "attachment; filename=wallet.csv" } })
+    await expect(exportWalletTransactions(94)).resolves.toEqual(expect.objectContaining({ filename: "wallet.csv" }))
+    expect(apiPost).toHaveBeenCalledWith(expect.stringMatching(/wallet\/adjustments$/), { schoolId: 94, type: "deposit", amount: 500, reference: "R", reason: "اصلاح" })
+  })
+
+  test("previews capacity and sends a stable idempotency key to purchase", async () => {
+    apiPost.mockResolvedValue({ data: { data: { totalAmount: 1000 } } })
+    const payload = { schoolId: 94, adviserId: 5, targetStudentCapacity: 240 }
+    await previewBillingCapacity(payload)
+    await purchaseBillingCapacity({ ...payload, idempotencyKey: "fixed-uuid" })
+    expect(apiPost.mock.calls[0]).toEqual([expect.stringMatching(/capacity\/preview$/), payload])
+    expect(apiPost.mock.calls[1]).toEqual([expect.stringMatching(/capacity\/purchase$/), { ...payload, idempotencyKey: "fixed-uuid" }])
+  })
+
+  test("loads immutable pricing history", async () => {
+    apiGet.mockResolvedValue({ data: { data: [{ id: 1, is_active: true }] } })
+    await expect(getBillingPricingHistory()).resolves.toEqual([{ id: 1, is_active: true }])
+    expect(apiGet).toHaveBeenCalledWith(expect.stringMatching(/billing\/pricing\/history$/))
   })
 })

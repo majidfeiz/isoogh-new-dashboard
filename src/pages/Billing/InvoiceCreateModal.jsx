@@ -74,7 +74,10 @@ export default function InvoiceCreateModal({ open, toggle, schools, fixedSchoolI
       const payload = { schoolId: Number(form.schoolId), jalaliYear: Number(form.jalaliYear), jalaliMonth: Number(form.jalaliMonth), durationMonths: Number(form.durationMonths), customerType: form.customerType, customerSnapshot: snapshot, advisers: selected.map((item) => { const value = form.advisers[String(item.adviserId)]; return { adviserId: Number(item.adviserId), targetStudentCapacity: Number(value.targetStudentCapacity), ...(allowOverrides && manualPricing && value.manualFinalAmountToman !== "" ? { manualFinalAmount: tomanToRial(value.manualFinalAmountToman) } : {}) }; }) };
       if (allowOverrides && Number(discountToman) > 0) payload.discountAmount = tomanToRial(discountToman);
       if (allowOverrides && adjustmentRequired) payload.adjustmentNote = adjustmentNote.trim();
-      await createBillingInvoice(payload); invalidateBillingCache(); invalidateCapacityReport(); window.dispatchEvent(new CustomEvent("billing-invoice-preview:invalidate")); onCreated?.(); toggle();
+      const createdInvoice = await createBillingInvoice(payload);
+      invalidateBillingCache(); invalidateCapacityReport(); window.dispatchEvent(new CustomEvent("billing-invoice-preview:invalidate"));
+      await Promise.resolve(onCreated?.(createdInvoice));
+      toggle();
     } catch (submitError) { setError(billingErrorMessage(submitError)); } finally { setSubmitting(false); }
   };
 

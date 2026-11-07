@@ -23,6 +23,7 @@ export default function BillingInvoices() {
   const [createOpen, setCreateOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const [executing, setExecuting] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -60,9 +61,15 @@ export default function BillingInvoices() {
     try { kind === "reminders" ? await executeBillingReminders() : await executeBillingRestrictions(); invalidateBillingCache(); }
     finally { setExecuting(""); }
   };
+  const invoiceCreated = async (invoice) => {
+    const number = invoice?.invoiceNumber || invoice?.invoice_number || invoice?.number || invoice?.id;
+    setNotice(number ? `فاکتور جدید با شماره ${number} با موفقیت صادر شد.` : "فاکتور جدید با موفقیت صادر شد.");
+    await load();
+  };
 
   return <div className="page-content" dir="rtl"><div className="container-fluid">
     <Breadcrumbs title="مالی و اشتراک" breadcrumbItem="فاکتورها" />
+    {notice && <Alert color="success" toggle={() => setNotice("")}>{notice}</Alert>}
     <Row>{kpis.map((kpi) => <Col md={4} key={kpi.status}><Card><CardBody><div className="text-muted">{STATUS_LABELS[kpi.status]}</div><h4>{kpi.count == null ? "—" : Number(kpi.count).toLocaleString("fa-IR")} فاکتور</h4><small>{kpi.amount == null && kpi.totalAmount == null ? "مبلغ نامشخص" : moneyDisplay(kpi.amount ?? kpi.totalAmount)}</small></CardBody></Card></Col>)}</Row>
     <Card><CardHeader className="d-flex flex-wrap gap-2 justify-content-between"><strong>فهرست فاکتورها</strong><div className="d-flex gap-2">
       {hasPermission("billing.execute") && <><Button size="sm" outline onClick={() => execute("reminders")} disabled={!!executing}>اجرای یادآوری‌ها</Button><Button size="sm" outline color="warning" onClick={() => execute("restrictions")} disabled={!!executing}>اجرای محدودیت‌ها</Button></>}
@@ -80,7 +87,7 @@ export default function BillingInvoices() {
       </tbody></Table></div>
       <div className="d-flex justify-content-between align-items-center"><small>{Number(result.pagination.total || 0).toLocaleString("fa-IR")} مورد</small><div><Button size="sm" className="ms-2" disabled={filters.page <= 1 || loading} onClick={() => setFilters({ ...filters, page: filters.page - 1 })}>قبلی</Button><span>{filters.page.toLocaleString("fa-IR")} از {Number(result.pagination.lastPage || 1).toLocaleString("fa-IR")}</span><Button size="sm" className="me-2" disabled={filters.page >= result.pagination.lastPage || loading} onClick={() => setFilters({ ...filters, page: filters.page + 1 })}>بعدی</Button></div></div>
     </CardBody></Card>
-    <InvoiceCreateModal open={createOpen} toggle={() => setCreateOpen(false)} schools={schools} fixedSchoolId={fixedSchoolId} allowOverrides={hasPermission("billing.invoices.override")} onCreated={load} />
+    <InvoiceCreateModal open={createOpen} toggle={() => setCreateOpen(false)} schools={schools} fixedSchoolId={fixedSchoolId} allowOverrides={hasPermission("billing.invoices.override")} onCreated={invoiceCreated} />
     <CustomInvoiceModal open={customOpen} toggle={() => setCustomOpen(false)} schools={schools} fixedSchoolId={fixedSchoolId} onCreated={load} />
   </div></div>;
 }
