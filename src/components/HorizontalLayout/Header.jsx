@@ -12,6 +12,7 @@ import { Row, Col, Dropdown, DropdownToggle, DropdownMenu } from "reactstrap";
 
 import NotificationDropdown from "../CommonForBoth/TopbarDropdown/NotificationDropdown";
 import ProfileMenu from "../CommonForBoth/TopbarDropdown/ProfileMenu";
+import WalletBalanceHeader from "../CommonForBoth/WalletBalanceHeader.jsx";
 
 import megamenuImg from "../../assets/images/megamenu-img.png";
 import logo from "../../assets/images/logo.svg";
@@ -354,6 +355,7 @@ const Header = (props) => {
               </button>
             </div>
 
+            <WalletBalanceHeader />
             <NotificationDropdown />
 
             <ProfileMenu />

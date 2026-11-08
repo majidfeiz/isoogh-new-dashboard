@@ -88,10 +88,10 @@ const IncomingCallList = () => {
         <Col xl="3" md="4"><Label>فرم تماس</Label><Input type="select" value={query.formId} disabled={!query.schoolId} onChange={(event) => updateQuery({ formId: event.target.value, page: 1 })}><option value="">همه فرم‌ها</option>{forms.map((form) => <option key={form.id} value={form.id}>{form.title || form.name || `فرم ${form.id}`}</option>)}</Input></Col>
         <Col xl="2" md="4"><Label htmlFor="incoming-calls-from">از تاریخ</Label><DatePicker id="incoming-calls-from" calendar={persian} locale={persianFa}
           value={pickerValue(query.from)} onChange={(date) => updateQuery({ from: apiDate(date), page: 1 })} format="YYYY/MM/DD"
-          inputClass="form-control" calendarPosition="bottom-right" placeholder="انتخاب تاریخ شمسی" /></Col>
+          inputClass="form-control" className="backup-date-picker-popup" calendarPosition="bottom-right" portal portalTarget={typeof document !== "undefined" ? document.body : undefined} fixRelativePosition placeholder="انتخاب تاریخ شمسی" /></Col>
         <Col xl="2" md="4"><Label htmlFor="incoming-calls-to">تا پایان روز</Label><DatePicker id="incoming-calls-to" calendar={persian} locale={persianFa}
           value={pickerValue(query.to)} onChange={(date) => updateQuery({ to: apiDate(date), page: 1 })} format="YYYY/MM/DD"
-          inputClass="form-control" calendarPosition="bottom-right" placeholder="انتخاب تاریخ شمسی" /></Col>
+          inputClass="form-control" className="backup-date-picker-popup" calendarPosition="bottom-right" portal portalTarget={typeof document !== "undefined" ? document.body : undefined} fixRelativePosition placeholder="انتخاب تاریخ شمسی" /></Col>
         <Col xl="2" md="4"><Label>تعداد در صفحه</Label><Input type="select" value={query.limit} onChange={(event) => updateQuery({ limit: Number(event.target.value), page: 1 })}>{[10, 20, 50, 100].map((limit) => <option key={limit}>{limit}</option>)}</Input></Col>
         {hasPermission("incoming-calls.export") && <Col xl="3" md="8" className="d-flex gap-2"><Button color="success" outline disabled={!!exporting || !query.schoolId || !!rangeError} onClick={() => download("csv")}>{exporting === "csv" ? "در حال دریافت..." : "خروجی CSV"}</Button><Button color="success" disabled={!!exporting || !query.schoolId || !!rangeError} onClick={() => download("xlsx")}>{exporting === "xlsx" ? "در حال دریافت..." : "خروجی Excel"}</Button></Col>}
       </Row>

@@ -6,14 +6,14 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { getSchools } from "../../services/schoolService.jsx";
 import { executeBillingReminders, executeBillingRestrictions, getBillingInvoices } from "../../services/billingService.jsx";
 import InvoiceCreateModal from "./InvoiceCreateModal.jsx";
-import { BILLING_ADMIN_ROLES, billingErrorMessage, getUserSchoolId, hasBillingRole, invalidateBillingCache, isBillingManager, moneyDisplay, STATUS_LABELS, subscribeBillingCache } from "./billingUtils.js";
+import CustomInvoiceModal from "./CustomInvoiceModal.jsx";
+import { billingErrorMessage, getUserSchoolId, invalidateBillingCache, INVOICE_TYPE_LABELS, moneyDisplay, STATUS_LABELS, subscribeBillingCache } from "./billingUtils.js";
 
 export default function BillingInvoices() {
   document.title = "مالی و اشتراک | داشبورد آیسوق";
   const { user, hasPermission } = useAuth();
-  const manager = isBillingManager(user);
-  const fixedSchoolId = manager ? getUserSchoolId(user) : "";
-  const admin = hasBillingRole(user, BILLING_ADMIN_ROLES);
+  const fixedSchoolId = getUserSchoolId(user) || "";
+  const schoolScoped = Boolean(fixedSchoolId);
   const [filters, setFilters] = useState({ schoolId: fixedSchoolId, status: "", search: "", page: 1, limit: 10 });
   const [result, setResult] = useState({ items: [], kpis: {}, pagination: { page: 1, lastPage: 1, total: 0 } });
   const [schools, setSchools] = useState([]);
@@ -21,7 +21,9 @@ export default function BillingInvoices() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [customOpen, setCustomOpen] = useState(false);
   const [executing, setExecuting] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -32,16 +34,16 @@ export default function BillingInvoices() {
       setSchools(allowedSchools);
       setFilters((current) => ({
         ...current,
-        schoolId: current.schoolId || fixedSchoolId || (manager && allowedSchools.length === 1 ? String(allowedSchools[0].id) : ""),
+        schoolId: current.schoolId || fixedSchoolId || (allowedSchools.length === 1 ? String(allowedSchools[0].id) : ""),
       }));
     }).catch(() => { if (active) setSchools([]); }).finally(() => { if (active) setSchoolsLoading(false); });
     return () => { active = false; };
-  }, [manager, fixedSchoolId]);
+  }, [fixedSchoolId]);
   const load = useCallback(async () => {
     if (schoolsLoading) return;
-    const selectedSchoolId = manager ? (filters.schoolId || fixedSchoolId) : filters.schoolId;
-    if (manager && !selectedSchoolId) {
-      setError(schools.length ? "برای مشاهده فاکتورها یک مجموعه را انتخاب کنید." : "هیچ مجموعه مجازی برای این حساب مدیر یافت نشد.");
+    const selectedSchoolId = filters.schoolId || fixedSchoolId;
+    if (schoolScoped && !selectedSchoolId) {
+      setError(schools.length ? "برای مشاهده فاکتورها یک مجموعه را انتخاب کنید." : "هیچ مجموعه مجازی برای این حساب یافت نشد.");
       setLoading(false);
       return;
     }
@@ -49,7 +51,7 @@ export default function BillingInvoices() {
     try { setResult(await getBillingInvoices({ ...filters, schoolId: selectedSchoolId })); }
     catch (e) { setError(billingErrorMessage(e)); }
     finally { setLoading(false); }
-  }, [filters, manager, fixedSchoolId, schools, schoolsLoading]);
+  }, [filters, schoolScoped, fixedSchoolId, schools, schoolsLoading]);
   useEffect(() => { load(); return subscribeBillingCache(load); }, [load]);
 
   const kpis = useMemo(() => ["unpaid", "paid", "expired"].map((status) => ({ status, ...(result.kpis?.[status] || {}) })), [result.kpis]);
@@ -59,26 +61,33 @@ export default function BillingInvoices() {
     try { kind === "reminders" ? await executeBillingReminders() : await executeBillingRestrictions(); invalidateBillingCache(); }
     finally { setExecuting(""); }
   };
+  const invoiceCreated = async (invoice) => {
+    const number = invoice?.invoiceNumber || invoice?.invoice_number || invoice?.number || invoice?.id;
+    setNotice(number ? `فاکتور جدید با شماره ${number} با موفقیت صادر شد.` : "فاکتور جدید با موفقیت صادر شد.");
+    await load();
+  };
 
   return <div className="page-content" dir="rtl"><div className="container-fluid">
     <Breadcrumbs title="مالی و اشتراک" breadcrumbItem="فاکتورها" />
-    <Row>{kpis.map((kpi) => <Col md={4} key={kpi.status}><Card><CardBody><div className="text-muted">{STATUS_LABELS[kpi.status]}</div><h4>{Number(kpi.count || 0).toLocaleString("fa-IR")} فاکتور</h4><small>{moneyDisplay(kpi.amount ?? kpi.totalAmount ?? 0)}</small></CardBody></Card></Col>)}</Row>
+    {notice && <Alert color="success" toggle={() => setNotice("")}>{notice}</Alert>}
+    <Row>{kpis.map((kpi) => <Col md={4} key={kpi.status}><Card><CardBody><div className="text-muted">{STATUS_LABELS[kpi.status]}</div><h4>{kpi.count == null ? "—" : Number(kpi.count).toLocaleString("fa-IR")} فاکتور</h4><small>{kpi.amount == null && kpi.totalAmount == null ? "مبلغ نامشخص" : moneyDisplay(kpi.amount ?? kpi.totalAmount)}</small></CardBody></Card></Col>)}</Row>
     <Card><CardHeader className="d-flex flex-wrap gap-2 justify-content-between"><strong>فهرست فاکتورها</strong><div className="d-flex gap-2">
-      {admin && hasPermission("billing.execute") && <><Button size="sm" outline onClick={() => execute("reminders")} disabled={!!executing}>اجرای یادآوری‌ها</Button><Button size="sm" outline color="warning" onClick={() => execute("restrictions")} disabled={!!executing}>اجرای محدودیت‌ها</Button></>}
-      {admin && hasPermission("billing.invoices.create") && <Button size="sm" color="primary" onClick={() => setCreateOpen(true)}>صدور فاکتور</Button>}
-      {admin && hasPermission("billing.pricing.show") && <Button size="sm" tag={Link} to="/billing/pricing">تنظیم قیمت</Button>}
+      {hasPermission("billing.execute") && <><Button size="sm" outline onClick={() => execute("reminders")} disabled={!!executing}>اجرای یادآوری‌ها</Button><Button size="sm" outline color="warning" onClick={() => execute("restrictions")} disabled={!!executing}>اجرای محدودیت‌ها</Button></>}
+      {hasPermission("billing.invoices.create") && <><Button size="sm" color="primary" onClick={() => setCreateOpen(true)}>صدور اشتراک</Button><Button size="sm" color="info" onClick={() => setCustomOpen(true)}>فاکتور سفارشی</Button></>}
+      {hasPermission("billing.pricing.show") && <Button size="sm" tag={Link} to="/billing/pricing">تنظیم قیمت</Button>}
     </div></CardHeader><CardBody>
       <Row className="g-2 mb-3">
-        <Col md={4}><Label for="schoolFilter">مجموعه</Label><Input id="schoolFilter" type="select" value={filters.schoolId} disabled={schoolsLoading || (manager && schools.length === 1)} onChange={(e) => setFilters({ ...filters, schoolId: e.target.value, page: 1 })}><option value="">{manager ? "انتخاب مجموعه" : "همه مجموعه‌ها"}</option>{schools.map((s) => <option key={s.id} value={s.id}>{s.name || s.title}</option>)}</Input></Col>
+        <Col md={4}><Label for="schoolFilter">مجموعه</Label><Input id="schoolFilter" type="select" value={filters.schoolId} disabled={schoolsLoading || (schoolScoped && schools.length === 1)} onChange={(e) => setFilters({ ...filters, schoolId: e.target.value, page: 1 })}><option value="">{schoolScoped ? "انتخاب مجموعه" : "همه مجموعه‌ها"}</option>{schools.map((s) => <option key={s.id} value={s.id}>{s.name || s.title}</option>)}</Input></Col>
         <Col md={3}><Label for="statusFilter">وضعیت</Label><Input id="statusFilter" type="select" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value, page: 1 })}><option value="">همه</option>{Object.entries(STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}</Input></Col>
         <Col md={5}><Label for="invoiceSearch">شماره فاکتور</Label><Input id="invoiceSearch" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value, page: 1 })} placeholder="جستجو…" /></Col>
       </Row>
       {error && <Alert color="danger">{error}<Button color="link" onClick={load}>تلاش دوباره</Button></Alert>}
-      <div className="table-responsive"><Table hover className="align-middle"><thead><tr><th>شماره</th><th>مجموعه</th><th>وضعیت</th><th>تاریخ صدور</th><th>مبلغ</th><th><span className="visually-hidden">عملیات</span></th></tr></thead><tbody>
-        {loading ? Array.from({ length: 5 }).map((_, i) => <tr key={i}><td colSpan="6"><span className="placeholder col-12" /></td></tr>) : result.items.length ? result.items.map((invoice) => <tr key={invoice.id}><td>{invoice.number || invoice.invoiceNumber || invoice.id}</td><td>{invoice.school?.name || invoice.schoolName || "—"}</td><td><Badge color={invoice.status === "paid" ? "success" : invoice.status === "expired" ? "danger" : "warning"}>{STATUS_LABELS[invoice.status] || invoice.status}</Badge></td><td>{invoice.issuedAt ? new Intl.DateTimeFormat("fa-IR-u-ca-persian").format(new Date(invoice.issuedAt)) : "—"}</td><td>{moneyDisplay(invoice.totalAmount ?? invoice.finalAmount)}</td><td>{hasPermission("billing.invoices.show") && <Button tag={Link} size="sm" to={`/billing/invoices/${invoice.id}?schoolId=${invoice.schoolId}`}>جزئیات</Button>}</td></tr>) : <tr><td colSpan="6" className="text-center py-5 text-muted">فاکتوری یافت نشد.</td></tr>}
+      <div className="table-responsive"><Table hover className="align-middle"><thead><tr><th>شماره</th><th>نوع</th><th>مجموعه</th><th>وضعیت</th><th>تاریخ صدور</th><th>مبلغ</th><th><span className="visually-hidden">عملیات</span></th></tr></thead><tbody>
+        {loading ? Array.from({ length: 5 }).map((_, i) => <tr key={i}><td colSpan="7"><span className="placeholder col-12" /></td></tr>) : result.items.length ? result.items.map((invoice) => <tr key={invoice.id}><td>{invoice.number || invoice.invoiceNumber || invoice.id}</td><td><Badge color="info">{INVOICE_TYPE_LABELS[invoice.type] || "فاکتور"}</Badge></td><td>{invoice.school?.name || invoice.schoolName || "—"}</td><td><Badge color={invoice.status === "paid" ? "success" : invoice.status === "expired" ? "danger" : "warning"}>{STATUS_LABELS[invoice.status] || invoice.status}</Badge></td><td>{invoice.issuedAt ? new Intl.DateTimeFormat("fa-IR-u-ca-persian").format(new Date(invoice.issuedAt)) : "—"}</td><td>{moneyDisplay(invoice.totalAmount ?? invoice.finalAmount)}</td><td>{hasPermission("billing.invoices.show") && <Button tag={Link} size="sm" to={`/billing/invoices/${invoice.id}?schoolId=${invoice.schoolId}`}>جزئیات</Button>}</td></tr>) : <tr><td colSpan="7" className="text-center py-5 text-muted">فاکتوری یافت نشد.</td></tr>}
       </tbody></Table></div>
       <div className="d-flex justify-content-between align-items-center"><small>{Number(result.pagination.total || 0).toLocaleString("fa-IR")} مورد</small><div><Button size="sm" className="ms-2" disabled={filters.page <= 1 || loading} onClick={() => setFilters({ ...filters, page: filters.page - 1 })}>قبلی</Button><span>{filters.page.toLocaleString("fa-IR")} از {Number(result.pagination.lastPage || 1).toLocaleString("fa-IR")}</span><Button size="sm" className="me-2" disabled={filters.page >= result.pagination.lastPage || loading} onClick={() => setFilters({ ...filters, page: filters.page + 1 })}>بعدی</Button></div></div>
     </CardBody></Card>
-    <InvoiceCreateModal open={createOpen} toggle={() => setCreateOpen(false)} schools={schools} fixedSchoolId={fixedSchoolId} allowOverrides={admin} onCreated={load} />
+    <InvoiceCreateModal open={createOpen} toggle={() => setCreateOpen(false)} schools={schools} fixedSchoolId={fixedSchoolId} allowOverrides={hasPermission("billing.invoices.override")} onCreated={invoiceCreated} />
+    <CustomInvoiceModal open={customOpen} toggle={() => setCustomOpen(false)} schools={schools} fixedSchoolId={fixedSchoolId} onCreated={load} />
   </div></div>;
 }

@@ -5,10 +5,14 @@ import AdviserFormCapacity from "./AdviserFormCapacity.jsx"
 import { getAdviserFormCapacity } from "../../services/adviserFormCapacityService.jsx"
 import { getSupportForms } from "../../services/supportFormService.jsx"
 import { getAdvisers } from "../../services/adviserService.jsx"
+import { previewBillingCapacity, purchaseBillingCapacity } from "../../services/billingService.jsx"
 
 jest.mock("../../services/adviserFormCapacityService.jsx", () => ({ getAdviserFormCapacity: jest.fn() }))
 jest.mock("../../services/supportFormService.jsx", () => ({ getSupportForms: jest.fn() }))
 jest.mock("../../services/adviserService.jsx", () => ({ getAdvisers: jest.fn() }))
+jest.mock("../../services/billingService.jsx", () => ({ previewBillingCapacity: jest.fn(), purchaseBillingCapacity: jest.fn() }))
+let mockCanPurchase = false
+jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ hasPermission: () => mockCanPurchase }) }))
 jest.mock("../../components/Common/Breadcrumb.jsx", () => () => null)
 jest.mock("../../components/Common/Paginations.jsx", () => () => null)
 jest.mock("../IncomingCalls/IncomingCallsCommon.jsx", () => ({ SchoolPicker: ({ value, onChange }) => <select aria-label="مجموعه" value={value} onChange={(event) => onChange(event.target.value)}><option value="2">دو</option><option value="3">سه</option></select> }))
@@ -22,9 +26,31 @@ const rows = [
 ]
 
 beforeEach(() => {
+  mockCanPurchase = false
   getSupportForms.mockResolvedValue({ items: [{ id: 10, title: "فرم یک" }] })
   getAdvisers.mockResolvedValue({ items: [{ id: 5, name: "مشاور" }] })
   getAdviserFormCapacity.mockResolvedValue({ items: rows, pagination: { page: 3, limit: 20, total: 4 } })
+})
+
+test("previews capacity before purchase and reuses one idempotency key", async () => {
+  mockCanPurchase = true
+  previewBillingCapacity.mockResolvedValue({ currentCapacity: 200, addedCapacity: 20, capacityStepSeats: 20, steps: 1, pricePerStep: 1000, totalAmount: 1000, pricingEffectiveAt: "2026-11-01" })
+  purchaseBillingCapacity.mockRejectedValueOnce({ response: { status: 503, data: { message: "خطای موقت" } } }).mockResolvedValueOnce({ invoiceId: 9 })
+  render(<MemoryRouter initialEntries={["/reports/adviser-form-capacity?schoolId=2"]}><AdviserFormCapacity /></MemoryRouter>)
+  await screen.findByText("۱۹۹")
+  fireEvent.click(screen.getAllByRole("button", { name: "افزایش ظرفیت" })[0])
+  fireEvent.change(screen.getByLabelText("ظرفیت هدف"), { target: { value: "220" } })
+  fireEvent.click(screen.getByRole("button", { name: "دریافت پیش‌نمایش" }))
+  expect(await screen.findByText("پیش‌نمایش قطعی backend")).toBeInTheDocument()
+  expect(previewBillingCapacity).toHaveBeenCalledWith({ schoolId: 2, adviserId: 1, targetStudentCapacity: "220" })
+  fireEvent.click(screen.getByRole("button", { name: "تأیید و خرید ظرفیت" }))
+  await waitFor(() => expect(purchaseBillingCapacity).toHaveBeenCalledTimes(1))
+  const firstKey = purchaseBillingCapacity.mock.calls[0][0].idempotencyKey
+  expect(firstKey).toBeTruthy()
+  await waitFor(() => expect(screen.getByRole("button", { name: "تأیید و خرید ظرفیت" })).not.toBeDisabled())
+  fireEvent.click(screen.getByRole("button", { name: "تأیید و خرید ظرفیت" }))
+  await waitFor(() => expect(purchaseBillingCapacity).toHaveBeenCalledTimes(2))
+  expect(purchaseBillingCapacity.mock.calls[1][0].idempotencyKey).toBe(firstKey)
 })
 
 test("shows normal, full, legacy and inactive capacities and clears dependent filters on school change", async () => {
