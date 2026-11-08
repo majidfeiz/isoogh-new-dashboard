@@ -933,7 +933,11 @@ export const StudentsTab = ({ formId, schoolId }) => {
   const { user, hasPermission } = useAuth();
   const canArchive = canManageAdviserStudentArchive(user, hasPermission);
   const [advisers, setAdvisers] = useState([]);
+  const [advisersLoading, setAdvisersLoading] = useState(false);
+  const [advisersPagination, setAdvisersPagination] = useState({ page: 1, lastPage: 1, total: 0 });
+  const [adviserSearch, setAdviserSearch] = useState("");
   const [selectedAdviser, setSelectedAdviser] = useState("");
+  const [selectedAdviserOption, setSelectedAdviserOption] = useState(null);
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 });
   const [search, setSearch] = useState("");
@@ -965,12 +969,59 @@ export const StudentsTab = ({ formId, schoolId }) => {
   const parentTagsRequest = useRef(0);
   const tagValuesRequest = useRef(0);
   const parentTagSearchTimer = useRef(null);
+  const advisersRequest = useRef(0);
+  const adviserSearchTimer = useRef(null);
+
+  const loadAdvisers = useCallback((page = 1, searchValue = "", append = false) => {
+    const requestId = ++advisersRequest.current;
+    setAdvisersLoading(true);
+    getSupportFormAdvisers(formId, { page, limit: 50, search: searchValue || undefined })
+      .then((res) => {
+        if (requestId !== advisersRequest.current) return;
+        const nextItems = res.items || [];
+        setAdvisers((current) => {
+          if (!append) return nextItems;
+          const byId = new Map(current.map((item) => [String(item.adviser_id || item.adviser?.id || item.id), item]));
+          nextItems.forEach((item) => byId.set(String(item.adviser_id || item.adviser?.id || item.id), item));
+          return Array.from(byId.values());
+        });
+        setAdvisersPagination(res.pagination || { page, lastPage: 1, total: nextItems.length });
+      })
+      .catch(() => { if (requestId === advisersRequest.current) setAlert({ type: "danger", message: "خطا در دریافت مشاوران." }); })
+      .finally(() => { if (requestId === advisersRequest.current) setAdvisersLoading(false); });
+  }, [formId]);
 
   useEffect(() => {
-    getSupportFormAdvisers(formId, { page: 1, limit: 200 })
-      .then((res) => setAdvisers(res.items || []))
-      .catch(() => {});
-  }, [formId]);
+    setAdvisers([]);
+    setAdviserSearch("");
+    setAdvisersPagination({ page: 1, lastPage: 1, total: 0 });
+    loadAdvisers(1, "", false);
+    return () => { clearTimeout(adviserSearchTimer.current); advisersRequest.current += 1; };
+  }, [formId, loadAdvisers]);
+
+  const adviserOptions = useMemo(() => advisers.map((item) => {
+    const adviser = item?.adviser || item;
+    const userInfo = adviser?.user || {};
+    const id = item?.adviser_id || adviser?.id || item?.id;
+    const name = userInfo.name || adviser?.name || adviser?.code || `مشاور ${id}`;
+    const detail = [adviser?.code, userInfo.phone, userInfo.ssn].filter(Boolean).join(" • ");
+    return { value: String(id), label: name, detail };
+  }), [advisers]);
+
+  const searchAdvisers = (inputValue, actionMeta) => {
+    if (actionMeta.action !== "input-change") return inputValue;
+    setAdviserSearch(inputValue);
+    clearTimeout(adviserSearchTimer.current);
+    adviserSearchTimer.current = setTimeout(() => loadAdvisers(1, inputValue.trim(), false), 350);
+    return inputValue;
+  };
+
+  const loadMoreAdvisers = () => {
+    const page = Number(advisersPagination.page || 1);
+    const lastPage = Number(advisersPagination.lastPage || 1);
+    if (advisersLoading || page >= lastPage) return;
+    loadAdvisers(page + 1, adviserSearch.trim(), true);
+  };
 
   const fetchStudents = useCallback(
     async (page = 1, q = search, archive = archiveFilter) => {
@@ -1338,22 +1389,28 @@ export const StudentsTab = ({ formId, schoolId }) => {
 
       <Row className="g-2 align-items-end mb-4">
         <Col md="6">
-          <Label>انتخاب مشاور</Label>
-          <Input
-            type="select"
-            value={selectedAdviser}
-            onChange={(e) => setSelectedAdviser(e.target.value)}
-          >
-            <option value="">یک مشاور انتخاب کنید</option>
-            {advisers.map((a) => {
-              const name = a?.adviser?.user?.name || a?.adviser?.code || `مشاور ${a?.adviser_id}`;
-              return (
-                <option key={a.adviser_id || a.id} value={a.adviser_id || a.adviser?.id}>
-                  {name}
-                </option>
-              );
-            })}
-          </Input>
+          <Label htmlFor="support-form-adviser-select">انتخاب مشاور</Label>
+          <Select
+            inputId="support-form-adviser-select"
+            isRtl
+            isClearable
+            isSearchable
+            menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+            menuPosition="fixed"
+            menuPlacement="auto"
+            options={adviserOptions}
+            value={adviserOptions.find((option) => option.value === String(selectedAdviser)) || selectedAdviserOption}
+            isLoading={advisersLoading}
+            placeholder={advisersLoading && !adviserOptions.length ? "در حال دریافت مشاوران..." : "نام، کد یا شماره مشاور را جست‌وجو کنید..."}
+            loadingMessage={() => "در حال دریافت مشاوران..."}
+            noOptionsMessage={({ inputValue }) => inputValue ? "مشاوری مطابق جست‌وجو پیدا نشد" : "مشاوری به این فرم متصل نیست"}
+            onInputChange={searchAdvisers}
+            onMenuScrollToBottom={loadMoreAdvisers}
+            onChange={(option) => { setSelectedAdviser(option?.value || ""); setSelectedAdviserOption(option || null); }}
+            formatOptionLabel={(option) => <div><span>{option.label}</span>{option.detail && <small className="d-block text-muted">{option.detail}</small>}</div>}
+            styles={TAG_SELECT_STYLES}
+          />
+          <small className="text-muted d-block mt-2"><i className="bx bx-search ms-1" />برای پیدا کردن سریع مشاور، بخشی از نام، کد یا شماره او را وارد کنید.</small>
         </Col>
         {selectedAdviser && (
           <Col md="6" className="d-flex gap-2">
