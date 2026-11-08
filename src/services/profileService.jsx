@@ -15,6 +15,6 @@ export async function changePassword({ current_password, new_password }) {
   const res = await apiPatch(getApiUrl(API_ROUTES.profile.changePassword), {
     current_password,
     new_password,
-  });
-  return res?.data ?? null;
+  }, { silent: true, preserveAuthOn401: true });
+  return res?.data?.data ?? null;
 }

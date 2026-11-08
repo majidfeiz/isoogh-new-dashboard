@@ -3,6 +3,20 @@ export const API_BASE_URL = "http://127.0.0.1:8040"
 export const API_VERSION = { v1: "", v2: "/api/v2" }
 export const getApiUrl = (path) => `${API_BASE_URL}${path}`
 export const API_ROUTES = {
+  auth: {
+    captcha: "/auth/captcha",
+    login: "/auth/login",
+    verifyOtp: "/auth/verify-otp",
+    me: "/auth/me",
+    logout: "/auth/logout",
+    forgotPassword: "/auth/password/forgot",
+    resetPassword: "/auth/password/reset",
+  },
+  profile: {
+    me: "/profile",
+    update: "/profile",
+    changePassword: "/profile/password",
+  },
   dashboard: {
     myLayout: "/dashboard/my/layout",
   },

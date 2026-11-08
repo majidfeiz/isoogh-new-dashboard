@@ -44,7 +44,7 @@ http.interceptors.response.use(
 
     const status = error?.response?.status;
 
-    if (status === 401) {
+    if (status === 401 && !error.config?.preserveAuthOn401) {
       clearAuthData();
       if (
         typeof window !== "undefined" &&

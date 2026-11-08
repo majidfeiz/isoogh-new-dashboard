@@ -347,6 +347,9 @@ const Login = (props) => {
                         </ul>
                       </Alert>
                     )}
+                    {props.router.location.state?.message && (
+                      <Alert color="success">{props.router.location.state.message}</Alert>
+                    )}
 
                     {/* ── مرحله ۱: فرم ورود ── */}
                     {step === 1 && (
@@ -423,6 +426,12 @@ const Login = (props) => {
                           <label className="form-check-label" htmlFor="rememberMe">
                             مرا به خاطر بسپار
                           </label>
+                        </div>
+
+                        <div className="mb-3 text-end">
+                          <Link to="/forgot-password" className="text-muted">
+                            رمز عبور را فراموش کرده‌اید؟
+                          </Link>
                         </div>
 
                         {captcha.enabled && (

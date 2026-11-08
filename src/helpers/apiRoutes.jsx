@@ -30,6 +30,8 @@ export const API_ROUTES = {
     me: `${API_VERSION.v1}/auth/me`,
     refresh: `${API_VERSION.v1}/auth/refresh`,
     logout: `${API_VERSION.v1}/auth/logout`,
+    forgotPassword: `${API_VERSION.v1}/auth/password/forgot`,
+    resetPassword: `${API_VERSION.v1}/auth/password/reset`,
     sessions: `${API_VERSION.v1}/auth/sessions`,
     session: (id) => `${API_VERSION.v1}/auth/sessions/${id}`,
     adminUserSessions: (userId) => `${API_VERSION.v1}/auth/admin/users/${userId}/sessions`,

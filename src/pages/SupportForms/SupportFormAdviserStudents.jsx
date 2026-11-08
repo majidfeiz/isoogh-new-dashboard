@@ -71,7 +71,6 @@ const SupportFormAdviserStudents = () => {
   const [deleteModal, setDeleteModal] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [bulkDeleteModal, setBulkDeleteModal] = useState(false);
-  const [tagAutoCloseTimer, setTagAutoCloseTimer] = useState(null);
 
   const [candidateSearch, setCandidateSearch] = useState("");
   const [candidateResults, setCandidateResults] = useState([]);
@@ -383,10 +382,6 @@ const SupportFormAdviserStudents = () => {
     setTagText("");
     setSubTagText("");
     setTagAlert(null);
-    if (tagAutoCloseTimer) {
-      clearTimeout(tagAutoCloseTimer);
-      setTagAutoCloseTimer(null);
-    }
     fetchParentTags("");
   };
 
@@ -398,6 +393,7 @@ const SupportFormAdviserStudents = () => {
       return;
     }
     setAttachLoading(true);
+    setTagAlert(null);
     try {
       const payload = {};
       if (selectedParentTag) payload.tagId = Number(selectedParentTag);
@@ -407,27 +403,27 @@ const SupportFormAdviserStudents = () => {
 
       const res = await attachSupportFormAdviserStudentsByTag(id, adviserId, payload);
       const result = res?.data || res || {};
-      const added = result.added ?? "-";
-      const skipped = result.skipped ?? "-";
-      const matched = result.matched ?? "-";
-      const success = {
-        type: "success",
-        message: `نتیجه افزودن بر اساس تگ: اضافه شد ${added}، رد شد ${skipped}، تطبیق ${matched}`,
-      };
-      setAlert(success);
-      setTagAlert(success);
-      const timer = setTimeout(() => {
-        setTagModal(false);
-        setTagAlert(null);
-        setTagAutoCloseTimer(null);
-      }, 2500);
-      setTagAutoCloseTimer(timer);
-      await fetchData(meta.page, filters, sort);
+      const added = Number(result.added || 0);
+      const skipped = Number(result.skipped || 0);
+      const matched = Number(result.matched || 0);
+      let outcome;
+      if (added > 0) {
+        outcome = { type: "success", message: `${added.toLocaleString("fa-IR")} دانش‌آموز اضافه شد${skipped ? ` و ${skipped.toLocaleString("fa-IR")} مورد تکراری رد شد` : ""}.` };
+        await fetchData(1, filters, sort, { preserveAlert: true });
+      } else if (matched > 0 || skipped > 0) {
+        outcome = { type: "warning", message: "دانش‌آموزان این تگ قبلاً به مشاور اضافه شده‌اند و مورد جدیدی برای افزودن وجود ندارد." };
+      } else {
+        outcome = { type: "warning", message: tagValues.length && !selectedTagValue && !subTagText.trim()
+          ? "برای این سرتگ زیرتگ تعریف شده است؛ زیرتگ موردنظر را انتخاب کنید."
+          : "دانش‌آموزی با تگ انتخاب‌شده در مجموعه این فرم پیدا نشد." };
+      }
+      setAlert(outcome);
+      setTagAlert(outcome);
     } catch (e) {
       console.error("خطا در افزودن بر اساس تگ", e);
       const conflict = adviserCapacityConflict(e);
       if (conflict) { await fetchData(1, filters, sort, { preserveAlert: true }); notifyCapacityChanged(id); }
-      const err = { type: "danger", message: conflict?.message || "خطا در افزودن بر اساس تگ." };
+      const err = { type: "danger", message: conflict?.message || e?.response?.data?.message || "خطا در افزودن بر اساس تگ." };
       setAlert(err);
       setTagAlert(err);
     } finally {
@@ -867,7 +863,10 @@ const SupportFormAdviserStudents = () => {
                 </Input>
               </Col>
               <Col md="12">
-                <Label className="form-label">زیر تگ</Label>
+                <Label className="form-label">زیرتگ {tagLoading
+                  ? <span className="text-muted">(در حال بررسی)</span>
+                  : tagValues.length ? <span className="text-danger">(الزامی)</span>
+                    : <span className="text-muted">(برای این سرتگ تعریف نشده)</span>}</Label>
                 <Input
                   type="select"
                   value={selectedTagValue}
@@ -884,6 +883,7 @@ const SupportFormAdviserStudents = () => {
                     </option>
                   ))}
                 </Input>
+                {selectedParentTag && tagValues.length > 0 && !selectedTagValue && !subTagText.trim() && <small className="text-warning d-block mt-2">یک زیرتگ را انتخاب کنید.</small>}
               </Col>
               <Col md="12">
                 <Label className="form-label">یا نام/شناسه تگ</Label>
@@ -907,7 +907,7 @@ const SupportFormAdviserStudents = () => {
               <Button color="light" type="button" onClick={() => setTagModal(false)}>
                 بستن
               </Button>
-              <Button color="primary" type="submit" disabled={attachLoading}>
+              <Button color="primary" type="submit" disabled={attachLoading || tagLoading || (!tagText.trim() && !selectedParentTag) || (selectedParentTag && tagValues.length > 0 && !selectedTagValue && !subTagText.trim())}>
                 {attachLoading ? "در حال افزودن..." : "افزودن"}
               </Button>
             </div>
