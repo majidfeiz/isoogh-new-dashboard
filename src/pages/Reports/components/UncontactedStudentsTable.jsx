@@ -1,11 +1,10 @@
 // src/pages/Reports/components/UncontactedStudentsTable.jsx
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import { Badge, Button, Card, CardBody, CardHeader, Spinner, Table } from "reactstrap"
 import moment from "moment-jalaali"
 import Paginations from "../../../components/Common/Paginations.jsx"
-import { getReportsUncontactedStudents } from "../../../services/reportService.jsx"
-import { API_ROUTES, getApiUrl } from "../../../helpers/apiRoutes.jsx"
-import { getAccessToken } from "../../../helpers/authStorage.jsx"
+import { exportReportsUncontactedStudents, getReportsUncontactedStudents } from "../../../services/reportService.jsx"
+import { canceledReportError, reportErrorMessage } from "../reportDashboardUtils.js"
 
 const faNum = (v) => (v == null ? "—" : Number(v).toLocaleString("fa-IR"))
 
@@ -18,15 +17,20 @@ const toJalali = (d) => {
   }
 }
 
-const UncontactedStudentsTable = ({ period, schoolId, hasExportPerm }) => {
+const UncontactedStudentsTable = ({ period, schoolId, hasExportPerm, enabled = true }) => {
   const [items, setItems] = useState([])
   const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [exporting, setExporting] = useState(false)
+  const requestRef = useRef(null)
 
   const fetchData = useCallback(
     async (page = 1) => {
+      if (!enabled) return
+      requestRef.current?.abort()
+      const controller = new AbortController()
+      requestRef.current = controller
       setLoading(true)
       setError(null)
       try {
@@ -36,7 +40,9 @@ const UncontactedStudentsTable = ({ period, schoolId, hasExportPerm }) => {
           schoolId,
           page,
           limit: meta.limit,
+          signal: controller.signal,
         })
+        if (controller.signal.aborted) return
         setItems(res?.items || [])
         setMeta((prev) => ({
           ...prev,
@@ -44,45 +50,36 @@ const UncontactedStudentsTable = ({ period, schoolId, hasExportPerm }) => {
           total: res?.meta?.total ?? 0,
           lastPage: res?.meta?.lastPage ?? 1,
         }))
-      } catch {
-        setError("خطا در بارگذاری لیست دانش‌آموزان تماس‌نگرفته")
+      } catch (caught) {
+        if (canceledReportError(caught)) return
+        setError(reportErrorMessage(caught))
         setItems([])
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     },
-    [period, schoolId, meta.limit]
+    [period.from, period.to, schoolId, meta.limit, enabled]
   )
 
   useEffect(() => {
-    fetchData(1)
-  }, [period, schoolId]) // eslint-disable-line react-hooks/exhaustive-deps
+    setItems([]); setMeta((current) => ({ ...current, page: 1, total: 0, lastPage: 1 })); fetchData(1); return () => requestRef.current?.abort()
+  }, [period.from, period.to, schoolId, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleExport = async () => {
     if (exporting) return
     setExporting(true)
     try {
-      const params = new URLSearchParams()
-      if (period?.from) params.append("from", period.from)
-      if (period?.to) params.append("to", period.to)
-      if (schoolId) params.append("schoolId", String(schoolId))
-      const url = `${getApiUrl(API_ROUTES.reports.uncontactedStudentsExport)}?${params.toString()}`
-      const token = getAccessToken()
-      const res = await fetch(url, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
-      if (!res.ok) throw new Error("خطا در دانلود")
-      const blob = await res.blob()
-      const objectUrl = window.URL.createObjectURL(blob)
+      const file = await exportReportsUncontactedStudents({ from: period.from, to: period.to, schoolId })
+      const objectUrl = window.URL.createObjectURL(file.blob)
       const a = document.createElement("a")
       a.href = objectUrl
-      a.download = "uncontacted-students.csv"
+      a.download = file.filename
       document.body.appendChild(a)
       a.click()
       a.remove()
       setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1200)
-    } catch {
-      // toast shown by httpClient
+    } catch (caught) {
+      setError(reportErrorMessage(caught))
     } finally {
       setExporting(false)
     }
@@ -128,7 +125,7 @@ const UncontactedStudentsTable = ({ period, schoolId, hasExportPerm }) => {
         {error && !loading && (
           <div className="text-center py-4 text-danger p-3">
             <i className="mdi mdi-alert-circle-outline fs-3 d-block mb-2" />
-            <small>{error}</small>
+            <small>{error}</small><div><Button size="sm" color="link" onClick={() => fetchData(meta.page)}>تلاش مجدد</Button></div>
           </div>
         )}
         {!loading && !error && (

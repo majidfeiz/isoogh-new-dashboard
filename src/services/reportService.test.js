@@ -10,11 +10,52 @@ import {
   getStudentVoipComprehensiveReport,
   getInactiveAdvisersReport,
   getReportsCallsByAdviser,
+  getReportsOverview,
+  getReportsUncontactedStudents,
+  exportReportsUncontactedStudents,
+  jalaliBoundaryToIso,
+  reportQueryKey,
+  runReportQuery,
 } from "./reportService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn() }))
 
 beforeEach(() => apiGet.mockReset())
+
+test("converts Jalali Tehran boundaries in the API layer and sends a half-open range", async () => {
+  expect(jalaliBoundaryToIso("1405/08/01")).toBe("2026-10-22T20:30:00.000Z")
+  apiGet.mockResolvedValue({ data: { data: { totalCalls: 1 } } })
+  await getReportsOverview({ schoolId: 94, from: "1405/08/01", to: "1405/09/01" })
+  expect(apiGet.mock.calls[0][1]).toEqual(expect.objectContaining({ params: {
+    schoolId: 94,
+    from: jalaliBoundaryToIso("1405/08/01"),
+    to: jalaliBoundaryToIso("1405/09/01"),
+  } }))
+  expect(apiGet.mock.calls[0][1]).not.toHaveProperty("timeout")
+  expect(new Date(apiGet.mock.calls[0][1].params.from).getTime()).toBeLessThan(new Date(apiGet.mock.calls[0][1].params.to).getTime())
+})
+
+test("coalesces StrictMode-equivalent requests for one stable report key", async () => {
+  let resolve
+  const request = jest.fn(() => new Promise((done) => { resolve = done }))
+  const key = reportQueryKey("overview", { schoolId: 94, from: "1405/08/01", to: "1405/09/01" })
+  const first = runReportQuery(key, request)
+  const second = runReportQuery(key, request)
+  expect(request).toHaveBeenCalledTimes(1)
+  resolve({ ok: true })
+  await expect(Promise.all([first, second])).resolves.toEqual([{ ok: true }, { ok: true }])
+})
+
+test("uses server pagination for uncontacted students and exports without page or limit", async () => {
+  apiGet.mockResolvedValueOnce({ data: { data: { items: [{ studentId: 1 }], meta: { page: 3, limit: 10, total: 22, lastPage: 3 } } } })
+  const result = await getReportsUncontactedStudents({ schoolId: 94, from: "1405/08/01", to: "1405/09/01", page: 3, limit: 10 })
+  expect(result.meta.total).toBe(22)
+  expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining({ schoolId: 94, page: 3, limit: 10 }))
+  apiGet.mockResolvedValueOnce({ data: new Blob(["csv"]), headers: { "content-disposition": "attachment; filename=students.csv" } })
+  await expect(exportReportsUncontactedStudents({ schoolId: 94, from: "1405/08/01", to: "1405/09/01" })).resolves.toEqual(expect.objectContaining({ filename: "students.csv" }))
+  expect(apiGet.mock.calls[1][1].params).not.toHaveProperty("page")
+  expect(apiGet.mock.calls[1][1].params).not.toHaveProperty("limit")
+})
 
 test("maps the wrapped calls-by-adviser response", async () => {
   const data = { items: [{ adviserId: 12, adviserName: "فاطمه روشن" }], meta: { total: 1 } }
