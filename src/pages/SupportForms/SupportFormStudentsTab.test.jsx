@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { AllStudentsTab, StudentsTab } from "./SupportFormDetail.jsx";
-import { getSupportForm, getSupportFormAdvisers, getSupportFormAdviserStudents, getSupportFormAllStudents, setSupportFormAdviserStudentArchive } from "../../services/supportFormService.jsx";
+import { attachSupportFormAdviserStudentsByTag, getSupportForm, getSupportFormAdvisers, getSupportFormAdviserStudents, getSupportFormAllStudents, setSupportFormAdviserStudentArchive } from "../../services/supportFormService.jsx";
 import { apiGet } from "../../helpers/httpClient.jsx";
 
 jest.mock("../../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPost: jest.fn(), apiPatch: jest.fn(), apiDelete: jest.fn() }));
@@ -10,7 +10,7 @@ jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({
 }) }));
 jest.mock("../../services/supportFormService.jsx", () => ({
   getSupportForm: jest.fn(), getSupportFormAdvisers: jest.fn(), getSupportFormAdviserStudents: jest.fn(), getSupportFormAllStudents: jest.fn(),
-  setSupportFormAdviserStudentArchive: jest.fn(),
+  setSupportFormAdviserStudentArchive: jest.fn(), attachSupportFormAdviserStudentsByTag: jest.fn(),
 }));
 jest.mock("../../components/Common/TableContainer", () => ({ columns, data }) => <table><tbody>
   {data.map((item) => <tr key={item.id}>{columns.map((column) => <td key={column.id}>
@@ -153,4 +153,25 @@ test("appends the next tag page when the selector reaches its end", async () => 
 
   await waitFor(() => expect(within(tagSelect).getByRole("option", { name: "تگ صفحه دوم" })).toBeInTheDocument());
   expect(apiGet).toHaveBeenLastCalledWith(expect.stringMatching(/\/parent-tags$/), { params: expect.objectContaining({ page: 2, limit: 200, schoolId: 8, rootOnly: 1 }) });
+});
+
+test("requires a child tag when the selected root has children and sends the exact tag payload", async () => {
+  getSupportFormAdvisers.mockResolvedValue({ items: [{ adviser_id: 18, adviser: { user: { name: "مشاور" } } }] });
+  getSupportFormAdviserStudents.mockResolvedValue({ items: [], pagination: { page: 1, limit: 10, total: 0 } });
+  attachSupportFormAdviserStudentsByTag.mockResolvedValue({ data: { added: 2, skipped: 0, matched: 2 } });
+  apiGet
+    .mockResolvedValueOnce({ data: { data: { items: [{ id: 71, name: "سرتگ" }], meta: { page: 1, lastPage: 1 } } } })
+    .mockResolvedValueOnce({ data: { data: { items: [{ id: 72, name: "زیرتگ" }], meta: { page: 1, lastPage: 1 } } } });
+
+  render(<StudentsTab formId="2844" schoolId={8} />);
+  fireEvent.change(await screen.findByLabelText("support-form-adviser-select"), { target: { value: "18" } });
+  fireEvent.click(await screen.findByRole("button", { name: "افزودن با تگ" }));
+  fireEvent.change(await screen.findByLabelText("support-form-parent-tag"), { target: { value: "71" } });
+  await waitFor(() => expect(within(screen.getByLabelText("support-form-child-tag")).getByRole("option", { name: "زیرتگ" })).toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "افزودن" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("support-form-child-tag"), { target: { value: "72" } });
+  fireEvent.click(screen.getByRole("button", { name: "افزودن" }));
+
+  await waitFor(() => expect(attachSupportFormAdviserStudentsByTag).toHaveBeenCalledWith("2844", "18", { tagId: 71, subTagId: 72 }));
+  expect(await screen.findByText(/۲ دانش‌آموز اضافه شد/)).toBeInTheDocument();
 });
