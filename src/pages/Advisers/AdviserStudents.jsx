@@ -449,22 +449,25 @@ const AdviserStudents = () => {
 
       const res = await attachAdviserStudentsByTag(adviserId, payload);
       const result = res?.data || res || {};
-      const added = result.added ?? "-";
-      const skipped = result.skipped ?? "-";
-      const matched = result.matched ?? "-";
-
-      const success = {
-        type: "success",
-        message: `نتیجه افزودن بر اساس تگ: اضافه شد ${added}، رد شد ${skipped}، تطبیق ${matched}`,
-      };
-      setAlert(success);
-      setTagAlert(success);
-
-      await fetchData(meta.page, filters, sort, { preserveAlert: true });
-      closeTagModal();
+      const added = Number(result.added || 0);
+      const skipped = Number(result.skipped || 0);
+      const matched = Number(result.matched || 0);
+      let outcome;
+      if (added > 0) {
+        outcome = { type: "success", message: `${added.toLocaleString("fa-IR")} دانش‌آموز اضافه شد${skipped ? ` و ${skipped.toLocaleString("fa-IR")} مورد تکراری رد شد` : ""}.` };
+        await fetchData(1, filters, sort, { preserveAlert: true });
+      } else if (matched > 0 || skipped > 0) {
+        outcome = { type: "warning", message: "دانش‌آموزان این تگ قبلاً به مشاور اضافه شده‌اند و مورد جدیدی برای افزودن وجود ندارد." };
+      } else {
+        outcome = { type: "warning", message: tagValues.length && !selectedTagValue
+          ? "برای این سرتگ زیرتگ تعریف شده است؛ زیرتگ موردنظر را انتخاب کنید."
+          : "دانش‌آموزی با تگ انتخاب‌شده در مجموعه پیدا نشد." };
+      }
+      setAlert(outcome);
+      setTagAlert(outcome);
     } catch (e) {
       console.error("خطا در افزودن دانش‌آموز بر اساس تگ", e);
-      const error = { type: "danger", message: "خطا در افزودن بر اساس تگ." };
+      const error = { type: "danger", message: e?.response?.data?.message || "خطا در افزودن بر اساس تگ." };
       setAlert(error);
       setTagAlert(error);
     } finally {
@@ -908,7 +911,10 @@ const AdviserStudents = () => {
               </Col>
 
               <Col md="12">
-                <Label className="form-label fw-semibold">زیرتگ <span className="text-muted fw-normal">(اختیاری)</span></Label>
+                <Label className="form-label fw-semibold">زیرتگ {tagValuesLoading
+                  ? <span className="text-muted fw-normal">(در حال بررسی)</span>
+                  : tagValues.length ? <span className="text-danger fw-normal">(الزامی)</span>
+                    : <span className="text-muted fw-normal">(برای این سرتگ تعریف نشده)</span>}</Label>
                 <Select
                   inputId="adviser-students-child-tag"
                   isRtl
@@ -928,6 +934,7 @@ const AdviserStudents = () => {
                   onChange={(option) => setSelectedTagValue(option?.value || "")}
                   styles={TAG_SELECT_STYLES}
                 />
+                {selectedParentTag && tagValues.length > 0 && !selectedTagValue && <small className="text-warning d-block mt-2"><i className="bx bx-info-circle ms-1" />دانش‌آموزان براساس زیرتگ دسته‌بندی شده‌اند؛ یک زیرتگ را انتخاب کنید.</small>}
               </Col>
 
             </Row>
@@ -936,7 +943,7 @@ const AdviserStudents = () => {
               <Button color="light" type="button" onClick={closeTagModal}>
                 انصراف
               </Button>
-              <Button color="primary" type="submit" disabled={submitLoading || !selectedParentTag}>
+              <Button color="primary" type="submit" disabled={submitLoading || tagValuesLoading || !selectedParentTag || (tagValues.length > 0 && !selectedTagValue)}>
                 {submitLoading ? "در حال افزودن..." : "افزودن"}
               </Button>
             </div>
