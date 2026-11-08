@@ -1196,15 +1196,27 @@ export const StudentsTab = ({ formId, schoolId }) => {
   const handleAttachByTag = async (payload) => {
     if (!selectedAdviser) return;
     setAttachLoading(true);
+    setTagAlert(null);
     try {
       const res = await attachSupportFormAdviserStudentsByTag(formId, selectedAdviser, payload);
       const d = res?.data || res || {};
-      setTagAlert({ type: "success", message: `اضافه: ${d.added ?? "-"} | رد: ${d.skipped ?? "-"}` });
-      await fetchStudents(meta.page);
+      const added = Number(d.added || 0);
+      const skipped = Number(d.skipped || 0);
+      const matched = Number(d.matched || 0);
+      if (added > 0) {
+        await fetchStudents(1);
+        setTagAlert({ type: "success", message: `${added.toLocaleString("fa-IR")} دانش‌آموز اضافه شد${skipped ? ` و ${skipped.toLocaleString("fa-IR")} مورد تکراری رد شد` : ""}.` });
+      } else if (matched > 0 || skipped > 0) {
+        setTagAlert({ type: "warning", message: "دانش‌آموزان این تگ قبلاً به مشاور اضافه شده‌اند و مورد جدیدی برای افزودن وجود ندارد." });
+      } else {
+        setTagAlert({ type: "warning", message: tagValues.length && !selectedTagValue
+          ? "برای این سرتگ زیرتگ تعریف شده است؛ زیرتگ موردنظر را انتخاب کنید."
+          : "دانش‌آموزی با تگ انتخاب‌شده در مجموعه این فرم پیدا نشد." });
+      }
     } catch (error) {
       const conflict = adviserCapacityConflict(error);
       if (conflict) { await fetchStudents(1); notifyCapacityChanged(formId); }
-      setTagAlert({ type: "danger", message: conflict?.message || "خطا در افزودن بر اساس تگ." });
+      setTagAlert({ type: "danger", message: conflict?.message || error?.response?.data?.message || "خطا در افزودن بر اساس تگ." });
     } finally {
       setAttachLoading(false);
     }
@@ -1572,7 +1584,10 @@ export const StudentsTab = ({ formId, schoolId }) => {
               <small className="text-muted d-block mt-2"><i className="bx bx-search ms-1" />برای پیدا کردن سریع تگ، بخشی از نام آن را بنویسید.</small>
             </Col>
             <Col md="12">
-              <Label className="fw-semibold">زیرتگ <span className="text-muted fw-normal">(اختیاری)</span></Label>
+              <Label className="fw-semibold">زیرتگ {tagValuesLoading
+                ? <span className="text-muted fw-normal">(در حال بررسی)</span>
+                : tagValues.length ? <span className="text-danger fw-normal">(الزامی)</span>
+                  : <span className="text-muted fw-normal">(برای این سرتگ تعریف نشده)</span>}</Label>
               <Select
                 inputId="support-form-child-tag"
                 isRtl
@@ -1592,13 +1607,14 @@ export const StudentsTab = ({ formId, schoolId }) => {
                 onChange={(option) => setSelectedTagValue(option?.value || "")}
                 styles={TAG_SELECT_STYLES}
               />
+              {selectedParentTag && tagValues.length > 0 && !selectedTagValue && <small className="text-warning d-block mt-2"><i className="bx bx-info-circle ms-1" />دانش‌آموزان براساس زیرتگ دسته‌بندی شده‌اند؛ یک زیرتگ را انتخاب کنید.</small>}
             </Col>
           </Row>
           <div className="d-flex justify-content-end gap-2 mt-4">
             <Button color="light" onClick={closeTagModal}>انصراف</Button>
             <Button
               color="primary"
-              disabled={attachLoading || !selectedParentTag}
+              disabled={attachLoading || tagValuesLoading || !selectedParentTag || (tagValues.length > 0 && !selectedTagValue)}
               onClick={() => {
                 const payload = {};
                 if (selectedParentTag) payload.tagId = Number(selectedParentTag);
