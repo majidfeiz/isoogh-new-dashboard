@@ -21,11 +21,13 @@ import {
 import * as Yup from "yup";
 import { useFormik } from "formik";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 
 import Breadcrumb from "../../components/Common/Breadcrumb";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getProfile, updateProfile, changePassword } from "../../services/profileService.jsx";
 import { getMySessions, revokeMySession } from "../../services/sessionService.jsx";
+import { clearAuthData } from "../../helpers/authStorage.jsx";
 
 // تبدیل Unix timestamp یا ISO به تاریخ شمسی
 function toJalali(dateInput) {
@@ -75,7 +77,8 @@ function parseBrowser(ua) {
 const UserProfile = () => {
   document.title = "پروفایل | ایسوق";
 
-  const { refreshMe } = useAuth();
+  const { refreshMe, hasPermission } = useAuth();
+  const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -88,7 +91,7 @@ const UserProfile = () => {
   const [revokeId, setRevokeId] = useState(null);
 
   const canUpdate = profile?.effectivePermissions?.includes("profile.update");
-  const canChangePassword = profile?.effectivePermissions?.includes("profile.change-password");
+  const canChangePassword = hasPermission("profile.change-password");
 
   const fetchProfile = useCallback(async () => {
     setLoading(true);
@@ -176,24 +179,44 @@ const UserProfile = () => {
     initialValues: {
       current_password: "",
       new_password: "",
+      confirm_password: "",
     },
     validationSchema: Yup.object({
       current_password: Yup.string().required("رمز عبور فعلی الزامی است"),
       new_password: Yup.string()
         .min(6, "رمز جدید باید حداقل ۶ کاراکتر باشد")
         .required("رمز عبور جدید الزامی است"),
+      confirm_password: Yup.string()
+        .oneOf([Yup.ref("new_password")], "تکرار رمز عبور مطابقت ندارد")
+        .required("تکرار رمز عبور جدید الزامی است"),
     }),
-    onSubmit: async (values, { setSubmitting, resetForm }) => {
+    onSubmit: async (values, { setSubmitting, resetForm, setFieldError }) => {
       try {
-        await changePassword(values);
-        toast.success("رمز عبور با موفقیت تغییر یافت");
+        await changePassword({
+          current_password: values.current_password,
+          new_password: values.new_password,
+        });
         setPasswordModal(false);
         resetForm();
+        clearAuthData();
+        navigate("/login", {
+          replace: true,
+          state: { message: "رمز عبور تغییر کرد؛ دوباره وارد شوید" },
+        });
       } catch (e) {
         const status = e?.response?.status;
-        if (status === 401) toast.error("رمز عبور فعلی اشتباه است");
-        else if (status === 400) toast.error("رمز جدید نباید با رمز فعلی یکسان باشد");
+        if (status === 401) setFieldError("current_password", "رمز عبور فعلی اشتباه است");
+        else if (status === 400 || status === 422) {
+          const response = e?.response?.data;
+          const messages = Array.isArray(response?.message) ? response.message : [response?.message].filter(Boolean);
+          const currentMessage = messages.find((item) => String(item).includes("current_password"));
+          const newMessage = messages.find((item) => String(item).includes("new_password"));
+          if (currentMessage) setFieldError("current_password", currentMessage);
+          if (newMessage) setFieldError("new_password", newMessage);
+          if (!currentMessage && !newMessage) setFieldError("new_password", messages[0] || "رمز جدید معتبر نیست");
+        }
         else if (status === 403) toast.error("شما دسترسی تغییر رمز عبور را ندارید");
+        else toast.error("تغییر رمز عبور انجام نشد. دوباره تلاش کنید");
       } finally {
         setSubmitting(false);
       }
@@ -521,12 +544,26 @@ const UserProfile = () => {
               />
               <FormFeedback>{passwordForm.errors.new_password}</FormFeedback>
             </div>
+            <div className="mb-3">
+              <Label>تکرار رمز عبور جدید</Label>
+              <Input
+                name="confirm_password"
+                type="password"
+                autoComplete="new-password"
+                value={passwordForm.values.confirm_password}
+                onChange={passwordForm.handleChange}
+                onBlur={passwordForm.handleBlur}
+                invalid={passwordForm.touched.confirm_password && !!passwordForm.errors.confirm_password}
+                placeholder="تکرار رمز عبور جدید"
+              />
+              <FormFeedback>{passwordForm.errors.confirm_password}</FormFeedback>
+            </div>
           </ModalBody>
           <ModalFooter>
             <Button color="secondary" onClick={() => setPasswordModal(false)}>
               انصراف
             </Button>
-            <Button color="warning" type="submit" disabled={passwordForm.isSubmitting}>
+            <Button color="warning" type="submit" disabled={passwordForm.isSubmitting || !passwordForm.isValid || passwordForm.values.new_password !== passwordForm.values.confirm_password}>
               {passwordForm.isSubmitting ? <Spinner size="sm" className="me-1" /> : null}
               تغییر رمز
             </Button>

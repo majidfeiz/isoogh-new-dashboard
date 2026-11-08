@@ -10,6 +10,28 @@ export async function getLoginCaptcha() {
   return response?.data?.data ?? response?.data ?? { enabled: false };
 }
 
+export async function requestPasswordReset(identifier, captcha = null) {
+  const payload = { identifier };
+  if (captcha?.captchaToken && captcha?.captchaAnswer) {
+    payload.captchaToken = captcha.captchaToken;
+    payload.captchaAnswer = captcha.captchaAnswer;
+  }
+  const response = await apiPost(
+    getApiUrl(API_ROUTES.auth.forgotPassword),
+    payload,
+    { silent: true }
+  );
+  return response?.data?.data;
+}
+
+export async function resetPassword({ resetToken, code, newPassword }) {
+  await apiPost(
+    getApiUrl(API_ROUTES.auth.resetPassword),
+    { resetToken, code, newPassword },
+    { silent: true, preserveAuthOn401: true }
+  );
+}
+
 // مرحله اول ورود: ارسال identifier + password، دریافت otpToken
 export async function login(identifier, password, rememberMe = false, captcha = null) {
   const url = getApiUrl(API_ROUTES.auth.login);
