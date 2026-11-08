@@ -19,15 +19,33 @@ jest.mock("../../components/Common/TableContainer", () => ({ columns, data }) =>
 </tbody></table>);
 jest.mock("../../components/Common/Paginations.jsx", () => () => null);
 jest.mock("../../components/Common/DeleteModal.jsx", () => () => null);
-jest.mock("react-select", () => ({ inputId, options = [], value, onChange, isDisabled, isLoading, isSearchable, onMenuScrollToBottom }) => <div><select
+jest.mock("react-select", () => ({ inputId, options = [], value, onChange, onInputChange, isDisabled, isLoading, isSearchable, menuPosition, menuPlacement, onMenuScrollToBottom }) => <div>{isSearchable && <input aria-label={`${inputId}-search`} onChange={(event) => onInputChange?.(event.target.value, { action: "input-change" })} />}<select
   aria-label={inputId}
   data-searchable={String(Boolean(isSearchable))}
+  data-menu-position={menuPosition}
+  data-menu-placement={menuPlacement}
   disabled={isDisabled}
   value={value?.value || ""}
   onChange={(event) => onChange(options.find((option) => option.value === event.target.value) || null)}
 ><option value="">{isLoading ? "در حال دریافت..." : "انتخاب"}</option>{options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>{onMenuScrollToBottom && <button type="button" aria-label={`${inputId}-load-more`} onClick={onMenuScrollToBottom}>بیشتر</button>}</div>);
 
 beforeEach(() => jest.clearAllMocks());
+
+test("adviser selector is searchable and loads matching advisers from the server", async () => {
+  getSupportFormAdvisers
+    .mockResolvedValueOnce({ items: [{ adviser_id: 15, adviser: { user: { name: "مشاور اول" } } }], pagination: { page: 1, lastPage: 2, total: 51 } })
+    .mockResolvedValueOnce({ items: [{ adviser_id: 18, adviser: { user: { name: "مریم احمدی" } } }], pagination: { page: 1, lastPage: 1, total: 1 } });
+
+  render(<StudentsTab formId="10" schoolId={8} />);
+  const selector = await screen.findByLabelText("support-form-adviser-select");
+  expect(selector).toHaveAttribute("data-searchable", "true");
+  expect(selector).toHaveAttribute("data-menu-position", "fixed");
+  expect(selector).toHaveAttribute("data-menu-placement", "auto");
+  fireEvent.change(screen.getByLabelText("support-form-adviser-select-search"), { target: { value: "مریم" } });
+
+  await waitFor(() => expect(getSupportFormAdvisers).toHaveBeenLastCalledWith("10", expect.objectContaining({ page: 1, limit: 50, search: "مریم" })));
+  await waitFor(() => expect(within(selector).getByRole("option", { name: "مریم احمدی" })).toBeInTheDocument());
+});
 
 test("the visible students tab opens confirmation and archives the assignment ID", async () => {
   getSupportFormAdvisers.mockResolvedValue({ items: [{ adviser_id: 15, adviser: { user: { name: "مشاور" } } }] });
