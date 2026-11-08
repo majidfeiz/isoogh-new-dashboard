@@ -1,11 +1,49 @@
 // src/services/reportService.jsx
 import { apiGet } from "../helpers/httpClient.jsx"
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx"
+import { toGregorian } from "jalaali-js"
+
+const reportInflight = new Map()
+const reportCache = new Map()
+const REPORT_CACHE_MS = 30_000
+
+const zonedOffsetMs = (instant, timeZone) => {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "longOffset", hour: "2-digit" }).formatToParts(instant)
+  const match = parts.find((part) => part.type === "timeZoneName")?.value?.match(/GMT([+-])(\d{2}):(\d{2})/)
+  if (!match) return 0
+  const minutes = Number(match[2]) * 60 + Number(match[3])
+  return (match[1] === "-" ? -minutes : minutes) * 60_000
+}
+
+export function jalaliBoundaryToIso(value, timeZone = "Asia/Tehran") {
+  const match = String(value || "").replace(/-/g, "/").match(/^(\d{4})\/(\d{2})\/(\d{2})$/)
+  if (!match) return value || undefined
+  const gregorian = toGregorian(Number(match[1]), Number(match[2]), Number(match[3]))
+  const utcGuess = Date.UTC(gregorian.gy, gregorian.gm - 1, gregorian.gd)
+  const first = utcGuess - zonedOffsetMs(new Date(utcGuess), timeZone)
+  const instant = utcGuess - zonedOffsetMs(new Date(first), timeZone)
+  return new Date(instant).toISOString()
+}
+
+export function reportQueryKey(endpoint, params = {}) {
+  return [endpoint, params.schoolId || "all", params.from || "", params.to || "", params.page || "", params.limit || "", params.search || ""].join("|")
+}
+
+export function runReportQuery(key, request, { force = false } = {}) {
+  const cached = reportCache.get(key)
+  if (!force && cached && Date.now() - cached.at < REPORT_CACHE_MS) return Promise.resolve(cached.data)
+  if (!force && reportInflight.has(key)) return reportInflight.get(key)
+  const promise = request().then((data) => { reportCache.set(key, { data, at: Date.now() }); return data }).finally(() => reportInflight.delete(key))
+  reportInflight.set(key, promise)
+  return promise
+}
+
+export const clearReportCache = (predicate = () => true) => { for (const key of reportCache.keys()) if (predicate(key)) reportCache.delete(key) }
 
 function buildParams({ from, to, schoolId } = {}) {
   return {
-    from: from || undefined,
-    to: to || undefined,
+    from: jalaliBoundaryToIso(from),
+    to: jalaliBoundaryToIso(to),
     schoolId: schoolId || undefined,
   }
 }
@@ -37,18 +75,18 @@ function buildAdviserCallParams({
   return params
 }
 
-export async function getReportsOverview({ from, to, schoolId } = {}) {
+export async function getReportsOverview({ from, to, schoolId, signal } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.overview), {
     params: buildParams({ from, to, schoolId }),
-    timeout: 30000,
+    signal, silent: true,
   })
   return unwrap(res)
 }
 
-export async function getReportsCallsTrend({ from, to, schoolId } = {}) {
+export async function getReportsCallsTrend({ from, to, schoolId, signal } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.callsTrend), {
     params: buildParams({ from, to, schoolId }),
-    timeout: 30000,
+    signal, silent: true,
   })
   return unwrap(res)
 }
@@ -345,18 +383,18 @@ export async function exportAdviserPerformanceReport(params = {}) {
   return res.data
 }
 
-export async function getReportsCallsByHour({ from, to, schoolId } = {}) {
+export async function getReportsCallsByHour({ from, to, schoolId, signal } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.callsByHour), {
     params: buildParams({ from, to, schoolId }),
-    timeout: 30000,
+    signal, silent: true,
   })
   return unwrap(res)
 }
 
-export async function getReportsStudentsCoverage({ from, to, schoolId } = {}) {
+export async function getReportsStudentsCoverage({ from, to, schoolId, signal } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.studentsCoverage), {
     params: buildParams({ from, to, schoolId }),
-    timeout: 30000,
+    signal, silent: true,
   })
   return unwrap(res)
 }
@@ -367,26 +405,40 @@ export async function getReportsUncontactedStudents({
   schoolId,
   page = 1,
   limit = 10,
+  signal,
 } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.uncontactedStudents), {
     params: { ...buildParams({ from, to, schoolId }), page, limit },
-    timeout: 30000,
+    signal, silent: true,
   })
   return unwrap(res)
 }
 
-export async function getReportsFormsStatus({ from, to, schoolId } = {}) {
+export async function exportReportsUncontactedStudents({ from, to, schoolId, search = "" } = {}) {
+  const res = await apiGet(getApiUrl(API_ROUTES.reports.uncontactedStudentsExport), {
+    params: { ...buildParams({ from, to, schoolId }), search: search || undefined },
+    responseType: "blob",
+  })
+  const disposition = res.headers?.["content-disposition"] || ""
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
+  const plain = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+  let filename = "uncontacted-students.csv"
+  try { filename = decodeURIComponent(encoded || plain || filename) } catch { /* keep fallback */ }
+  return { blob: res.data, filename }
+}
+
+export async function getReportsFormsStatus({ from, to, schoolId, signal } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.formsStatus), {
     params: buildParams({ from, to, schoolId }),
-    timeout: 30000,
+    signal, silent: true,
   })
   return unwrap(res)
 }
 
-export async function getReportsMonthlyComparison({ from, to, schoolId } = {}) {
+export async function getReportsMonthlyComparison({ from, to, schoolId, signal } = {}) {
   const res = await apiGet(getApiUrl(API_ROUTES.reports.monthlyComparison), {
     params: buildParams({ from, to, schoolId }),
-    timeout: 30000,
+    signal, silent: true,
   })
   return unwrap(res)
 }
