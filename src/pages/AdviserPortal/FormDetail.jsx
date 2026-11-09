@@ -46,7 +46,7 @@ import {
   readAdviserStudentQuery,
   updateAdviserStudentQuery,
 } from "./formDetailSortUtils.js";
-import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getSessionForVoipCall, getUnansweredQuestions, hydrateAnswers, isMultiChoiceQuestion } from "./answerFormUtils.js";
+import { buildAnswerPayload, createAnswerCallContext, getAnswerRequestError, getAnswerSubmitMessage, getRequiredQuestionIdsFromError, getSessionForVoipCall, getUnansweredQuestions, getUnansweredRequiredQuestions, hydrateAnswers, isMultiChoiceQuestion } from "./answerFormUtils.js";
 import { ADVISER_ACCOUNT_INACTIVE_MESSAGE, closeSupportForm, isAdviserAccountInactiveError, isSupportFormEndedError, SUPPORT_FORM_READ_ONLY_MESSAGE } from "./supportFormAvailability.js";
 import { parseFormHeadings } from "./supportFormHeadings.js";
 import "./support-form-list.scss";
@@ -92,8 +92,10 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
   const [answersLoading, setAnswersLoading] = useState(false);
   const [answersReady, setAnswersReady] = useState(false);
   const [answerError, setAnswerError] = useState("");
+  const [invalidQuestionIds, setInvalidQuestionIds] = useState([]);
   const [currentSession, setCurrentSession] = useState(null);
   const submittingRef = useRef(false);
+  const questionRefs = useRef(new Map());
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +105,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
     setSessionsOpen(false);
     setConfirmationOpen(false);
     setAnswerError("");
+    setInvalidQuestionIds([]);
     setAnswersLoading(false);
     if (!open) return undefined;
     if (!voipCallId) {
@@ -126,8 +129,13 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
     return () => { cancelled = true; };
   }, [open, studentId, callContext?.formId, form?.questions, voipCallId]);
 
+  const clearQuestionError = (questionId) => {
+    setInvalidQuestionIds((current) => current.filter((id) => Number(id) !== Number(questionId)));
+  };
+
   const setAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
+    clearQuestionError(questionId);
   };
 
   const clearAnswer = (questionId) => {
@@ -148,14 +156,35 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
           : [...current, optionId],
       };
     });
+    clearQuestionError(questionId);
   };
 
   const questions = form?.questions || [];
   const unansweredCount = getUnansweredQuestions(questions, answers).length;
   const isComplete = unansweredCount === 0;
 
+  const showRequiredErrors = (missingQuestions) => {
+    const ids = missingQuestions.map((question) => Number(question.id));
+    setInvalidQuestionIds(ids);
+    setConfirmationOpen(false);
+    requestAnimationFrame(() => questionRefs.current.get(ids[0])?.scrollIntoView?.({ behavior: "smooth", block: "center" }));
+  };
+
+  const validateRequiredAnswers = () => {
+    const missing = getUnansweredRequiredQuestions(questions, answers);
+    if (missing.length) showRequiredErrors(missing);
+    return missing.length === 0;
+  };
+
+  const handleSubmitRequest = () => {
+    if (!validateRequiredAnswers()) return;
+    if (isComplete) handleSubmit(true);
+    else setConfirmationOpen(true);
+  };
+
   const handleSubmit = async (callSuccessful) => {
     if (!canEdit || submittingRef.current) return;
+    if (!validateRequiredAnswers()) return;
     submittingRef.current = true;
     setSubmittingAction(callSuccessful ? "success" : "incomplete");
     setSubmitting(true);
@@ -176,6 +205,10 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
       onSubmitted?.(result);
       onClose();
     } catch (error) {
+      const serverQuestionIds = getRequiredQuestionIdsFromError(error, questions);
+      if (serverQuestionIds.length) {
+        showRequiredErrors(questions.filter((question) => serverQuestionIds.includes(Number(question.id))));
+      }
       if (isSupportFormEndedError(error)) {
         onFormEnded?.(error);
         setAnswerError(SUPPORT_FORM_READ_ONLY_MESSAGE);
@@ -206,6 +239,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
       </ModalHeader>
       <ModalBody className="p-4">
         {!canEdit ? <Alert color="warning">{SUPPORT_FORM_READ_ONLY_MESSAGE}</Alert> : null}
+        {invalidQuestionIds.length > 0 ? <Alert color="danger">لطفاً تمام سؤال‌های اجباری را تکمیل کنید.</Alert> : null}
         {answerError ? <Alert color="danger">{answerError}</Alert> : null}
         {answersLoading ? <div className="text-center py-5"><Spinner color="primary" /><div className="text-muted mt-2">در حال دریافت پاسخنامه تماس...</div></div> : null}
         {!answersLoading && <>
@@ -261,8 +295,11 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
         )}
 
         <div className="vstack gap-4">
-          {(form?.questions || []).map((q, idx) => (
-            <FormGroup key={q.id} className="mb-0">
+          {(form?.questions || []).map((q, idx) => {
+            const isInvalid = invalidQuestionIds.includes(Number(q.id));
+            return (
+            <div key={q.id} ref={(node) => { if (node) questionRefs.current.set(Number(q.id), node); }}>
+            <FormGroup className={`mb-0 rounded p-2 ${isInvalid ? "border border-danger" : ""}`}>
               <Label className="fw-semibold">
                 {idx + 1}. {q.text}
                 {q.required && <span className="text-danger ms-1">*</span>}
@@ -274,13 +311,14 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                   rows={3}
                   value={answers[q.id] || ""}
                   disabled={!canEdit}
+                  invalid={isInvalid}
                   onChange={(e) => setAnswer(q.id, e.target.value)}
                   placeholder="پاسخ خود را بنویسید..."
                 />
               )}
 
               {(q.type === 1 || q.type === 2) && !isMultiChoiceQuestion(q) && (
-                <div className="vstack gap-2 mt-1">
+                <div className={`vstack gap-2 mt-1 rounded ${isInvalid ? "border border-danger p-2" : ""}`}>
                   {q.options.map((opt) => (
                     <div
                       key={opt.id}
@@ -322,7 +360,7 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
               )}
 
               {(q.type === 1 || q.type === 2) && isMultiChoiceQuestion(q) && (
-                <div className="vstack gap-2 mt-1">
+                <div className={`vstack gap-2 mt-1 rounded ${isInvalid ? "border border-danger p-2" : ""}`}>
                   {q.options.map((opt) => (
                     <div
                       key={opt.id}
@@ -358,19 +396,22 @@ export const AnswerDrawer = ({ open, onClose, student, form, callContext, onSubm
                   type="number"
                   value={answers[q.id] ?? ""}
                   disabled={!canEdit}
+                  invalid={isInvalid}
                   onChange={(e) => setAnswer(q.id, e.target.value)}
                   placeholder="عدد را وارد کنید..."
                 />
               )}
+              {isInvalid ? <div className="text-danger small mt-2">پاسخ به این سؤال الزامی است</div> : null}
             </FormGroup>
-          ))}
+            </div>
+          );})}
         </div>
 
         <div className="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
           <Button color="light" onClick={onClose} disabled={submitting}>
             انصراف
           </Button>
-          <Button color="primary" onClick={() => isComplete ? handleSubmit(true) : setConfirmationOpen(true)} disabled={!canEdit || submitting || !answersReady}>
+          <Button color="primary" onClick={handleSubmitRequest} disabled={!canEdit || submitting || !answersReady}>
             {submitting ? <Spinner size="sm" className="me-2" /> : <i className="bx bx-save me-2" />}
             ثبت پاسخ‌ها
           </Button>
@@ -485,6 +526,7 @@ const FormDetail = () => {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [answerCallContext, setAnswerCallContext] = useState(null);
+  const [statusValidationError, setStatusValidationError] = useState(null);
   const [callTrackingWarningOpen, setCallTrackingWarningOpen] = useState(false);
   const [queuedCall, setQueuedCall] = useState(null);
   const queuedTraceRequest = useRef(null);
@@ -820,7 +862,18 @@ const FormDetail = () => {
       ]);
     } catch (error) {
       const responseStatus = error?.response?.status;
-      if (responseStatus === 403) {
+      const responseData = error?.response?.data?.data ?? error?.response?.data;
+      if (responseStatus === 422 && responseData?.code === "REQUIRED_QUESTIONS_INCOMPLETE_FOR_STATUS") {
+        setStatusValidationError({
+          message: responseData.message || "ابتدا سؤال‌های اجباری فرم تماس را تکمیل کنید.",
+          errors: Array.isArray(responseData.errors) ? responseData.errors : [],
+          student,
+          studentId: Number(responseData.studentId ?? student.studentId),
+          supportFormId: Number(responseData.supportFormId ?? formId),
+          voipCallId: Number(responseData.voipCallId) || null,
+        });
+        toast.error(responseData.message || "ابتدا سؤال‌های اجباری فرم تماس را تکمیل کنید.");
+      } else if (responseStatus === 403) {
         toast.error("اجازه تغییر وضعیت این تخصیص را ندارید");
         await Promise.allSettled([
           fetchStudents(meta.page, search, callStatus, workShiftId, sort),
@@ -833,6 +886,20 @@ const FormDetail = () => {
       delete statusRequests.current[assignmentId];
       setUpdatingStatusIds((current) => ({ ...current, [assignmentId]: false }));
     }
+  };
+
+  const handleCompleteStatusAnswers = () => {
+    if (!statusValidationError?.voipCallId) return;
+    const context = createAnswerCallContext({
+      formId: statusValidationError.supportFormId,
+      studentId: statusValidationError.studentId,
+      voipCallId: statusValidationError.voipCallId,
+      student: statusValidationError.student,
+    });
+    if (!context) return;
+    setAnswerCallContext(context);
+    setStatusValidationError(null);
+    setDrawerOpen(true);
   };
 
   const formTitle = form?.title || `فرم ${formId}`;
@@ -1188,6 +1255,31 @@ const FormDetail = () => {
         canEdit={canEdit}
         onFormEnded={handleFormEnded}
       />
+      <Modal isOpen={Boolean(statusValidationError)} toggle={() => setStatusValidationError(null)} centered>
+        <ModalHeader toggle={() => setStatusValidationError(null)}>تکمیل سؤال‌های اجباری</ModalHeader>
+        <ModalBody>
+          <Alert color="warning" className="mb-3">{statusValidationError?.message}</Alert>
+          {statusValidationError?.errors?.length > 0 ? (
+            <div className="mb-3">
+              <div className="fw-semibold mb-2">سؤال‌های ناقص:</div>
+              <ul className="mb-0 ps-3">
+                {statusValidationError.errors.map((item, index) => (
+                  <li key={item.questionId ?? index} className="mb-1">{item.title || `سؤال ${item.questionId}`}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="d-flex justify-content-end gap-2">
+            <Button color="light" onClick={() => setStatusValidationError(null)}>بستن</Button>
+            {statusValidationError?.voipCallId ? (
+              <Button color="primary" onClick={handleCompleteStatusAnswers}>
+                <i className="bx bx-edit me-1" />
+                تکمیل پاسخ‌نامه
+              </Button>
+            ) : null}
+          </div>
+        </ModalBody>
+      </Modal>
       <CallTrackingWarningModal
         open={callTrackingWarningOpen}
         onAcknowledge={() => setCallTrackingWarningOpen(false)}

@@ -8,8 +8,11 @@ import {
   getAdviserSupportFormStats,
   getAdviserWorkShifts,
   makeCall,
+  getStudentAnswers,
+  submitAnswers,
   updateAdviserStudentStatus,
 } from "../../services/adviserPortalService.jsx";
+import { toast } from "react-toastify";
 
 const mockHasPermission = jest.fn();
 
@@ -26,6 +29,9 @@ jest.mock("../../services/adviserPortalService.jsx", () => ({
   updateAdviserStudentStatus: jest.fn(),
 }));
 jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ hasPermission: mockHasPermission }) }));
+jest.mock("../../context/ActiveCallContext.jsx", () => ({
+  useActiveCall: () => ({ activeCall: null, hydrate: jest.fn(), setSchoolId: jest.fn(), setBlockedOpen: jest.fn() }),
+}));
 jest.mock("../../services/voipService.jsx", () => ({ getCallTrace: jest.fn() }));
 jest.mock("react-toastify", () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock("../../components/Common/Paginations.jsx", () => () => null);
@@ -53,6 +59,7 @@ beforeEach(() => {
   getAdviserSupportFormStats.mockResolvedValue({});
   getAdviserWorkShifts.mockResolvedValue([{ id: 1, name: "صبح" }]);
   getAdviserFormStudents.mockResolvedValue({ items: [student], pagination: { page: 1, limit: 15, total: 1, lastPage: 1 } });
+  getStudentAnswers.mockResolvedValue([]);
 });
 
 test.each([
@@ -129,6 +136,76 @@ test("keeps the old status and refetches after a forbidden mutation", async () =
   fireEvent.change(control, { target: { value: "2" } });
   await waitFor(() => expect(getAdviserFormStudents).toHaveBeenCalledTimes(2));
   expect(control).toHaveValue("0");
+});
+
+test("keeps status unchanged and offers the exact call questionnaire for incomplete required answers", async () => {
+  getAdviserSupportFormDetail.mockResolvedValue({
+    id: 10,
+    schoolId: 146,
+    title: "فرم",
+    isClosed: false,
+    canEdit: true,
+    canCall: true,
+    questions: [
+      { id: 101, text: "هدف تماس", type: 0, required: true, options: [] },
+      { id: 102, text: "نتیجه پیگیری", type: 1, required: true, options: [{ id: 201, label: "انجام شد" }] },
+    ],
+  });
+  updateAdviserStudentStatus.mockRejectedValue({ response: { status: 422, data: {
+    code: "REQUIRED_QUESTIONS_INCOMPLETE_FOR_STATUS",
+    message: "به دلیل تکمیل نشدن سؤالات اجباری فرم تماس، امکان تغییر وضعیت وجود ندارد. ابتدا فرم تماس را تکمیل کنید.",
+    supportFormId: 10,
+    studentId: 20,
+    voipCallId: 555,
+    missingQuestionIds: [101, 102],
+    errors: [
+      { questionId: 101, title: "هدف تماس", type: 0, multiChoice: false, message: "الزامی است" },
+      { questionId: 102, title: "نتیجه پیگیری", type: 1, multiChoice: false, message: "الزامی است" },
+    ],
+  } } });
+  renderPage();
+
+  const control = await screen.findByRole("combobox", { name: /تغییر وضعیت تماس/ });
+  fireEvent.change(control, { target: { value: "1" } });
+
+  expect(await screen.findByText("هدف تماس", { selector: "li" })).toBeInTheDocument();
+  expect(screen.getByText("نتیجه پیگیری", { selector: "li" })).toBeInTheDocument();
+  expect(screen.getByText(/به دلیل تکمیل نشدن سؤالات اجباری/)).toBeInTheDocument();
+  expect(control).toHaveValue("0");
+  expect(getAdviserFormStudents).toHaveBeenCalledTimes(1);
+  expect(getAdviserSupportFormStats).toHaveBeenCalledTimes(1);
+  expect(toast.success).not.toHaveBeenCalledWith("وضعیت تماس دانش‌آموز به‌روزرسانی شد");
+
+  fireEvent.click(screen.getByRole("button", { name: /تکمیل پاسخ‌نامه/ }));
+  await waitFor(() => expect(getStudentAnswers).toHaveBeenCalledWith(10, 20, 555));
+  expect(screen.getByText("تکمیل فرم تماس")).toBeInTheDocument();
+});
+
+test("refreshes students and stats after completing the questionnaire opened from a status error", async () => {
+  getAdviserSupportFormDetail.mockResolvedValue({
+    id: 10, schoolId: 146, title: "فرم", isClosed: false, canEdit: true, canCall: true,
+    questions: [{ id: 101, text: "هدف تماس", type: 0, required: true, options: [] }],
+  });
+  updateAdviserStudentStatus.mockRejectedValue({ response: { status: 422, data: {
+    code: "REQUIRED_QUESTIONS_INCOMPLETE_FOR_STATUS", message: "ابتدا پاسخ‌نامه را تکمیل کنید",
+    supportFormId: 10, studentId: 20, voipCallId: 556,
+    errors: [{ questionId: 101, title: "هدف تماس", type: 0, multiChoice: false, message: "الزامی است" }],
+  } } });
+  getStudentAnswers
+    .mockResolvedValueOnce([])
+    .mockResolvedValueOnce([{ voipCallId: 556, answers: [{ questionId: 101, answerText: "انجام شد" }] }]);
+  submitAnswers.mockResolvedValue({ voipCallId: 556, status: 1, isComplete: true });
+  renderPage();
+
+  fireEvent.change(await screen.findByRole("combobox", { name: /تغییر وضعیت تماس/ }), { target: { value: "1" } });
+  fireEvent.click(await screen.findByRole("button", { name: /تکمیل پاسخ‌نامه/ }));
+  const answer = await screen.findByPlaceholderText("پاسخ خود را بنویسید...");
+  fireEvent.change(answer, { target: { value: "انجام شد" } });
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+
+  await waitFor(() => expect(submitAnswers).toHaveBeenCalledWith(expect.objectContaining({ voipCallId: 556 })));
+  await waitFor(() => expect(getAdviserFormStudents).toHaveBeenCalledTimes(2));
+  expect(getAdviserSupportFormStats).toHaveBeenCalledTimes(2);
 });
 
 test("handles SUPPORT_FORM_ENDED from an in-flight call without removing existing data", async () => {
