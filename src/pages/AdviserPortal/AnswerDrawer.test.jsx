@@ -1,6 +1,7 @@
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AnswerDrawer } from "./FormDetail.jsx";
+import { AnswerDrawer as StudentProfileAnswerDrawer } from "./StudentProfile.jsx";
 import { getStudentAnswers, submitAnswers } from "../../services/adviserPortalService.jsx";
 
 jest.mock("../../services/adviserPortalService.jsx", () => ({
@@ -30,10 +31,86 @@ const form = {
   ],
 };
 const context = (voipCallId) => ({ formId: 10, studentId: 20, voipCallId, student, isNewCall: true });
+const requiredForm = {
+  id: 10,
+  questions: [
+    { id: 101, type: 0, required: true, text: "متن اجباری", options: [] },
+    { id: 102, type: 1, required: true, text: "انتخاب اجباری", options: [{ id: 201, label: "گزینه معتبر" }] },
+    { id: 103, type: 2, multiChoice: true, required: true, text: "چند انتخاب اجباری", options: [{ id: 301, label: "گزینه چندتایی" }] },
+    { id: 104, type: 0, required: false, text: "متن اختیاری", options: [] },
+  ],
+};
 
 beforeEach(() => {
   getStudentAnswers.mockReset();
   submitAnswers.mockReset();
+});
+
+test("blocks transport, marks every unanswered required question and never opens incomplete confirmation", async () => {
+  getStudentAnswers.mockResolvedValue([]);
+  render(<AnswerDrawer open student={student} form={requiredForm} callContext={context(710)} onClose={jest.fn()} />);
+
+  await waitFor(() => expect(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ })).toBeEnabled());
+  fireEvent.change(screen.getAllByPlaceholderText("پاسخ خود را بنویسید...")[0], { target: { value: "   " } });
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+
+  expect(submitAnswers).not.toHaveBeenCalled();
+  expect(screen.getByText("لطفاً تمام سؤال‌های اجباری را تکمیل کنید.")).toBeInTheDocument();
+  expect(screen.getAllByText("پاسخ به این سؤال الزامی است")).toHaveLength(3);
+  expect(screen.queryByText("پاسخنامه کامل نیست. آیا با این حال تماس موفق ثبت شود؟")).not.toBeInTheDocument();
+});
+
+test("clears only the edited question error and allows optional questions to stay empty", async () => {
+  getStudentAnswers.mockResolvedValueOnce([]).mockResolvedValueOnce([{ voipCallId: 711, answers: [] }]);
+  submitAnswers.mockResolvedValue({ voipCallId: 711, count: 4, isComplete: false, status: 1 });
+  render(<AnswerDrawer open student={student} form={requiredForm} callContext={context(711)} onClose={jest.fn()} />);
+
+  await waitFor(() => expect(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+  expect(screen.getAllByText("پاسخ به این سؤال الزامی است")).toHaveLength(3);
+
+  fireEvent.change(screen.getAllByPlaceholderText("پاسخ خود را بنویسید...")[0], { target: { value: "پاسخ" } });
+  expect(screen.getAllByText("پاسخ به این سؤال الزامی است")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("radio", { name: "گزینه معتبر" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "گزینه چندتایی" }));
+  expect(screen.queryByText("پاسخ به این سؤال الزامی است")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+  fireEvent.click(screen.getByRole("button", { name: /ثبت تماس موفق/ }));
+  await waitFor(() => expect(submitAnswers).toHaveBeenCalledTimes(1));
+});
+
+test("preserves answers and marks server-declared required questions after a 422", async () => {
+  getStudentAnswers.mockResolvedValue([]);
+  submitAnswers.mockRejectedValue({ response: { status: 422, data: { message: "پاسخ این سؤال در سرور الزامی است", missingQuestionIds: [101] } } });
+  render(<AnswerDrawer open student={student} form={{ ...requiredForm, questions: [requiredForm.questions[0]] }} callContext={context(712)} onClose={jest.fn()} />);
+
+  const text = await screen.findByPlaceholderText("پاسخ خود را بنویسید...");
+  fireEvent.change(text, { target: { value: "پاسخ حفظ شود" } });
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+
+  expect(await screen.findByText("پاسخ این سؤال در سرور الزامی است")).toBeInTheDocument();
+  expect(screen.getByText("پاسخ به این سؤال الزامی است")).toBeInTheDocument();
+  expect(text).toHaveValue("پاسخ حفظ شود");
+});
+
+test("applies the same required-question gate in StudentProfile", async () => {
+  getStudentAnswers.mockResolvedValue([]);
+  render(<StudentProfileAnswerDrawer
+    open
+    studentName="دانش‌آموز"
+    studentPhone="0912"
+    previousAnswers={[]}
+    form={{ ...requiredForm, questions: [requiredForm.questions[0]] }}
+    callContext={context(713)}
+    onClose={jest.fn()}
+  />);
+
+  await waitFor(() => expect(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: /ثبت پاسخ‌ها/ }));
+  expect(submitAnswers).not.toHaveBeenCalled();
+  expect(screen.getByText("لطفاً تمام سؤال‌های اجباری را تکمیل کنید.")).toBeInTheDocument();
+  expect(screen.getByText("پاسخ به این سؤال الزامی است")).toBeInTheDocument();
 });
 
 test("hydrates and edits the session selected by voipCallId then refetches it", async () => {

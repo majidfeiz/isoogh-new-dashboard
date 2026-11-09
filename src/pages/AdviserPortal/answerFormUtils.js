@@ -98,15 +98,58 @@ export const isTextQuestion = (question = {}) =>
   question.type === 0 || question.type === 3;
 
 export const hasQuestionAnswer = (question, value) => {
-  if (isTextQuestion(question)) return typeof value === "string" && value.trim() !== "";
-  if (isMultiChoiceQuestion(question)) {
-    return Array.isArray(value) && value.some((item) => toValidId(item) !== null);
+  if (question?.type === 3) {
+    if ((typeof value !== "string" && typeof value !== "number") || String(value).trim() === "") return false;
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue !== 0;
   }
-  return toValidId(value) !== null;
+  if (isTextQuestion(question)) return typeof value === "string" && value.trim() !== "";
+  const optionIds = getQuestionOptionIds(question);
+  if (isMultiChoiceQuestion(question)) {
+    return Array.isArray(value) && value.some((item) => optionIds.has(toValidId(item)));
+  }
+  return optionIds.has(toValidId(value));
 };
 
 export const getUnansweredQuestions = (questions = [], answers = {}) =>
   questions.filter((question) => !hasQuestionAnswer(question, answers[question.id]));
+
+export const getUnansweredRequiredQuestions = (questions = [], answers = {}) =>
+  questions.filter((question) => question.required === true && !hasQuestionAnswer(question, answers[question.id]));
+
+export const getRequiredQuestionIdsFromError = (error, questions = []) => {
+  if (![400, 422].includes(Number(error?.response?.status))) return [];
+  const requiredIds = new Set(questions
+    .filter((question) => question.required === true)
+    .map((question) => toValidId(question.id))
+    .filter(Boolean));
+  const found = new Set();
+  const idKeys = new Set(["questionid", "question_id"]);
+  const listKeys = new Set([
+    "questionids", "question_ids", "missingquestionids", "missing_question_ids",
+    "requiredquestionids", "required_question_ids", "unansweredquestionids", "unanswered_question_ids",
+  ]);
+  const visit = (value, key = "") => {
+    if (Array.isArray(value)) {
+      if (listKeys.has(key.toLowerCase())) value.forEach((item) => {
+        const id = toValidId(item);
+        if (id && requiredIds.has(id)) found.add(id);
+      });
+      value.forEach((item) => visit(item, key));
+      return;
+    }
+    if (!value || typeof value !== "object") {
+      if (idKeys.has(key.toLowerCase())) {
+        const id = toValidId(value);
+        if (id && requiredIds.has(id)) found.add(id);
+      }
+      return;
+    }
+    Object.entries(value).forEach(([childKey, childValue]) => visit(childValue, childKey));
+  };
+  visit(error?.response?.data);
+  return [...found];
+};
 
 export const buildAnswerPayload = (questions = [], answers = {}) => {
   const seen = new Set();
@@ -117,7 +160,7 @@ export const buildAnswerPayload = (questions = [], answers = {}) => {
     const value = answers[question.id];
     if (!hasQuestionAnswer(question, value)) return [{ questionId }];
     if (isTextQuestion(question)) {
-      return [{ questionId, answer: value.trim() }];
+      return [{ questionId, answer: String(value).trim() }];
     }
     const optionIds = getQuestionOptionIds(question);
     if (isMultiChoiceQuestion(question)) {
