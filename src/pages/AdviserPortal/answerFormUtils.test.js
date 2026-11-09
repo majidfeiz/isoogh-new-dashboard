@@ -1,4 +1,4 @@
-import { buildAnswerPayload, createAnswerCallContext, getAnswerDisplayText, getAnswerRequestError, getAnswerSubmitMessage, getFlowVoipCallId, getSessionForVoipCall, getUnansweredQuestions, hasQuestionAnswer, hydrateAnswers } from "./answerFormUtils.js";
+import { buildAnswerPayload, createAnswerCallContext, getAnswerDisplayText, getAnswerRequestError, getAnswerSubmitMessage, getFlowVoipCallId, getRequiredQuestionIdsFromError, getSessionForVoipCall, getUnansweredQuestions, getUnansweredRequiredQuestions, hasQuestionAnswer, hydrateAnswers } from "./answerFormUtils.js";
 
 const questions = [
   { id: 10, type: 0 },
@@ -12,6 +12,38 @@ test("validates text, single choice and multi choice answers", () => {
   expect(hasQuestionAnswer(questions[1], "51")).toBe(true);
   expect(hasQuestionAnswer(questions[2], [])).toBe(false);
   expect(hasQuestionAnswer(questions[2], [0, "", 61])).toBe(true);
+  expect(hasQuestionAnswer(questions[1], 999)).toBe(false);
+  expect(hasQuestionAnswer(questions[2], [999])).toBe(false);
+});
+
+test("rejects empty and zero numeric answers", () => {
+  const numericQuestion = { id: 13, type: 3, required: true, options: [] };
+  expect(hasQuestionAnswer(numericQuestion, " ")).toBe(false);
+  expect(hasQuestionAnswer(numericQuestion, 0)).toBe(false);
+  expect(hasQuestionAnswer(numericQuestion, "0")).toBe(false);
+  expect(hasQuestionAnswer(numericQuestion, "12")).toBe(true);
+});
+
+test("only reports unanswered required questions", () => {
+  const requiredQuestions = [
+    { ...questions[0], required: true },
+    { ...questions[1], required: false },
+    { ...questions[2], required: true },
+  ];
+  expect(getUnansweredRequiredQuestions(requiredQuestions, { 10: "  ", 11: "", 12: [] }))
+    .toEqual([requiredQuestions[0], requiredQuestions[2]]);
+  expect(getUnansweredRequiredQuestions(requiredQuestions, { 10: "متن", 12: [61] })).toEqual([]);
+});
+
+test("extracts required question ids only from 400/422 validation errors", () => {
+  const requiredQuestions = [
+    { ...questions[0], required: true },
+    { ...questions[1], required: false },
+    { ...questions[2], required: true },
+  ];
+  const error = { response: { status: 422, data: { message: "required", errors: [{ questionId: 10 }], missingQuestionIds: [11, 12] } } };
+  expect(getRequiredQuestionIdsFromError(error, requiredQuestions)).toEqual([10, 12]);
+  expect(getRequiredQuestionIdsFromError({ response: { status: 500, data: { questionIds: [10] } } }, requiredQuestions)).toEqual([]);
 });
 
 test("builds the API payload only from the current question list", () => {
