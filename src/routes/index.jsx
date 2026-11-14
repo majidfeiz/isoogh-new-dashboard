@@ -333,6 +333,8 @@ import BillingAutoInvoices from "../pages/Billing/BillingAutoInvoices.jsx";
 import PaymentAuditLogs from "../pages/Billing/PaymentAuditLogs.jsx";
 import BillingGatewayLogs from "../pages/Billing/BillingGatewayLogs.jsx";
 import BillingWallets from "../pages/Billing/BillingWallets.jsx";
+import ManagedJobs from "../pages/ManagedJobs/ManagedJobs.jsx";
+import ManagedJobRunDetail from "../pages/ManagedJobs/ManagedJobRunDetail.jsx";
 
 
 const authProtectedRoutes = [
@@ -348,6 +350,8 @@ const authProtectedRoutes = [
   { path: "/billing/auto-invoices", component: <ProtectedRoute permission="billing.auto-invoices.index"><BillingAutoInvoices /></ProtectedRoute> },
   { path: "/billing/payment-logs", component: <ProtectedRoute permission="audit-logs.index"><PaymentAuditLogs /></ProtectedRoute> },
   { path: "/billing/gateway-logs", component: <ProtectedRoute permission="billing.gateway-logs.index"><BillingGatewayLogs /></ProtectedRoute> },
+  { path: "/managed-jobs", component: <ProtectedRoute permission="managed-jobs.index"><ManagedJobs /></ProtectedRoute> },
+  { path: "/managed-jobs/runs/:id", component: <ProtectedRoute permission="managed-jobs.index"><ManagedJobRunDetail /></ProtectedRoute> },
   { path: "/dashboard-saas", component: <DashboardSaas /> },
   { path: "/dashboard-crypto", component: <DashboardCrypto /> },
   { path: "/blog", component: <Blog /> },
