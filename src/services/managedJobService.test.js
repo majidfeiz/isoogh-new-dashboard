@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
-import { executeManagedJob, getManagedJobs, getManagedJobRun, normalizeManagedJob, updateManagedJob } from "./managedJobService.jsx";
+import { executeManagedJob, getManagedJobs, getManagedJobRun, getManagedJobRuns, normalizeManagedJob, updateManagedJob } from "./managedJobService.jsx";
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }));
 
@@ -28,6 +28,15 @@ test("manual execution sends only the trimmed required reason", async () => {
 test("loads one run from response.data", async () => {
   apiGet.mockResolvedValue({ data: { data: { id: 9, status: "running" } } });
   await expect(getManagedJobRun(9)).resolves.toEqual({ id: 9, status: "running" });
+});
+
+test("queries the current run with the requested job and running status", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [], meta: { total: 0 } } } });
+  const signal = new AbortController().signal;
+  await getManagedJobRuns({ jobKey: "sync-simotel-outbound-history", status: "running", page: 1, limit: 20 }, signal);
+  expect(apiGet).toHaveBeenCalledWith("/managed-jobs/runs", {
+    params: { jobKey: "sync-simotel-outbound-history", status: "running", page: 1, limit: 20 }, signal, silent: true,
+  });
 });
 
 test("normalizes boolean-like API fields without overwriting omitted patch fields", () => {
