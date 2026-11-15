@@ -2,24 +2,6 @@
 import { apiGet, apiPost, apiPatch, apiDelete } from "../helpers/httpClient.jsx";
 import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
-export const SCHOOL_STATUS_FILTERS = Object.freeze(["active", "inactive", "all"]);
-export const SCHOOLS_INVALIDATED_EVENT = "schools:invalidated";
-
-const normalizeSchoolStatus = (status) =>
-  SCHOOL_STATUS_FILTERS.includes(status) ? status : "active";
-
-export function invalidateSchoolQueries(detail = {}) {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(SCHOOLS_INVALIDATED_EVENT, { detail }));
-  }
-}
-
-export function subscribeToSchoolInvalidation(listener) {
-  if (typeof window === "undefined" || typeof listener !== "function") return () => {};
-  window.addEventListener(SCHOOLS_INVALIDATED_EVENT, listener);
-  return () => window.removeEventListener(SCHOOLS_INVALIDATED_EVENT, listener);
-}
-
 export async function getSchools({
   page = 1,
   limit = 10,
@@ -27,8 +9,6 @@ export async function getSchools({
   sortBy,
   sortOrder,
   managerId,
-  status = "active",
-  signal,
 } = {}) {
   const url = getApiUrl(API_ROUTES.schools.list);
   const response = await apiGet(url, {
@@ -39,9 +19,7 @@ export async function getSchools({
       sortBy: sortBy || undefined,
       sortOrder: sortOrder || undefined,
       managerId: managerId || undefined,
-      status: normalizeSchoolStatus(status),
     },
-    signal,
   });
 
   const payload = response?.data;
@@ -62,16 +40,6 @@ export async function getSchools({
           : 1),
     },
   };
-}
-
-export async function updateSchoolStatus(id, isActive) {
-  if (typeof isActive !== "boolean") {
-    throw new TypeError("isActive must be a boolean");
-  }
-
-  const url = getApiUrl(API_ROUTES.schools.updateStatus(id));
-  const response = await apiPatch(url, { isActive });
-  return response?.data?.data || response?.data;
 }
 
 export async function getSchool(id) {

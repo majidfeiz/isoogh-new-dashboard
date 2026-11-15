@@ -42,19 +42,6 @@ export const AuthProvider = ({ children }) => {
   const [meLoading, setMeLoading] = useState(false);
   const [selectedSchoolId, setSelectedSchoolId] = useState(() => defaultSchoolId(getAuthUser()));
 
-  useEffect(() => {
-    const clearInactiveSelectedSchool = (event) => {
-      const changedSchoolId = event?.detail?.schoolId;
-      if (event?.detail?.isActive !== false || changedSchoolId == null) return;
-      setSelectedSchoolId((current) =>
-        String(current) === String(changedSchoolId) ? "" : current
-      );
-    };
-
-    window.addEventListener("schools:invalidated", clearInactiveSelectedSchool);
-    return () => window.removeEventListener("schools:invalidated", clearInactiveSelectedSchool);
-  }, []);
-
   // switch state — initialized from localStorage so it survives page refresh
   const [isSwitched, setIsSwitched] = useState(() => !!getSwitchCallbackToken());
   const [callbackToken, setCallbackToken] = useState(() => getSwitchCallbackToken());

@@ -13,12 +13,6 @@ import {
   InputGroup,
   InputGroupText,
   Spinner,
-  Badge,
-  Alert,
-  Modal,
-  ModalHeader,
-  ModalBody,
-  ModalFooter,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
 import { useListState } from "../../hooks/useListState";
@@ -26,14 +20,8 @@ import { useListState } from "../../hooks/useListState";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
-import {
-  getSchools,
-  deleteSchool,
-  invalidateSchoolQueries,
-  updateSchoolStatus,
-} from "../../services/schoolService.jsx";
+import { getSchools, deleteSchool } from "../../services/schoolService.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { toast } from "react-toastify";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -49,7 +37,7 @@ const managerLabel = (manager) =>
   (manager?.id ? `مدیر #${manager.id}` : "");
 
 const normalizeSavedFilters = (filters) => {
-  if (!filters) return { search: "", managerId: "", status: "all" };
+  if (!filters) return { search: "", managerId: "" };
   const search =
     filters.search ??
     [filters.name, filters.code, filters.managerName]
@@ -61,21 +49,7 @@ const normalizeSavedFilters = (filters) => {
   return {
     search,
     managerId: filters.managerId || "",
-    status: ["active", "inactive", "all"].includes(filters.status)
-      ? filters.status
-      : "all",
   };
-};
-
-const schoolIsActive = (school) =>
-  typeof school?.isActive === "boolean"
-    ? school.isActive
-    : school?.status === 1 || school?.status === "1" || school?.status === true;
-
-const backendMessage = (error, fallback) => {
-  const message = error?.response?.data?.message;
-  if (Array.isArray(message)) return message.filter(Boolean).join("، ");
-  return message || error?.response?.data?.error || fallback;
 };
 
 const SchoolList = () => {
@@ -94,9 +68,6 @@ const SchoolList = () => {
   });
   const [filters, setFilters] = useState(normalizeSavedFilters(saved?.filters));
   const [loading, setLoading] = useState(false);
-  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
-  const [statusTarget, setStatusTarget] = useState(null);
-  const [statusError, setStatusError] = useState("");
   const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
   const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
   const initialPageRef = useRef(saved?.page ?? 1);
@@ -117,7 +88,6 @@ const SchoolList = () => {
           sortBy: currentSort?.by,
           sortOrder: currentSort?.order,
           managerId: currentFilters?.managerId || undefined,
-          status: currentFilters?.status || "all",
         });
 
         setData(res.items || []);
@@ -149,13 +119,10 @@ const SchoolList = () => {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    const nextFilters = { ...filters, [name]: value };
-    setFilters(nextFilters);
-
-    if (name === "status") {
-      saveState({ page: 1, filters: nextFilters, sort, sorting });
-      fetchData(1, nextFilters, sort);
-    }
+    setFilters((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleSearchSubmit = (e) => {
@@ -165,7 +132,7 @@ const SchoolList = () => {
   };
 
   const handleResetFilters = () => {
-    const reset = { search: "", managerId: "", status: "all" };
+    const reset = { search: "", managerId: "" };
     setFilters(reset);
     saveState({ page: 1, filters: reset, sort, sorting });
     fetchData(1, reset, sort);
@@ -204,42 +171,6 @@ const SchoolList = () => {
     },
     [meta.page, filters, sort, fetchData]
   );
-
-  const openStatusConfirmation = useCallback((school) => {
-    setStatusError("");
-    setStatusTarget(school);
-  }, []);
-
-  const closeStatusConfirmation = useCallback(() => {
-    if (statusUpdatingId !== null) return;
-    setStatusTarget(null);
-    setStatusError("");
-  }, [statusUpdatingId]);
-
-  const confirmStatusChange = useCallback(async () => {
-    if (!statusTarget || statusUpdatingId !== null) return;
-    const nextIsActive = !schoolIsActive(statusTarget);
-    setStatusUpdatingId(statusTarget.id);
-    setStatusError("");
-
-    try {
-      await updateSchoolStatus(statusTarget.id, nextIsActive);
-      invalidateSchoolQueries({ schoolId: statusTarget.id, isActive: nextIsActive });
-      toast.success(
-        nextIsActive
-          ? "مجموعه با موفقیت فعال شد."
-          : "مجموعه با موفقیت غیرفعال شد."
-      );
-      setStatusTarget(null);
-      await fetchData(meta.page, filters, sort);
-    } catch (error) {
-      const message = backendMessage(error, "تغییر وضعیت مجموعه انجام نشد.");
-      setStatusError(message);
-      toast.error(message);
-    } finally {
-      setStatusUpdatingId(null);
-    }
-  }, [fetchData, filters, meta.page, sort, statusTarget, statusUpdatingId]);
 
   const columns = useMemo(
     () => [
@@ -290,16 +221,14 @@ const SchoolList = () => {
       {
         id: "status",
         header: "وضعیت",
-        accessorKey: "isActive",
+        accessorKey: "status",
         enableColumnFilter: false,
         enableSorting: false,
         cell: (info) => {
-          const active = schoolIsActive(info.row.original);
-          return (
-            <Badge color={active ? "success" : "secondary"} pill>
-              {active ? "فعال" : "غیرفعال"}
-            </Badge>
-          );
+          const value = info.getValue();
+          if (value === 1 || value === "1" || value === true) return "فعال";
+          if (value === 0 || value === "0" || value === false) return "غیرفعال";
+          return "-";
         },
       },
       {
@@ -319,8 +248,6 @@ const SchoolList = () => {
           const id = row.original.id;
           const canUpdate = hasPermission("schools.update");
           const canDelete = hasPermission("schools.delete");
-          const active = schoolIsActive(row.original);
-          const rowStatusLoading = statusUpdatingId === id;
 
           if (!canUpdate && !canDelete) return "-";
 
@@ -329,19 +256,6 @@ const SchoolList = () => {
               {canUpdate && (
                 <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
                   ویرایش
-                </Button>
-              )}
-
-              {canUpdate && (
-                <Button
-                  color={active ? "danger" : "success"}
-                  outline={active}
-                  size="sm"
-                  onClick={() => openStatusConfirmation(row.original)}
-                  disabled={rowStatusLoading}
-                >
-                  {rowStatusLoading && <Spinner size="sm" className="ms-1" />}
-                  {active ? "غیرفعال‌کردن" : "فعال‌کردن"}
                 </Button>
               )}
 
@@ -360,7 +274,7 @@ const SchoolList = () => {
         },
       },
     ],
-    [handleEdit, handleDelete, hasPermission, loading, openStatusConfirmation, statusUpdatingId]
+    [handleEdit, handleDelete, hasPermission, loading]
   );
 
   const handleSortingChange = useCallback(
@@ -460,23 +374,6 @@ const SchoolList = () => {
                       </InputGroup>
                     </Col>
 
-                    <Col xl="2" lg="3" md="6">
-                      <Label className="form-label" htmlFor="status">
-                        وضعیت
-                      </Label>
-                      <Input
-                        id="status"
-                        name="status"
-                        type="select"
-                        value={filters.status}
-                        onChange={handleFilterChange}
-                      >
-                        <option value="all">همه</option>
-                        <option value="active">فعال</option>
-                        <option value="inactive">غیرفعال</option>
-                      </Input>
-                    </Col>
-
                     <Col xl="3" lg="4" md="6" className="d-flex gap-2">
                       <Button
                         color="primary"
@@ -525,46 +422,6 @@ const SchoolList = () => {
             </Card>
           </Col>
         </Row>
-
-        <Modal isOpen={Boolean(statusTarget)} toggle={closeStatusConfirmation} centered>
-          <ModalHeader toggle={closeStatusConfirmation}>
-            تأیید تغییر وضعیت مجموعه
-          </ModalHeader>
-          <ModalBody>
-            {statusError && (
-              <Alert color="danger" role="alert">
-                {statusError}
-              </Alert>
-            )}
-            {schoolIsActive(statusTarget) ? (
-              <>
-                <p>
-                  مجموعه «{statusTarget?.name || statusTarget?.code || statusTarget?.id}» غیرفعال شود؟
-                </p>
-                <Alert color="warning" className="mb-0">
-                  این مجموعه از selectorها و بخش‌های عملیاتی حذف می‌شود، اما هیچ‌یک از داده‌های آن حذف نخواهد شد.
-                </Alert>
-              </>
-            ) : (
-              <p className="mb-0">
-                مجموعه «{statusTarget?.name || statusTarget?.code || statusTarget?.id}» دوباره فعال شود؟
-              </p>
-            )}
-          </ModalBody>
-          <ModalFooter>
-            <Button color="light" onClick={closeStatusConfirmation} disabled={statusUpdatingId !== null}>
-              انصراف
-            </Button>
-            <Button
-              color={schoolIsActive(statusTarget) ? "danger" : "success"}
-              onClick={confirmStatusChange}
-              disabled={statusUpdatingId !== null}
-            >
-              {statusUpdatingId !== null && <Spinner size="sm" className="ms-1" />}
-              {schoolIsActive(statusTarget) ? "غیرفعال‌کردن" : "فعال‌کردن"}
-            </Button>
-          </ModalFooter>
-        </Modal>
       </div>
     </div>
   );
