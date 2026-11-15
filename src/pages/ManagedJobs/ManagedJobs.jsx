@@ -6,7 +6,8 @@ import Breadcrumbs from "../../components/Common/Breadcrumb.jsx";
 import Paginations from "../../components/Common/Paginations.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { executeManagedJob, getManagedJobs, getManagedJobRuns, updateManagedJob } from "../../services/managedJobService.jsx";
-import { buildConfiguration, formatJobDate, intervalLabel, managedJobError, statusView, validateJobForm, validationFields } from "./managedJobUtils.js";
+import { buildConfiguration, formatJobDate, intervalLabel, managedJobError, managedJobRunErrorMessage, statusView, validateJobForm, validationFields } from "./managedJobUtils.js";
+import SimotelHistoryProgress, { SIMOTEL_HISTORY_JOB_KEY } from "./SimotelHistoryProgress.jsx";
 
 const StatusBadge = ({ status }) => {
   const view = statusView(status);
@@ -38,6 +39,7 @@ const ManagedJobs = () => {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [togglingKey, setTogglingKey] = useState("");
+  const [terminalNotice, setTerminalNotice] = useState(null);
   const requestRef = useRef(null);
 
   const page = Math.max(1, Number(params.get("page") || 1));
@@ -87,6 +89,12 @@ const ManagedJobs = () => {
   useEffect(() => {
     load();
     return () => requestRef.current?.abort();
+  }, [load]);
+
+  const handleRunTerminal = useCallback((run) => {
+    setTerminalNotice(run);
+    load(true);
+    getManagedJobRuns({ jobKey: SIMOTEL_HISTORY_JOB_KEY, page: 1, limit: 20 }).catch(() => {});
   }, [load]);
 
   useEffect(() => {
@@ -196,6 +204,7 @@ const ManagedJobs = () => {
       <Button outline color="secondary" onClick={() => load(true)} disabled={refreshing}>{refreshing ? <Spinner size="sm" /> : <i className="bx bx-refresh" />} به‌روزرسانی</Button>
     </CardHeader></Card>
     {environmentDisabled && <Alert color="warning"><i className="bx bx-server ms-2" />سیستم اجرای Jobها در container غیرفعال است و وضعیت مؤثر همه Jobها غیرفعال خواهد بود.</Alert>}
+    {terminalNotice && <Alert color={terminalNotice.status === "failed" ? "danger" : "success"} toggle={() => setTerminalNotice(null)}>{terminalNotice.status === "failed" ? managedJobRunErrorMessage(terminalNotice.error_code || terminalNotice.errorCode, terminalNotice.error_message || terminalNotice.errorMessage || "اجرای همگام‌سازی تاریخچه تماس‌ها ناموفق بود.") : "همگام‌سازی تاریخچه تماس‌ها با موفقیت پایان یافت."}</Alert>}
     {actionError && !toggleJob && <Alert color="danger">{actionError}</Alert>}
     <Nav tabs className="mb-3">
       <NavItem><NavLink href="#" active={view === "jobs"} onClick={(event) => { event.preventDefault(); setParams({ view: "jobs", page: "1", limit: String(limit) }); }}>Jobها</NavLink></NavItem>
@@ -209,7 +218,11 @@ const ManagedJobs = () => {
       </>}
     </Row></CardHeader><CardBody className="p-0">
       {loading ? <Loading /> : error ? <Alert color="danger" className="m-3">{error}<Button size="sm" outline color="danger" className="me-2" onClick={() => load()}>تلاش مجدد</Button></Alert> : !items.length ? <div className="text-center text-muted py-5"><i className="bx bx-data fs-1 d-block" />موردی یافت نشد.</div> : view === "jobs" ? <div className="table-responsive"><Table hover className="align-middle mb-0"><thead><tr><th>Job</th><th>وضعیت</th><th>آخرین نتیجه</th><th>آخرین / اجرای بعدی</th><th>فاصله</th><th>عملیات</th></tr></thead><tbody>
-        {items.map((job) => <tr key={job.key}><td><strong>{job.name}</strong><code dir="ltr" className="d-block">{job.key}</code><small className="text-muted">{job.description}</small></td><td><div className="d-flex flex-wrap gap-1"><Badge color={job.enabled ? "success" : "secondary"}>{job.enabled ? "فعال در پنل" : "غیرفعال در پنل"}</Badge><Badge color={job.effectiveEnabled ? "success" : "danger"}>{job.effectiveEnabled ? "فعال مؤثر" : "غیرفعال مؤثر"}</Badge>{job.running && <Badge color="info">در حال اجرا</Badge>}</div></td><td><StatusBadge status={job.lastStatus} /></td><td><div title={job.lastStartedAt || ""}>{formatJobDate(job.lastStartedAt)}</div><small title={job.nextRunAt || ""} className="text-muted">بعدی: {formatJobDate(job.nextRunAt)}</small></td><td>{intervalLabel(job.intervalSeconds)}</td><td><div className="d-flex flex-wrap align-items-center gap-2">{canUpdate && <><Button size="sm" outline color="primary" onClick={() => openEdit(job)} disabled={togglingKey === job.key}>ویرایش</Button><button type="button" className={`btn btn-sm d-inline-flex align-items-center gap-2 rounded-pill ${job.enabled ? "btn-soft-success" : "btn-soft-secondary"}`} onClick={() => openToggle(job)} disabled={Boolean(togglingKey)} aria-label={`${job.enabled ? "غیرفعال‌کردن" : "فعال‌کردن"} ${job.name}`} aria-pressed={job.enabled}><span className={`position-relative rounded-pill ${job.enabled ? "bg-success" : "bg-secondary"}`} style={{ width: 34, height: 18 }} aria-hidden="true"><span className="position-absolute bg-white rounded-circle shadow-sm" style={{ width: 14, height: 14, top: 2, transition: "inset-inline-start .2s", insetInlineStart: job.enabled ? 18 : 2 }} /></span><span>{togglingKey === job.key ? <Spinner size="sm" /> : job.enabled ? "فعال" : "غیرفعال"}</span></button></>}{canExecute && <Button size="sm" color="primary" disabled={!job.environmentEnabled || !job.effectiveEnabled || job.running} onClick={() => { setExecuteJob(job); setReason(""); setActionError(""); }}>اجرای دستی</Button>}</div></td></tr>)}
+        {items.map((job) => {
+          const executeDisabled = !job.environmentEnabled || !job.effectiveEnabled || job.running;
+          const executeHint = job.running ? "این Job در حال اجراست؛ پس از پایان می‌توانید دوباره آن را اجرا کنید." : !job.environmentEnabled ? "اجرای Jobها در تنظیمات سرور غیرفعال است." : !job.effectiveEnabled ? "ابتدا Job را فعال کنید." : "";
+          return <React.Fragment key={job.key}><tr><td><strong>{job.name}</strong><code dir="ltr" className="d-block">{job.key}</code><small className="text-muted">{job.description}</small></td><td><div className="d-flex flex-wrap gap-1"><Badge color={job.enabled ? "success" : "secondary"}>{job.enabled ? "فعال در پنل" : "غیرفعال در پنل"}</Badge><Badge color={job.effectiveEnabled ? "success" : "danger"}>{job.effectiveEnabled ? "فعال مؤثر" : "غیرفعال مؤثر"}</Badge>{job.running && <Badge color="info">در حال اجرا</Badge>}</div></td><td><StatusBadge status={job.lastStatus} /></td><td><div title={job.lastStartedAt || ""}>{formatJobDate(job.lastStartedAt)}</div><small title={job.nextRunAt || ""} className="text-muted">بعدی: {formatJobDate(job.nextRunAt)}</small></td><td>{intervalLabel(job.intervalSeconds)}</td><td><div className="d-flex flex-wrap align-items-center gap-2">{canUpdate && <><Button size="sm" outline color="primary" onClick={() => openEdit(job)} disabled={togglingKey === job.key}>ویرایش</Button><button type="button" className={`btn btn-sm d-inline-flex align-items-center gap-2 rounded-pill ${job.enabled ? "btn-soft-success" : "btn-soft-secondary"}`} onClick={() => openToggle(job)} disabled={Boolean(togglingKey)} aria-label={`${job.enabled ? "غیرفعال‌کردن" : "فعال‌کردن"} ${job.name}`} aria-pressed={job.enabled}><span className={`position-relative rounded-pill ${job.enabled ? "bg-success" : "bg-secondary"}`} style={{ width: 34, height: 18 }} aria-hidden="true"><span className="position-absolute bg-white rounded-circle shadow-sm" style={{ width: 14, height: 14, top: 2, transition: "inset-inline-start .2s", insetInlineStart: job.enabled ? 18 : 2 }} /></span><span>{togglingKey === job.key ? <Spinner size="sm" /> : job.enabled ? "فعال" : "غیرفعال"}</span></button></>}{canExecute && <span className="d-inline-block" title={executeHint}><Button size="sm" color="primary" disabled={executeDisabled} style={executeDisabled ? { pointerEvents: "none" } : undefined} onClick={() => { setExecuteJob(job); setReason(""); setActionError(""); }}>اجرای دستی</Button></span>}</div></td></tr>{job.key === SIMOTEL_HISTORY_JOB_KEY && job.running && <tr><td colSpan="6" className="p-2"><SimotelHistoryProgress onTerminal={handleRunTerminal} /></td></tr>}</React.Fragment>;
+        })}
       </tbody></Table></div> : <div className="table-responsive"><Table hover className="align-middle mb-0"><thead><tr><th>شناسه</th><th>Job</th><th>Trigger</th><th>وضعیت</th><th>درخواست‌دهنده</th><th>مدت</th><th>شروع</th><th /></tr></thead><tbody>
         {items.map((run) => <tr key={run.id}><td>{run.id}</td><td><code>{run.job_key || run.jobKey}</code></td><td>{run.trigger || "—"}</td><td><StatusBadge status={run.status} /></td><td>{run.requested_by || run.requestedBy || "سیستم"}</td><td>{run.duration_ms == null ? "—" : Number(run.duration_ms).toLocaleString("fa-IR") + " ms"}</td><td title={run.started_at || ""}>{formatJobDate(run.started_at || run.startedAt)}</td><td><Button tag={Link} to={"/managed-jobs/runs/" + run.id} size="sm" outline color="primary">جزئیات</Button></td></tr>)}
       </tbody></Table></div>}

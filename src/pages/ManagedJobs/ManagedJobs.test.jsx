@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ManagedJobs from "./ManagedJobs.jsx";
-import { getManagedJobs, updateManagedJob } from "../../services/managedJobService.jsx";
+import { getManagedJobs, getManagedJobRuns, updateManagedJob } from "../../services/managedJobService.jsx";
 
 const mockHasPermission = jest.fn();
 jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ hasPermission: mockHasPermission }) }));
@@ -23,6 +23,7 @@ const job = {
 beforeEach(() => {
   jest.clearAllMocks();
   getManagedJobs.mockResolvedValue({ items: [job], meta: { page: 1, limit: 20, total: 1, lastPage: 1 } });
+  getManagedJobRuns.mockResolvedValue({ items: [], meta: { page: 1, limit: 20, total: 0, lastPage: 1 } });
 });
 
 const renderPage = () => render(<MemoryRouter initialEntries={["/managed-jobs"]}><Routes><Route path="/managed-jobs" element={<ManagedJobs />} /></Routes></MemoryRouter>);
@@ -39,6 +40,15 @@ test("disables manual execution when environment is disabled", async () => {
   mockHasPermission.mockImplementation((permission) => permission === "managed-jobs.execute");
   renderPage();
   expect(await screen.findByRole("button", { name: "اجرای دستی" })).toBeDisabled();
+});
+
+test("keeps manual execution disabled with a clear hint while the Simotel history job is running", async () => {
+  mockHasPermission.mockImplementation((permission) => permission === "managed-jobs.execute");
+  getManagedJobs.mockResolvedValue({ items: [{ ...job, key: "sync-simotel-outbound-history", running: true, effectiveEnabled: true, environmentEnabled: true }], meta: { page: 1, limit: 20, total: 1, lastPage: 1 } });
+  renderPage();
+  const button = await screen.findByRole("button", { name: "اجرای دستی" });
+  expect(button).toBeDisabled();
+  expect(button.parentElement).toHaveAttribute("title", expect.stringMatching(/در حال اجراست/));
 });
 
 test("changes enabled state only after confirmation and refreshes canonical data", async () => {
