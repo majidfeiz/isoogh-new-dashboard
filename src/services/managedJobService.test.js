@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx";
-import { executeManagedJob, getManagedJobs, getManagedJobRun, updateManagedJob } from "./managedJobService.jsx";
+import { executeManagedJob, getManagedJobs, getManagedJobRun, normalizeManagedJob, updateManagedJob } from "./managedJobService.jsx";
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }));
 
@@ -28,4 +28,13 @@ test("manual execution sends only the trimmed required reason", async () => {
 test("loads one run from response.data", async () => {
   apiGet.mockResolvedValue({ data: { data: { id: 9, status: "running" } } });
   await expect(getManagedJobRun(9)).resolves.toEqual({ id: 9, status: "running" });
+});
+
+test("normalizes boolean-like API fields without overwriting omitted patch fields", () => {
+  expect(normalizeManagedJob({ job_key: "job", enabled: "false", effective_enabled: 0 })).toMatchObject({
+    key: "job",
+    enabled: false,
+    effectiveEnabled: false,
+  });
+  expect(normalizeManagedJob({ key: "job", enabled: false })).not.toHaveProperty("environmentEnabled");
 });

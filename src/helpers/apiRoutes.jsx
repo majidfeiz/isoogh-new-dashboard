@@ -132,6 +132,7 @@ export const API_ROUTES = {
     create: "/schools",
     detail: (id) => `/schools/${id}`,
     update: (id) => `/schools/${id}`,
+    updateStatus: (id) => `/schools/${id}/status`,
     delete: (id) => `/schools/${id}`,
   },
   auditLogs: {
