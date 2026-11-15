@@ -547,6 +547,13 @@ const SidebarContent = (props) => {
       },
       {
         type: "item",
+        label: "پردازش‌های زمان‌بندی‌شده",
+        icon: "bx bx-timer",
+        to: "/managed-jobs",
+        permission: "managed-jobs.index",
+      },
+      {
+        type: "item",
         label: "لاگ فعالیت‌ها",
         icon: "bx bx-history",
         to: "/audit-logs",

@@ -13,6 +13,12 @@ import {
   InputGroup,
   InputGroupText,
   Spinner,
+  Badge,
+  Alert,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
 } from "reactstrap";
 import { useNavigate } from "react-router-dom";
 import { useListState } from "../../hooks/useListState";
@@ -20,8 +26,14 @@ import { useListState } from "../../hooks/useListState";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import TableContainer from "../../components/Common/TableContainer";
 import Paginations from "../../components/Common/Paginations.jsx";
-import { getSchools, deleteSchool } from "../../services/schoolService.jsx";
+import {
+  getSchools,
+  deleteSchool,
+  invalidateActiveSchoolLists,
+  updateSchoolStatus,
+} from "../../services/schoolService.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { toast } from "react-toastify";
 
 const formatDateTime = (value) => {
   if (!value) return "-";
@@ -35,6 +47,15 @@ const managerLabel = (manager) =>
   manager?.user?.username ||
   manager?.code ||
   (manager?.id ? `مدیر #${manager.id}` : "");
+
+const isSchoolActive = (school) =>
+  school?.status === 1 || school?.status === "1" || school?.status === true;
+
+const errorMessage = (error) => {
+  const message = error?.response?.data?.message;
+  if (Array.isArray(message)) return message.filter(Boolean).join("، ");
+  return message || error?.response?.data?.error || "تغییر وضعیت مجموعه انجام نشد.";
+};
 
 const normalizeSavedFilters = (filters) => {
   if (!filters) return { search: "", managerId: "" };
@@ -68,6 +89,9 @@ const SchoolList = () => {
   });
   const [filters, setFilters] = useState(normalizeSavedFilters(saved?.filters));
   const [loading, setLoading] = useState(false);
+  const [statusTarget, setStatusTarget] = useState(null);
+  const [statusUpdatingId, setStatusUpdatingId] = useState(null);
+  const [statusError, setStatusError] = useState("");
   const [sorting, setSorting] = useState(saved?.sorting ?? [{ id: "id", desc: true }]);
   const [sort, setSort] = useState(saved?.sort ?? { by: "id", order: "DESC" });
   const initialPageRef = useRef(saved?.page ?? 1);
@@ -172,6 +196,38 @@ const SchoolList = () => {
     [meta.page, filters, sort, fetchData]
   );
 
+  const openStatusModal = useCallback((school) => {
+    setStatusError("");
+    setStatusTarget(school);
+  }, []);
+
+  const closeStatusModal = useCallback(() => {
+    if (statusUpdatingId !== null) return;
+    setStatusTarget(null);
+    setStatusError("");
+  }, [statusUpdatingId]);
+
+  const confirmStatusChange = useCallback(async () => {
+    if (!statusTarget || statusUpdatingId !== null) return;
+    const nextStatus = isSchoolActive(statusTarget) ? 0 : 1;
+    setStatusUpdatingId(statusTarget.id);
+    setStatusError("");
+
+    try {
+      await updateSchoolStatus(statusTarget.id, nextStatus);
+      invalidateActiveSchoolLists({ schoolId: statusTarget.id, status: nextStatus });
+      toast.success(nextStatus === 1 ? "مجموعه با موفقیت فعال شد." : "مجموعه با موفقیت غیرفعال شد.");
+      setStatusTarget(null);
+      await fetchData(meta.page, filters, sort);
+    } catch (error) {
+      const message = errorMessage(error);
+      setStatusError(message);
+      toast.error(message);
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  }, [fetchData, filters, meta.page, sort, statusTarget, statusUpdatingId]);
+
   const columns = useMemo(
     () => [
       {
@@ -226,9 +282,9 @@ const SchoolList = () => {
         enableSorting: false,
         cell: (info) => {
           const value = info.getValue();
-          if (value === 1 || value === "1" || value === true) return "فعال";
-          if (value === 0 || value === "0" || value === false) return "غیرفعال";
-          return "-";
+          if (value === null || value === undefined) return <Badge color="light" className="text-dark">نامشخص</Badge>;
+          const active = isSchoolActive(info.row.original);
+          return <Badge color={active ? "success" : "secondary"} pill>{active ? "فعال" : "غیرفعال"}</Badge>;
         },
       },
       {
@@ -248,6 +304,8 @@ const SchoolList = () => {
           const id = row.original.id;
           const canUpdate = hasPermission("schools.update");
           const canDelete = hasPermission("schools.delete");
+          const active = isSchoolActive(row.original);
+          const changingStatus = statusUpdatingId === id;
 
           if (!canUpdate && !canDelete) return "-";
 
@@ -256,6 +314,19 @@ const SchoolList = () => {
               {canUpdate && (
                 <Button color="warning" size="sm" onClick={() => handleEdit(id)}>
                   ویرایش
+                </Button>
+              )}
+
+              {canUpdate && (
+                <Button
+                  color={active ? "danger" : "success"}
+                  outline={active}
+                  size="sm"
+                  onClick={() => openStatusModal(row.original)}
+                  disabled={changingStatus}
+                >
+                  {changingStatus && <Spinner size="sm" className="ms-1" />}
+                  {active ? "غیرفعال‌کردن" : "فعال‌کردن"}
                 </Button>
               )}
 
@@ -274,7 +345,7 @@ const SchoolList = () => {
         },
       },
     ],
-    [handleEdit, handleDelete, hasPermission, loading]
+    [handleEdit, handleDelete, hasPermission, loading, openStatusModal, statusUpdatingId]
   );
 
   const handleSortingChange = useCallback(
@@ -335,6 +406,12 @@ const SchoolList = () => {
               </CardHeader>
 
               <CardBody>
+                <Alert color="info" className="d-flex gap-2 align-items-start">
+                  <i className="bx bx-info-circle fs-4" />
+                  <div>
+                    این فهرست از endpoint عملیاتی مجموعه‌های فعال دریافت می‌شود. تا زمان ارائه endpoint مدیریتی شامل مجموعه‌های غیرفعال، فعال‌سازی مجدد مجموعه پس از خروج آن از این فهرست امکان‌پذیر نیست.
+                  </div>
+                </Alert>
                 <Form className="mb-4" onSubmit={handleSearchSubmit}>
                   <Row className="g-3 align-items-end">
                     <Col xl="4" lg="5" md="6">
@@ -422,6 +499,39 @@ const SchoolList = () => {
             </Card>
           </Col>
         </Row>
+
+        <Modal isOpen={Boolean(statusTarget)} toggle={closeStatusModal} centered labelledBy="school-status-modal-title">
+          <ModalHeader toggle={closeStatusModal}>
+            <span id="school-status-modal-title">تأیید تغییر وضعیت مجموعه</span>
+          </ModalHeader>
+          <ModalBody>
+            {statusError && <Alert color="danger" role="alert">{statusError}</Alert>}
+            <div className="border rounded bg-light p-3 mb-3">
+              <strong>{statusTarget?.name || "مجموعه"}</strong>
+              {statusTarget?.code && <small className="text-muted d-block mt-1">کد: {statusTarget.code}</small>}
+            </div>
+            {isSchoolActive(statusTarget) ? (
+              <Alert color="warning" className="mb-0">
+                با غیرفعال‌کردن این مجموعه، مجموعه از فهرست‌های انتخابی سامانه حذف می‌شود؛ اما اطلاعات آن حذف نخواهد شد. آیا ادامه می‌دهید؟
+              </Alert>
+            ) : (
+              <Alert color="info" className="mb-0">
+                این مجموعه دوباره در فهرست‌های انتخابی سامانه نمایش داده خواهد شد. آیا ادامه می‌دهید؟
+              </Alert>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button color="light" onClick={closeStatusModal} disabled={statusUpdatingId !== null}>انصراف</Button>
+            <Button
+              color={isSchoolActive(statusTarget) ? "danger" : "success"}
+              onClick={confirmStatusChange}
+              disabled={statusUpdatingId !== null}
+            >
+              {statusUpdatingId !== null && <Spinner size="sm" className="ms-1" />}
+              {isSchoolActive(statusTarget) ? "غیرفعال‌کردن" : "فعال‌کردن"}
+            </Button>
+          </ModalFooter>
+        </Modal>
       </div>
     </div>
   );
