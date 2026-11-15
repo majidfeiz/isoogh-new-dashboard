@@ -2,7 +2,7 @@ import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import ManagedJobs from "./ManagedJobs.jsx";
-import { getManagedJobs } from "../../services/managedJobService.jsx";
+import { getManagedJobs, updateManagedJob } from "../../services/managedJobService.jsx";
 
 const mockHasPermission = jest.fn();
 jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ hasPermission: mockHasPermission }) }));
@@ -39,4 +39,37 @@ test("disables manual execution when environment is disabled", async () => {
   mockHasPermission.mockImplementation((permission) => permission === "managed-jobs.execute");
   renderPage();
   expect(await screen.findByRole("button", { name: "اجرای دستی" })).toBeDisabled();
+});
+
+test("changes enabled state only after confirmation and refreshes canonical data", async () => {
+  mockHasPermission.mockImplementation((permission) => permission === "managed-jobs.update");
+  const disabledJob = { ...job, enabled: false, effectiveEnabled: false };
+  getManagedJobs
+    .mockResolvedValueOnce({ items: [job], meta: { page: 1, limit: 20, total: 1, lastPage: 1 } })
+    .mockResolvedValue({ items: [disabledJob], meta: { page: 1, limit: 20, total: 1, lastPage: 1 } });
+  updateManagedJob.mockResolvedValue(disabledJob);
+
+  renderPage();
+  const toggle = await screen.findByRole("button", { name: "غیرفعال‌کردن پایش VoIP" });
+  fireEvent.click(toggle);
+
+  expect(updateManagedJob).not.toHaveBeenCalled();
+  expect(screen.getByText(/اجرای جاری قطع نمی‌شود/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "غیرفعال‌کردن" }));
+
+  await waitFor(() => expect(updateManagedJob).toHaveBeenCalledWith("check-voip-availability", { enabled: false }));
+  await waitFor(() => expect(getManagedJobs).toHaveBeenCalledTimes(2));
+  expect(await screen.findByRole("button", { name: "فعال‌کردن پایش VoIP" })).toHaveAttribute("aria-pressed", "false");
+});
+
+test("keeps current status and shows backend error when toggle fails", async () => {
+  mockHasPermission.mockImplementation((permission) => permission === "managed-jobs.update");
+  updateManagedJob.mockRejectedValue({ response: { data: { message: "تغییر وضعیت مجاز نیست" } } });
+
+  renderPage();
+  fireEvent.click(await screen.findByRole("button", { name: "غیرفعال‌کردن پایش VoIP" }));
+  fireEvent.click(screen.getByRole("button", { name: "غیرفعال‌کردن" }));
+
+  expect(await screen.findByText("تغییر وضعیت مجاز نیست")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "غیرفعال‌کردن پایش VoIP" })).toHaveAttribute("aria-pressed", "true");
 });

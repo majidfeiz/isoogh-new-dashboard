@@ -37,6 +37,7 @@ const ManagedJobs = () => {
   const [executeJob, setExecuteJob] = useState(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [togglingKey, setTogglingKey] = useState("");
   const requestRef = useRef(null);
 
   const page = Math.max(1, Number(params.get("page") || 1));
@@ -128,18 +129,41 @@ const ManagedJobs = () => {
     }
   };
 
+  const openToggle = (job) => {
+    if (togglingKey) return;
+    setActionError("");
+    setToggleJob({ job, nextEnabled: !job.enabled });
+  };
+
+  const closeToggle = () => {
+    if (busy || togglingKey) return;
+    setToggleJob(null);
+    setActionError("");
+  };
+
   const confirmToggle = async () => {
+    if (!toggleJob?.job || busy || togglingKey) return;
+    const { job, nextEnabled } = toggleJob;
     setBusy(true);
+    setTogglingKey(job.key);
     setActionError("");
     try {
-      const updated = await updateManagedJob(toggleJob.key, { enabled: !toggleJob.enabled });
-      setItems((current) => current.map((item) => item.key === updated.key ? updated : item));
+      const updated = await updateManagedJob(job.key, { enabled: nextEnabled });
+      const canonical = {
+        ...job,
+        ...updated,
+        key: updated.key || job.key,
+        enabled: typeof updated.enabled === "boolean" ? updated.enabled : nextEnabled,
+      };
+      setItems((current) => current.map((item) => item.key === job.key ? canonical : item));
       setToggleJob(null);
-      toast.success("وضعیت Job به‌روزرسانی شد.");
+      toast.success(nextEnabled ? "Job با موفقیت فعال شد." : "Job با موفقیت غیرفعال شد.");
+      await load(true);
     } catch (caught) {
       setActionError(managedJobError(caught));
     } finally {
       setBusy(false);
+      setTogglingKey("");
     }
   };
 
@@ -172,7 +196,7 @@ const ManagedJobs = () => {
       <Button outline color="secondary" onClick={() => load(true)} disabled={refreshing}>{refreshing ? <Spinner size="sm" /> : <i className="bx bx-refresh" />} به‌روزرسانی</Button>
     </CardHeader></Card>
     {environmentDisabled && <Alert color="warning"><i className="bx bx-server ms-2" />سیستم اجرای Jobها در container غیرفعال است و وضعیت مؤثر همه Jobها غیرفعال خواهد بود.</Alert>}
-    {actionError && <Alert color="danger">{actionError}</Alert>}
+    {actionError && !toggleJob && <Alert color="danger">{actionError}</Alert>}
     <Nav tabs className="mb-3">
       <NavItem><NavLink href="#" active={view === "jobs"} onClick={(event) => { event.preventDefault(); setParams({ view: "jobs", page: "1", limit: String(limit) }); }}>Jobها</NavLink></NavItem>
       <NavItem><NavLink href="#" active={view === "runs"} onClick={(event) => { event.preventDefault(); setParams({ view: "runs", page: "1", limit: String(limit) }); }}>تاریخچه اجراها</NavLink></NavItem>
@@ -185,14 +209,14 @@ const ManagedJobs = () => {
       </>}
     </Row></CardHeader><CardBody className="p-0">
       {loading ? <Loading /> : error ? <Alert color="danger" className="m-3">{error}<Button size="sm" outline color="danger" className="me-2" onClick={() => load()}>تلاش مجدد</Button></Alert> : !items.length ? <div className="text-center text-muted py-5"><i className="bx bx-data fs-1 d-block" />موردی یافت نشد.</div> : view === "jobs" ? <div className="table-responsive"><Table hover className="align-middle mb-0"><thead><tr><th>Job</th><th>وضعیت</th><th>آخرین نتیجه</th><th>آخرین / اجرای بعدی</th><th>فاصله</th><th>عملیات</th></tr></thead><tbody>
-        {items.map((job) => <tr key={job.key}><td><strong>{job.name}</strong><code dir="ltr" className="d-block">{job.key}</code><small className="text-muted">{job.description}</small></td><td><div className="d-flex flex-wrap gap-1"><Badge color={job.enabled ? "success" : "secondary"}>{job.enabled ? "فعال در پنل" : "غیرفعال در پنل"}</Badge><Badge color={job.effectiveEnabled ? "success" : "danger"}>{job.effectiveEnabled ? "فعال مؤثر" : "غیرفعال مؤثر"}</Badge>{job.running && <Badge color="info">در حال اجرا</Badge>}</div></td><td><StatusBadge status={job.lastStatus} /></td><td><div title={job.lastStartedAt || ""}>{formatJobDate(job.lastStartedAt)}</div><small title={job.nextRunAt || ""} className="text-muted">بعدی: {formatJobDate(job.nextRunAt)}</small></td><td>{intervalLabel(job.intervalSeconds)}</td><td><div className="d-flex flex-wrap align-items-center gap-2">{canUpdate && <><Button size="sm" outline color="primary" onClick={() => openEdit(job)}>ویرایش</Button><FormGroup switch className="mb-0"><Input type="switch" role="switch" aria-label={`فعال‌بودن ${job.name}`} checked={Boolean(job.enabled)} onChange={() => setToggleJob(job)} /></FormGroup></>}{canExecute && <Button size="sm" color="primary" disabled={!job.environmentEnabled || !job.effectiveEnabled || job.running} onClick={() => { setExecuteJob(job); setReason(""); setActionError(""); }}>اجرای دستی</Button>}</div></td></tr>)}
+        {items.map((job) => <tr key={job.key}><td><strong>{job.name}</strong><code dir="ltr" className="d-block">{job.key}</code><small className="text-muted">{job.description}</small></td><td><div className="d-flex flex-wrap gap-1"><Badge color={job.enabled ? "success" : "secondary"}>{job.enabled ? "فعال در پنل" : "غیرفعال در پنل"}</Badge><Badge color={job.effectiveEnabled ? "success" : "danger"}>{job.effectiveEnabled ? "فعال مؤثر" : "غیرفعال مؤثر"}</Badge>{job.running && <Badge color="info">در حال اجرا</Badge>}</div></td><td><StatusBadge status={job.lastStatus} /></td><td><div title={job.lastStartedAt || ""}>{formatJobDate(job.lastStartedAt)}</div><small title={job.nextRunAt || ""} className="text-muted">بعدی: {formatJobDate(job.nextRunAt)}</small></td><td>{intervalLabel(job.intervalSeconds)}</td><td><div className="d-flex flex-wrap align-items-center gap-2">{canUpdate && <><Button size="sm" outline color="primary" onClick={() => openEdit(job)} disabled={togglingKey === job.key}>ویرایش</Button><button type="button" className={`btn btn-sm d-inline-flex align-items-center gap-2 rounded-pill ${job.enabled ? "btn-soft-success" : "btn-soft-secondary"}`} onClick={() => openToggle(job)} disabled={Boolean(togglingKey)} aria-label={`${job.enabled ? "غیرفعال‌کردن" : "فعال‌کردن"} ${job.name}`} aria-pressed={job.enabled}><span className={`position-relative rounded-pill ${job.enabled ? "bg-success" : "bg-secondary"}`} style={{ width: 34, height: 18 }} aria-hidden="true"><span className="position-absolute bg-white rounded-circle shadow-sm" style={{ width: 14, height: 14, top: 2, transition: "inset-inline-start .2s", insetInlineStart: job.enabled ? 18 : 2 }} /></span><span>{togglingKey === job.key ? <Spinner size="sm" /> : job.enabled ? "فعال" : "غیرفعال"}</span></button></>}{canExecute && <Button size="sm" color="primary" disabled={!job.environmentEnabled || !job.effectiveEnabled || job.running} onClick={() => { setExecuteJob(job); setReason(""); setActionError(""); }}>اجرای دستی</Button>}</div></td></tr>)}
       </tbody></Table></div> : <div className="table-responsive"><Table hover className="align-middle mb-0"><thead><tr><th>شناسه</th><th>Job</th><th>Trigger</th><th>وضعیت</th><th>درخواست‌دهنده</th><th>مدت</th><th>شروع</th><th /></tr></thead><tbody>
         {items.map((run) => <tr key={run.id}><td>{run.id}</td><td><code>{run.job_key || run.jobKey}</code></td><td>{run.trigger || "—"}</td><td><StatusBadge status={run.status} /></td><td>{run.requested_by || run.requestedBy || "سیستم"}</td><td>{run.duration_ms == null ? "—" : Number(run.duration_ms).toLocaleString("fa-IR") + " ms"}</td><td title={run.started_at || ""}>{formatJobDate(run.started_at || run.startedAt)}</td><td><Button tag={Link} to={"/managed-jobs/runs/" + run.id} size="sm" outline color="primary">جزئیات</Button></td></tr>)}
       </tbody></Table></div>}
     </CardBody></Card>
     {!loading && !error && meta.total > 0 && <div className="mt-3"><Paginations perPageData={meta.limit} data={items} totalRecords={meta.total} currentPage={meta.page} setCurrentPage={(next) => setQuery("page", String(next), false)} isShowingPageLength paginationDiv="col-sm-auto" paginationClass="pagination pagination-sm mb-0" /></div>}
 
-    <Modal isOpen={Boolean(toggleJob)} toggle={() => !busy && setToggleJob(null)} centered><ModalHeader toggle={() => setToggleJob(null)}>تأیید تغییر وضعیت</ModalHeader><ModalBody>{toggleJob?.enabled ? "اجرای جاری قطع نمی‌شود، اما اجرای بعدی انجام نخواهد شد. Job غیرفعال شود؟" : "این Job برای اجراهای بعدی فعال شود؟"}</ModalBody><ModalFooter><Button color="light" onClick={() => setToggleJob(null)} disabled={busy}>انصراف</Button><Button color="warning" onClick={confirmToggle} disabled={busy}>{busy && <Spinner size="sm" className="ms-1" />}تأیید</Button></ModalFooter></Modal>
+    <Modal isOpen={Boolean(toggleJob)} toggle={closeToggle} centered labelledBy="managed-job-toggle-title"><ModalHeader toggle={closeToggle}><span id="managed-job-toggle-title">تأیید تغییر وضعیت Job</span></ModalHeader><ModalBody>{actionError && <Alert color="danger" role="alert">{actionError}</Alert>}<div className="border rounded p-3 bg-light mb-3"><strong className="d-block mb-1">{toggleJob?.job?.name}</strong><code dir="ltr">{toggleJob?.job?.key}</code></div>{toggleJob?.nextEnabled ? <Alert color="info" className="mb-0">این Job فعال می‌شود و در صورت فعال‌بودن تنظیمات container، اجرای زمان‌بندی‌شده بعدی انجام خواهد شد.</Alert> : <Alert color="warning" className="mb-0">اجرای جاری قطع نمی‌شود، اما اجرای زمان‌بندی‌شده بعدی انجام نخواهد شد.</Alert>}</ModalBody><ModalFooter><Button color="light" onClick={closeToggle} disabled={busy}>انصراف</Button><Button color={toggleJob?.nextEnabled ? "success" : "danger"} onClick={confirmToggle} disabled={busy}>{busy && <Spinner size="sm" className="ms-1" />}{toggleJob?.nextEnabled ? "فعال‌کردن" : "غیرفعال‌کردن"}</Button></ModalFooter></Modal>
     <Modal isOpen={Boolean(editJob)} toggle={() => !busy && setEditJob(null)} size="lg" scrollable><ModalHeader toggle={() => setEditJob(null)}>ویرایش {editJob?.name}</ModalHeader><ModalBody>{editJob && <>
       <FormGroup><Label for="job-interval">فاصله اجرا (ثانیه)</Label><Input id="job-interval" type="number" min="30" max="86400" value={editForm.intervalSeconds} invalid={Boolean(fieldErrors.intervalSeconds)} onChange={(event) => setEditForm((old) => ({ ...old, intervalSeconds: event.target.value }))} /><FormFeedback>{fieldErrors.intervalSeconds}</FormFeedback><small className="text-muted">{intervalLabel(editForm.intervalSeconds)}</small></FormGroup>
       <Row className="g-3">{Object.entries(editJob.configurationGuide || {}).map(([key, guide]) => <Col md="6" key={key}><FormGroup><Label for={"config-" + key}>{guide.title || key}</Label>{guide.type === "enum" ? <Input id={"config-" + key} type="select" value={editForm.configuration[key] ?? guide.default ?? ""} invalid={Boolean(fieldErrors[key])} onChange={(event) => setEditForm((old) => ({ ...old, configuration: { ...old.configuration, [key]: event.target.value } }))}>{(guide.values || []).map((value) => <option key={value}>{value}</option>)}</Input> : <Input id={"config-" + key} type="number" min={guide.minimum} max={guide.maximum} value={editForm.configuration[key] ?? guide.default ?? ""} invalid={Boolean(fieldErrors[key])} onChange={(event) => setEditForm((old) => ({ ...old, configuration: { ...old.configuration, [key]: event.target.value } }))} />}<FormFeedback>{fieldErrors[key]}</FormFeedback>{guide.help && <small className="text-muted">{guide.help}</small>}</FormGroup></Col>)}</Row>
