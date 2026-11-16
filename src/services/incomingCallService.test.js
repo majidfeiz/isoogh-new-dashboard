@@ -82,6 +82,44 @@ test("normalizes items returned by the incoming-calls endpoint", async () => {
   expect(response.items[0]).toEqual(expect.objectContaining({ callerNumber: "0912", destination: "219", startedAt: "2026-10-18T12:00:00.000Z" }));
 });
 
+test("uses incoming CDR fields and safe audio URLs without treating record as a URL", () => {
+  const item = normalizeIncomingCall({
+    id: 9,
+    status: "routing",
+    duration_seconds: 3,
+    started_at: "2026-11-15T08:00:00Z",
+    cdr: {
+      history_id: 55,
+      cuid: "cdr-1",
+      type: "incoming",
+      disposition: "ANSWERED",
+      duration_seconds: 42,
+      wait_seconds: 8,
+      record: "provider-record-name.wav",
+      started_at: "2026-11-15T08:01:00Z",
+      ended_at: "2026-11-15T08:01:42Z",
+    },
+    audio_files: [
+      { id: 2, name: "call.mp3", url: "https://files.example/call.mp3" },
+      { id: 3, name: "unsafe.mp3", url: "javascript:alert(1)" },
+    ],
+  });
+  expect(item).toMatchObject({
+    durationSeconds: 42,
+    startedAt: "2026-11-15T08:01:00Z",
+    endedAt: "2026-11-15T08:01:42Z",
+    cdr: { historyId: 55, type: "incoming", disposition: "ANSWERED", record: "provider-record-name.wav" },
+    audioFiles: [{ id: 2, name: "call.mp3", url: "https://files.example/call.mp3" }],
+  });
+  expect(item.audioFiles.some((audio) => audio.url === item.cdr.record)).toBe(false);
+});
+
+test("does not return an outgoing CDR from the incoming calls endpoint", async () => {
+  apiGet.mockResolvedValue({ data: { data: { items: [{ id: 1, cdr: { type: "incoming" } }, { id: 2, cdr: { type: "outgoing" } }], meta: { total: 2 } } } });
+  const response = await getIncomingCalls({ schoolId: 146 });
+  expect(response.items.map((item) => item.id)).toEqual([1]);
+});
+
 test("sends every report filter with a half-open local date range", () => {
   const params = buildIncomingCallParams({ schoolId: "146", page: 3, limit: 20, search: " علی ", status: "answered", ssn: " 001 ", username: " sara ", formId: "8", from: "2026-10-20", to: "2026-10-21", sortBy: "durationSeconds", sortOrder: "ASC" });
   expect(params).toEqual(expect.objectContaining({ schoolId: 146, page: 3, limit: 20, search: "علی", status: "answered", ssn: "001", username: "sara", formId: 8, sortBy: "durationSeconds", sortOrder: "ASC" }));

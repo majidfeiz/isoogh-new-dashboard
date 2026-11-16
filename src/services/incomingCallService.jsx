@@ -3,6 +3,24 @@ import { API_ROUTES, getApiUrl } from "../helpers/apiRoutes.jsx";
 
 const options = { silent: true };
 const unwrap = (response) => response?.data?.data ?? response?.data;
+
+/**
+ * @typedef {Object} IncomingCdr
+ * @property {number|null} historyId
+ * @property {string} cuid
+ * @property {'incoming'|null} type
+ * @property {string|null} disposition
+ * @property {number} durationSeconds
+ * @property {number} waitSeconds
+ * @property {string|null} record Provider record name; never used as a playback URL.
+ * @property {string|null} startedAt
+ * @property {string|null} endedAt
+ *
+ * @typedef {Object} IncomingAudioFile
+ * @property {number|null} id
+ * @property {string} name
+ * @property {string} url
+ */
 const INCOMING_CALL_DESTINATIONS = ["consultant", "supporter", "voice"];
 export const INCOMING_CALL_STATUSES = ["routing", "answered", "missed", "voice", "ended"];
 export const INCOMING_CALL_SORT_FIELDS = ["startedAt", "endedAt", "durationSeconds", "status"];
@@ -31,24 +49,59 @@ const pageResult = (response, page, limit) => {
   };
 };
 
-export const normalizeIncomingCall = (item = {}) => ({
-  ...item,
-  callerNumber: item.callerNumber ?? item.caller ?? item.from ?? item.src ?? "",
-  destination: item.destination ?? item.to ?? item.dst ?? "",
-  destinationType: item.destinationType ?? item.destination_type ?? "",
-  durationSeconds: item.durationSeconds ?? item.duration_seconds ?? item.duration,
-  startedAt: item.startedAt ?? item.started_at ?? item.createdAt ?? item.created_at,
-  answeredAt: item.answeredAt ?? item.answered_at,
-  endedAt: item.endedAt ?? item.ended_at,
-  supporterId: item.supporterId ?? item.supporter_id,
-  uniqueId: item.uniqueId ?? item.unique_id ?? item.cuid ?? item.routing_key,
-  appName: item.appName ?? item.app_name ?? "",
-  student: item.student || null,
-  adviser: item.adviser || null,
-  supporter: item.supporter || null,
-  supportForm: item.supportForm ?? item.support_form ?? null,
-  audioFiles: Array.isArray(item.audioFiles ?? item.audio_files) ? (item.audioFiles ?? item.audio_files) : [],
+const safeAudioUrl = (value) => {
+  const url = typeof value === "string" ? value.trim() : "";
+  if (!url) return "";
+  if (url.startsWith("/")) return url;
+  try { return ["http:", "https:", "blob:"].includes(new URL(url).protocol) ? url : ""; } catch (_) { return ""; }
+};
+
+const normalizeIncomingCdr = (cdr) => {
+  if (!cdr || typeof cdr !== "object") return null;
+  return {
+    historyId: cdr.historyId ?? cdr.history_id ?? null,
+    cuid: cdr.cuid ?? "",
+    type: cdr.type ?? null,
+    disposition: cdr.disposition ?? null,
+    durationSeconds: cdr.durationSeconds ?? cdr.duration_seconds ?? 0,
+    waitSeconds: cdr.waitSeconds ?? cdr.wait_seconds ?? 0,
+    record: cdr.record ?? null,
+    startedAt: cdr.startedAt ?? cdr.started_at ?? null,
+    endedAt: cdr.endedAt ?? cdr.ended_at ?? null,
+  };
+};
+
+const normalizeIncomingAudio = (audio = {}) => ({
+  id: audio.id ?? null,
+  name: audio.name ?? "",
+  url: safeAudioUrl(audio.url),
 });
+
+export const normalizeIncomingCall = (item = {}) => {
+  const cdr = normalizeIncomingCdr(item.cdr);
+  const audioFiles = (Array.isArray(item.audioFiles ?? item.audio_files) ? (item.audioFiles ?? item.audio_files) : [])
+    .map(normalizeIncomingAudio)
+    .filter((audio) => audio.url);
+  return {
+    ...item,
+    callerNumber: item.callerNumber ?? item.caller ?? item.from ?? item.src ?? "",
+    destination: item.destination ?? item.to ?? item.dst ?? "",
+    destinationType: item.destinationType ?? item.destination_type ?? "",
+    durationSeconds: cdr?.durationSeconds ?? item.durationSeconds ?? item.duration_seconds ?? item.duration,
+    startedAt: cdr?.startedAt ?? item.startedAt ?? item.started_at ?? item.createdAt ?? item.created_at,
+    answeredAt: item.answeredAt ?? item.answered_at,
+    endedAt: cdr?.endedAt ?? item.endedAt ?? item.ended_at,
+    supporterId: item.supporterId ?? item.supporter_id,
+    uniqueId: item.uniqueId ?? item.unique_id ?? item.cuid ?? item.routing_key,
+    appName: item.appName ?? item.app_name ?? "",
+    student: item.student || null,
+    adviser: item.adviser || null,
+    supporter: item.supporter || null,
+    supportForm: item.supportForm ?? item.support_form ?? null,
+    cdr,
+    audioFiles,
+  };
+};
 
 const cleanText = (value) => typeof value === "string" ? value.trim() : value;
 const dateBoundary = (date, nextDay = false) => {
@@ -120,7 +173,10 @@ export const setIncomingAvailability = async (schoolId, isAvailable, config = op
 export const getIncomingCalls = async (params = {}) => {
   const requestParams = buildIncomingCallParams(params);
   const result = pageResult(await apiGet(getApiUrl(API_ROUTES.incomingCalls.list), { params: requestParams, signal: params.signal, ...options }), requestParams.page, requestParams.limit);
-  return { ...result, items: result.items.map(normalizeIncomingCall) };
+  return {
+    ...result,
+    items: result.items.map(normalizeIncomingCall).filter((item) => !item.cdr?.type || item.cdr.type === "incoming"),
+  };
 };
 const downloadFilename = (header, fallback) => {
   const encoded = String(header || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];

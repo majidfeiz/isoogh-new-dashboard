@@ -23,7 +23,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { API_BASE_URL } from "../../helpers/apiRoutes.jsx";
 import { getAccessToken } from "../../helpers/authStorage.jsx";
 import { formatVoipTalkDuration } from "../../helpers/voipTime.js";
-import { normalizeOutboundCallItem } from "../../services/voipService.jsx";
+import { isOutboundCallHistory, normalizeOutboundCallItem } from "../../services/voipService.jsx";
 import { buildOutboundSocketPayload, isOutboundCallAdmin } from "./outboundCallHistoryFilterUtils.js";
 import { normalizeJalaliDateOnly } from "../../helpers/jalaliDateOnly.js";
 
@@ -250,7 +250,7 @@ const OutboundCallHistoriesLive = () => {
     setRows((prevRows) => {
       newRowIds = []; // reset on each call (React StrictMode may call twice)
       const prevIds = new Set(prevRows.map((r) => r.id != null ? String(r.id) : null).filter(Boolean));
-      return data.map((rawRow) => {
+      return data.filter(isOutboundCallHistory).map((rawRow) => {
         const row = normalizeOutboundCallItem(rawRow);
         if (row.id != null && !prevIds.has(String(row.id))) {
           newRowIds.push(row.id);
@@ -274,6 +274,7 @@ const OutboundCallHistoriesLive = () => {
     // Record may come as the object directly or wrapped in a response envelope
     const rawRecord = payload?.id != null ? payload : (payload?.data ?? payload?.record ?? payload?.item);
     if (!rawRecord || rawRecord.id == null) return;
+    if (!isOutboundCallHistory(rawRecord)) return;
     const record = normalizeOutboundCallItem(rawRecord);
 
     const f = filtersRef.current;

@@ -13,4 +13,7 @@ export const parseIncomingCallQuery = (params) => ({
 })
 export const serializeIncomingCallQuery = (query) => { const result = new URLSearchParams(); Object.entries(query).forEach(([key, value]) => { if (value !== "" && value != null && !(key === "page" && Number(value) === 1)) result.set(key, String(value)) }); return result }
 export const incomingCallRangeError = ({ from, to }) => Boolean(from) !== Boolean(to) ? "تاریخ شروع و پایان باید با هم انتخاب شوند." : from && to && from > to ? "تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد." : ""
-export const statusView = (status) => ({ routing: ["در حال مسیریابی", "info"], answered: ["پاسخ داده‌شده", "success"], missed: ["از دست‌رفته", "danger"], voice: ["پیام صوتی", "warning"], ended: ["پایان‌یافته", "secondary"] }[status] || [status || "نامشخص", "secondary"])
+export const statusView = (status) => {
+  const normalized = String(status || "").trim().toLowerCase().replaceAll("_", " ")
+  return ({ routing: ["در حال مسیریابی", "info"], answered: ["پاسخ داده‌شده", "success"], missed: ["از دست‌رفته", "danger"], "no answer": ["بدون پاسخ", "warning"], busy: ["مشغول", "info"], failed: ["ناموفق", "danger"], voice: ["پیام صوتی", "warning"], ended: ["پایان‌یافته", "secondary"] }[normalized] || [status || "نامشخص", "secondary"])
+}
