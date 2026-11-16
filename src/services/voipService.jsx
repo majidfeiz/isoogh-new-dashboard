@@ -54,6 +54,14 @@ export const normalizeOutboundCallItem = (item = {}) => ({
   files: Array.isArray(item?.files) ? item.files.map(normalizeOutboundFile) : [],
 });
 
+export const isOutboundCallHistory = (item = {}) => item?.type == null || item.type === "" || String(item.type).toLowerCase() === "outgoing";
+
+const filterOutboundCallItems = (items = []) => items.filter((item) => {
+  const outbound = isOutboundCallHistory(item);
+  if (!outbound && process.env.NODE_ENV === "development") console.warn("Unexpected non-outgoing item received from outbound-call-histories; row ignored.");
+  return outbound;
+});
+
 const requiredOutboundRange = (startDate, endDate) => {
   const start_date = normalizeJalaliDateOnly(startDate);
   const end_date = normalizeJalaliDateOnly(endDate);
@@ -118,7 +126,7 @@ export async function getOutboundCallHistories({
   const payload = response.data;
   const wrapped = payload?.data ?? payload ?? {};
 
-  const items = (wrapped?.data || wrapped?.items || []).map(normalizeOutboundCallItem);
+  const items = filterOutboundCallItems(wrapped?.data || wrapped?.items || []).map(normalizeOutboundCallItem);
   const meta = wrapped?.meta || wrapped?.pagination || {};
 
   return {

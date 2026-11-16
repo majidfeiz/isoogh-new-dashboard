@@ -34,6 +34,22 @@ test("combines supported filters and never forwards unsupported schoolId to the 
   expect(apiGet.mock.calls[0][1].params.schoolId).toBeUndefined();
 });
 
+test("drops an unexpected incoming row from the outbound endpoint and warns in development", async () => {
+  const previousEnvironment = process.env.NODE_ENV;
+  process.env.NODE_ENV = "development";
+  const warning = jest.spyOn(console, "warn").mockImplementation(() => {});
+  apiGet.mockResolvedValue({ data: { data: { items: [
+    { id: 1, type: "outgoing" },
+    { id: 2, type: "incoming" },
+    { id: 3 },
+  ], meta: { total: 3 } } } });
+  const result = await getOutboundCallHistories(requiredRange);
+  expect(result.items.map((item) => item.id)).toEqual([1, 3]);
+  expect(warning).toHaveBeenCalledWith(expect.stringMatching(/non-outgoing/));
+  warning.mockRestore();
+  process.env.NODE_ENV = previousEnvironment;
+});
+
 test("never forwards unsupported schoolId to CSV or Excel exports", async () => {
   apiGet.mockResolvedValue({ data: new Blob(["export"]), headers: {} });
   const filters = { ...requiredRange, schoolId: 8, support_form_id: 3113, username: "student", ssn: "001" };
