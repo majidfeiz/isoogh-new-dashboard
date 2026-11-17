@@ -33,3 +33,36 @@ export const errorState = (error, detail = false) => {
   if (detail && status === 404) return { status, message: "رکورد یافت نشد یا دسترسی ندارید." };
   return { status, message: error?.response?.data?.message || "دریافت اطلاعات با خطا مواجه شد." };
 };
+import DateObject from "react-date-object";
+import gregorian from "react-date-object/calendars/gregorian";
+import persian from "react-date-object/calendars/persian";
+import persianFa from "react-date-object/locales/persian_fa";
+
+
+const latinDigits = (value) => String(value || "")
+  .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+  .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+
+const tehranGregorianDate = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tehran",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+};
+
+export const importLogDatePickerValue = (iso) => {
+  const date = tehranGregorianDate(iso);
+  return date ? new DateObject({ date, format: "YYYY-MM-DD", calendar: gregorian }).convert(persian).setLocale(persianFa) : null;
+};
+
+export const importLogDateToIso = (value) => {
+  if (!value) return "";
+  const date = latinDigits(new DateObject(value).convert(gregorian).format("YYYY-MM-DD"));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return "";
+  return new Date(`${date}T00:00:00+03:30`).toISOString();
+};
