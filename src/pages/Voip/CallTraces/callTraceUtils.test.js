@@ -6,6 +6,7 @@ import {
   shouldPollDetail,
   shouldPollList,
   TRACE_STATUS,
+  getCallTraceError,
 } from "./callTraceUtils.js";
 
 describe("call trace status and step mapping", () => {
@@ -56,5 +57,16 @@ describe("call trace list states", () => {
     expect(getTraceListState({ loading: false, error: "network", items: [] })).toBe("error");
     expect(getTraceListState({ loading: false, error: "", items: [] })).toBe("empty");
     expect(getTraceListState({ loading: false, error: "", items: [{ id: 1 }] })).toBe("ready");
+  });
+});
+
+describe("call trace errors", () => {
+  test("uses sanitized status-specific messages", () => {
+    expect(getCallTraceError({ code: "ECONNABORTED" }).message).toBe("دریافت اطلاعات بیش از حد انتظار طول کشید");
+    expect(getCallTraceError({ response: { status: 403, data: { message: "secret" } } })).toEqual({
+      status: 403,
+      message: "اجازه مشاهده رهگیری تماس‌ها را ندارید.",
+    });
+    expect(getCallTraceError({ response: { status: 503 } }).message).toContain("موقتاً در دسترس نیست");
   });
 });
