@@ -5,6 +5,17 @@ jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn() }));
 
 beforeEach(() => apiGet.mockReset());
 
+test("requests the initial page with the contract defaults", async () => {
+  apiGet.mockResolvedValue({
+    data: { data: { items: [], meta: { page: 1, limit: 15, total: 0, lastPage: 1 } } },
+  });
+
+  await getCallTraces();
+
+  expect(apiGet).toHaveBeenCalledTimes(1);
+  expect(apiGet.mock.calls[0][1].params).toEqual(expect.objectContaining({ page: 1, limit: 15 }));
+});
+
 test("requests one server-paginated call trace page", async () => {
   apiGet.mockResolvedValue({
     data: {
@@ -29,28 +40,23 @@ test("requests one server-paginated call trace page", async () => {
   });
 });
 
-test("limits a legacy unpaginated response before rendering", async () => {
-  const records = Array.from({ length: 40 }, (_, index) => ({ id: index + 1 }));
-  apiGet.mockResolvedValue({ data: { data: records } });
+test("does not interpret a legacy collection as a paginated response", async () => {
+  apiGet.mockResolvedValue({
+    data: { data: [{ id: 1 }] },
+  });
 
-  const result = await getCallTraces({ page: 2, limit: 15 });
-
-  expect(result.items.map((item) => item.id)).toEqual(
-    Array.from({ length: 15 }, (_, index) => index + 16),
-  );
-  expect(result.meta).toEqual({ page: 2, limit: 15, total: 40, lastPage: 3 });
+  await expect(getCallTraces()).resolves.toEqual({
+    items: [],
+    meta: { page: 1, limit: 15, total: 0, lastPage: 1 },
+  });
 });
 
-test("normalizes pagination metadata returned beside a data array", async () => {
-  apiGet.mockResolvedValue({
-    data: {
-      data: [{ id: 1 }],
-      pagination: { currentPage: 1, perPage: 20, totalItems: 21, totalPages: 2 },
-    },
-  });
+test("retries a timeout only once", async () => {
+  apiGet
+    .mockRejectedValueOnce(Object.assign(new Error("timeout"), { code: "ECONNABORTED" }))
+    .mockResolvedValueOnce({ data: { data: { items: [], meta: { page: 1, limit: 15, total: 0, lastPage: 1 } } } });
 
-  await expect(getCallTraces({ limit: 20 })).resolves.toEqual({
-    items: [{ id: 1 }],
-    meta: { page: 1, limit: 20, total: 21, lastPage: 2 },
-  });
+  await getCallTraces();
+
+  expect(apiGet).toHaveBeenCalledTimes(2);
 });

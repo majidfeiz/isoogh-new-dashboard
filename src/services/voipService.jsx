@@ -303,6 +303,22 @@ const unwrapData = (response) => {
   return payload?.data ?? payload ?? {};
 };
 
+const waitForCallTraceRetry = (signal) => new Promise((resolve, reject) => {
+  const onAbort = () => {
+    clearTimeout(timer);
+    reject(Object.assign(new Error("canceled"), { code: "ERR_CANCELED" }));
+  };
+  const timer = setTimeout(() => {
+    signal?.removeEventListener("abort", onAbort);
+    resolve();
+  }, 300);
+  if (signal?.aborted) {
+    onAbort();
+    return;
+  }
+  signal?.addEventListener("abort", onAbort, { once: true });
+});
+
 /**
  * @param {{page?: number, limit?: number, search?: string, status?: CallTraceStatus|string,
  * adviserId?: string|number, studentId?: string|number, supportFormId?: string|number,
@@ -320,53 +336,40 @@ export async function getCallTraces({
   to = "",
   signal,
 } = {}) {
-  const response = await apiGet(getApiUrl(API_ROUTES.voip.callTraces), {
-    signal,
-    params: {
-      page,
-      limit,
-      search: search || undefined,
-      status: status || undefined,
-      adviserId: adviserId || undefined,
-      studentId: studentId || undefined,
-      supportFormId: supportFormId || undefined,
-      from: from || undefined,
-      to: to || undefined,
-    },
-  });
-  const payload = response?.data ?? {};
-  const data = payload?.data ?? payload;
-  const allItems = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.items)
-      ? data.items
-      : Array.isArray(data?.data)
-        ? data.data
-        : [];
-  const meta = data?.meta || data?.pagination || payload?.meta || payload?.pagination || {};
-  const normalizedPage = Number(meta.page ?? meta.currentPage ?? page) || page;
-  const normalizedLimit = Number(meta.limit ?? meta.perPage ?? meta.per_page ?? limit) || limit;
-
-  // Compatibility guard for older API deployments that return the complete collection.
-  // It prevents thousands of table rows from freezing the browser, but the backend must
-  // still paginate to avoid transferring and parsing the complete dataset on every page.
-  const isUnpaginatedResponse = allItems.length > normalizedLimit;
-  const effectivePage = isUnpaginatedResponse ? page : normalizedPage;
-  const items = isUnpaginatedResponse
-    ? allItems.slice((effectivePage - 1) * normalizedLimit, effectivePage * normalizedLimit)
-    : allItems;
-  const total = Number(meta.total ?? meta.totalItems ?? (isUnpaginatedResponse ? allItems.length : items.length));
-  const lastPage = Number(
-    meta.lastPage ??
-    meta.totalPages ??
-    meta.last_page ??
-    Math.max(1, Math.ceil(total / normalizedLimit)),
-  );
+  const params = {
+    page,
+    limit,
+    search: search || undefined,
+    status: status || undefined,
+    adviserId: adviserId || undefined,
+    studentId: studentId || undefined,
+    supportFormId: supportFormId || undefined,
+    from: from || undefined,
+    to: to || undefined,
+  };
+  let response;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await apiGet(getApiUrl(API_ROUTES.voip.callTraces), { signal, silent: true, params });
+      break;
+    } catch (error) {
+      const timeout = error?.code === "ECONNABORTED" || error?.code === "ETIMEDOUT";
+      if (!timeout || attempt === 1 || signal?.aborted) throw error;
+      await waitForCallTraceRetry(signal);
+    }
+  }
+  const data = response?.data?.data;
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const meta = data?.meta || {};
+  const normalizedPage = Number(meta.page) || page;
+  const normalizedLimit = Number(meta.limit) || limit;
+  const total = Number(meta.total) || 0;
+  const lastPage = Math.max(1, Number(meta.lastPage) || 1);
 
   return {
     items,
     meta: {
-      page: effectivePage,
+      page: normalizedPage,
       limit: normalizedLimit,
       total,
       lastPage,
