@@ -25,6 +25,7 @@ import { ProgressCell, StatusBadge, TraceTimeline } from "./CallTraceComponents.
 import {
   formatTraceDate,
   parseCallTraceQuery,
+  getCallTraceError,
   readableStep,
   serializeCallTraceQuery,
   shouldPollDetail,
@@ -67,7 +68,7 @@ const CallTraces = () => {
   const [meta, setMeta] = useState({ ...emptyMeta, page: query.page, limit: query.limit });
   const [initialLoading, setInitialLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
   const [visibility, setVisibility] = useState(() => document.visibilityState);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -79,6 +80,10 @@ const CallTraces = () => {
 
   const canIndex = hasPermission("voip.call-traces.index");
   const canShow = hasPermission("voip.call-traces.show");
+  const queryKey = useMemo(() => [
+    "voip-call-traces", query.page, query.limit, query.search, query.status,
+    query.adviserId, query.studentId, query.supportFormId, query.from, query.to,
+  ], [query]);
 
   const updateQuery = useCallback((updates) => {
     setSearchParams(serializeCallTraceQuery({ ...query, ...updates }));
@@ -90,22 +95,26 @@ const CallTraces = () => {
     listAbort.current = controller;
     if (background) setRefreshing(true);
     else setInitialLoading(true);
-    setError("");
+    setError(null);
     try {
       const result = await getCallTraces({ ...query, signal: controller.signal });
+      if (query.page > result.meta.lastPage) {
+        updateQuery({ page: 1 });
+        return;
+      }
       setItems(result.items);
       setMeta(result.meta);
     } catch (requestError) {
       if (isCanceled(requestError)) return;
       if (!background) setItems([]);
-      setError("دریافت رهگیری تماس‌ها با خطا مواجه شد. دوباره تلاش کنید.");
+      setError(getCallTraceError(requestError));
     } finally {
       if (listAbort.current === controller) {
         setInitialLoading(false);
         setRefreshing(false);
       }
     }
-  }, [query]);
+  }, [queryKey, query, updateQuery]);
 
   const loadDetail = useCallback(async (id, { background = false } = {}) => {
     if (!id || !canShow) return;
@@ -130,9 +139,14 @@ const CallTraces = () => {
   }, [canShow]);
 
   useEffect(() => {
+    const canonicalQuery = serializeCallTraceQuery(query).toString();
+    if (queryString !== canonicalQuery) {
+      setSearchParams(canonicalQuery, { replace: true });
+      return undefined;
+    }
     if (canIndex) loadList();
     return () => listAbort.current?.abort();
-  }, [canIndex, loadList]);
+  }, [canIndex, loadList, query, queryString, setSearchParams]);
 
   useEffect(() => {
     if (!query.traceId || !canShow || selectedId) return;
@@ -186,7 +200,7 @@ const CallTraces = () => {
 
   const clearFilters = () => {
     setDraftSearch("");
-    setSearchParams(new URLSearchParams());
+    setSearchParams(serializeCallTraceQuery({ page: 1, limit: 15 }));
   };
 
   if (!meLoading && !canIndex) return <Navigate to="/403" replace />;
@@ -257,13 +271,15 @@ const CallTraces = () => {
 
             {error ? (
               <Alert color="danger" className="d-flex justify-content-between align-items-center">
-                <span>{error}</span>
+                <span>{error.status ? `خطای ${error.status}: ` : ""}{error.message}</span>
                 <Button color="danger" size="sm" onClick={() => loadList()}>تلاش دوباره</Button>
               </Alert>
             ) : null}
 
             {initialLoading ? (
-              <div className="trace-state"><Spinner color="primary" /><span>در حال دریافت تماس‌ها…</span></div>
+              <div className="trace-skeleton" aria-label="در حال دریافت تماس‌ها">
+                {Array.from({ length: 6 }, (_, index) => <div className="placeholder-glow" key={index}><span className="placeholder col-12" /></div>)}
+              </div>
             ) : !error && items.length === 0 ? (
               <div className="trace-state">
                 <i className="bx bx-phone-off display-5 text-muted" />
@@ -305,12 +321,19 @@ const CallTraces = () => {
                   perPageData={meta.limit}
                   data={items}
                   totalRecords={meta.total}
+                  totalPages={meta.lastPage}
                   currentPage={meta.page}
                   setCurrentPage={(page) => updateQuery({ page })}
                   isShowingPageLength
                   paginationDiv="col-sm-auto"
                   paginationClass="pagination pagination-sm mb-0"
                 />
+                <div className="d-flex align-items-center gap-2 mt-3">
+                  <Label for="trace-limit" className="mb-0">تعداد در صفحه</Label>
+                  <Input id="trace-limit" type="select" className="trace-limit" value={query.limit} onChange={(event) => updateQuery({ limit: Number(event.target.value), page: 1 })}>
+                    {[15, 30, 50].map((value) => <option key={value} value={value}>{value.toLocaleString("fa-IR")}</option>)}
+                  </Input>
+                </div>
               </>
             ) : null}
           </CardBody>

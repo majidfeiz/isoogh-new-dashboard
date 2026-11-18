@@ -57,8 +57,8 @@ export const serializeCallTraceQuery = (query) => {
     const value = String(query[key] || "").trim();
     if (value) params.set(key, value);
   });
-  if (query.page > 1) params.set("page", String(query.page));
-  if (query.limit !== 15) params.set("limit", String(query.limit));
+  params.set("page", String(query.page || 1));
+  params.set("limit", String(query.limit || 15));
   return params;
 };
 
@@ -82,4 +82,19 @@ export const getTraceListState = ({ loading, error, items }) => {
   if (error) return "error";
   if (!items.length) return "empty";
   return "ready";
+};
+
+export const getCallTraceError = (error, fallback = "دریافت رهگیری تماس‌ها با خطا مواجه شد.") => {
+  if (error?.code === "ECONNABORTED" || error?.code === "ETIMEDOUT") {
+    return { status: null, message: "دریافت اطلاعات بیش از حد انتظار طول کشید" };
+  }
+  const status = Number(error?.response?.status) || null;
+  const messages = {
+    401: "نشست شما معتبر نیست؛ لطفاً دوباره وارد شوید.",
+    403: "اجازه مشاهده رهگیری تماس‌ها را ندارید.",
+  };
+  return {
+    status,
+    message: messages[status] || (status >= 500 ? "سرویس رهگیری موقتاً در دسترس نیست؛ دوباره تلاش کنید." : fallback),
+  };
 };

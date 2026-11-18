@@ -22,6 +22,21 @@
   .trace-progress {
     height: 7px;
   }
+
+  .trace-limit {
+    width: 90px;
+  }
+}
+
+.trace-skeleton {
+  min-height: 220px;
+  padding: 1rem 0;
+
+  .placeholder {
+    height: 2.25rem;
+    margin-bottom: .75rem;
+    border-radius: .35rem;
+  }
 }
 
 .trace-state {
