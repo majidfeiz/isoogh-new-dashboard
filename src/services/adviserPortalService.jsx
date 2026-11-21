@@ -125,6 +125,20 @@ let workShiftCache = null;
 let workShiftCacheTime = 0;
 let workShiftRequest = null;
 
+/**
+ * @typedef {Object} AdviserStudentProfileEducation
+ * @property {string|null} grade
+ * @property {string|null} major
+ * @property {string|null} sexuality
+ * @property {number|null} schoolId
+ * @property {string|null} schoolName
+ * @property {string|null} instituteType
+ * @property {string|null} instituteName
+ * @property {string|null} decile
+ * @property {string|null} scholarshipType
+ * @property {string|null} gpa
+ */
+
 const normalizeStudentProfile = (item = {}) => ({
   studentId: item?.studentId ?? item?.student_id ?? null,
   userId: item?.userId ?? item?.user_id ?? null,
@@ -140,9 +154,16 @@ const normalizeStudentProfile = (item = {}) => ({
   province: item?.province ?? "",
   city: item?.city ?? "",
   region: item?.region ?? null,
-  instituteType: item?.instituteType ?? null,
-  instituteName: item?.instituteName ?? "",
-  gpa: item?.gpa ?? "",
+  grade: item?.grade ?? null,
+  major: item?.major ?? null,
+  sexuality: item?.sexuality ?? item?.gender ?? null,
+  schoolId: item?.schoolId ?? item?.school_id ?? null,
+  schoolName: item?.schoolName ?? item?.school_name ?? null,
+  instituteType: item?.instituteType ?? item?.institute_type ?? null,
+  instituteName: item?.instituteName ?? item?.institute_name ?? null,
+  decile: item?.decile ?? null,
+  scholarshipType: item?.scholarshipType ?? item?.scholarship_type ?? null,
+  gpa: item?.gpa ?? null,
   emergencyPhone: item?.emergencyPhone ?? item?.emergency_phone ?? "",
   totalCalls: item?.totalCalls ?? item?.total_calls ?? 0,
   lastCallAt: item?.lastCallAt ?? item?.last_call_at ?? null,
