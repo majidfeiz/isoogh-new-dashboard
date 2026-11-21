@@ -362,6 +362,15 @@ export const AnswerDrawer = ({ open, onClose, studentName, studentPhone, previou
 
 // ─── Info Card ────────────────────────────────────────────────────────────────
 
+export const profileValue = (value) => value === null || value === undefined || value === "" ? "—" : String(value);
+
+export const adviserProfileGender = (value) => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : value;
+  if (normalized === "male") return "مرد";
+  if (normalized === "female") return "زن";
+  return profileValue(value);
+};
+
 const InfoCard = ({ label, value, icon }) => (
   <Col xs={12} sm={6} xl={4}>
     <div className="d-flex align-items-center gap-3 p-3 rounded border bg-white h-100" style={{ transition: "box-shadow .15s" }}>
@@ -370,7 +379,7 @@ const InfoCard = ({ label, value, icon }) => (
       </div>
       <div className="overflow-hidden flex-grow-1">
         <div className="text-muted" style={{ fontSize: 11 }}>{label}</div>
-        <div className="fw-semibold text-truncate" style={{ fontSize: 14 }}>{value || "—"}</div>
+        <div className="fw-semibold text-truncate" style={{ fontSize: 14 }}>{profileValue(value)}</div>
       </div>
     </div>
   </Col>
@@ -378,7 +387,7 @@ const InfoCard = ({ label, value, icon }) => (
 
 // ─── Tab 1: Student Info ──────────────────────────────────────────────────────
 
-const StudentInfoTab = ({ profile, loading }) => {
+export const StudentInfoTab = ({ profile, loading }) => {
   if (loading) return <div className="text-center py-5"><Spinner color="primary" /></div>;
   if (!profile) return <div className="text-center py-5 text-muted">اطلاعاتی یافت نشد</div>;
 
@@ -395,11 +404,20 @@ const StudentInfoTab = ({ profile, loading }) => {
     { label: "شهر", value: profile.city, icon: "bx-buildings" },
     profile.region && { label: "منطقه", value: profile.region, icon: "bx-map-pin" },
     { label: "نوبت", value: profile.shift, icon: "bx-sun" },
-    { label: "نام موسسه", value: profile.instituteName, icon: "bx-building-house" },
-    profile.instituteType && { label: "نوع موسسه", value: profile.instituteType, icon: "bx-category" },
-    { label: "معدل", value: profile.gpa, icon: "bx-trophy" },
     { label: "تلفن اضطراری", value: profile.emergencyPhone, icon: "bx-phone-incoming" },
   ].filter(Boolean);
+
+  const educationFields = [
+    { label: "اسم مجموعه", value: profile.schoolName, icon: "bx-buildings" },
+    { label: "پایه تحصیلی", value: profile.grade, icon: "bx-book-open" },
+    { label: "رشته تحصیلی", value: profile.major, icon: "bx-book" },
+    { label: "جنسیت", value: adviserProfileGender(profile.sexuality), icon: "bx-user" },
+    { label: "نوع مدرسه", value: profile.instituteType, icon: "bx-category" },
+    { label: "نام مدرسه", value: profile.instituteName, icon: "bx-building-house" },
+    { label: "معدل", value: profile.gpa, icon: "bx-trophy" },
+    { label: "دهک", value: profile.decile, icon: "bx-layer" },
+    { label: "نوع بورسیه", value: profile.scholarshipType, icon: "bx-award" },
+  ];
 
   return (
     <>
@@ -408,6 +426,12 @@ const StudentInfoTab = ({ profile, loading }) => {
           <InfoCard key={f.label} {...f} />
         ))}
       </Row>
+      <section className="mt-4 pt-4 border-top" aria-labelledby="student-education-title">
+        <h5 id="student-education-title" className="mb-3">اطلاعات تحصیلی و حمایتی</h5>
+        <Row className="g-3">
+          {educationFields.map((field) => <InfoCard key={field.label} {...field} />)}
+        </Row>
+      </section>
     </>
   );
 };

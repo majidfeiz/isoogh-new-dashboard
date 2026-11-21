@@ -84,6 +84,10 @@ const StudentForm = () => {
     region: "",
     institute_type: "",
     institute_name: "",
+    grade: "",
+    major: "",
+    decile: "",
+    scholarship_type: "",
     gpa: "",
     village: "",
     religion: "",
@@ -194,6 +198,10 @@ const StudentForm = () => {
           region: student.region ?? "",
           institute_type: student.institute_type ?? "",
           institute_name: student.institute_name ?? "",
+          grade: student.grade ?? "",
+          major: student.major ?? "",
+          decile: student.decile ?? "",
+          scholarship_type: student.scholarship_type ?? "",
           gpa: student.gpa ?? "",
           village: student.village ?? "",
           religion: student.religion ?? "",
@@ -415,7 +423,9 @@ const StudentForm = () => {
         emergency_phone: cleanOptional(form.emergency_phone),
         shift: cleanOptional(form.shift), province: cleanOptional(form.province), city: cleanOptional(form.city),
         region: cleanOptional(form.region), institute_type: cleanOptional(form.institute_type),
-        institute_name: cleanOptional(form.institute_name), gpa: cleanOptional(form.gpa),
+        institute_name: cleanOptional(form.institute_name), grade: cleanOptional(form.grade),
+        major: cleanOptional(form.major), decile: cleanOptional(form.decile),
+        scholarship_type: cleanOptional(form.scholarship_type), gpa: cleanOptional(form.gpa),
         village: cleanOptional(form.village), religion: cleanOptional(form.religion),
         relationship: cleanOptional(form.relationship), group_id: cleanOptional(form.group_id),
         work_shift_id: toNum(form.work_shift_id) ?? 1,
@@ -760,6 +770,38 @@ const StudentForm = () => {
                           placeholder="مثلاً 1375-03-10"
                         />
                         {renderError("birthday")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="grade">پایه تحصیلی</Label>
+                        <Input id="grade" name="grade" value={form.grade} onChange={handleChange} />
+                        {renderError("grade")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="major">رشته تحصیلی</Label>
+                        <Input id="major" name="major" value={form.major} onChange={handleChange} />
+                        {renderError("major")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="decile">دهک</Label>
+                        <Input id="decile" name="decile" value={form.decile} onChange={handleChange} />
+                        {renderError("decile")}
+                      </FormGroup>
+                    </Col>
+
+                    <Col md="4">
+                      <FormGroup>
+                        <Label for="scholarship_type">نوع بورسیه</Label>
+                        <Input id="scholarship_type" name="scholarship_type" value={form.scholarship_type} onChange={handleChange} />
+                        {renderError("scholarship_type")}
                       </FormGroup>
                     </Col>
 

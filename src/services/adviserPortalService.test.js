@@ -335,6 +335,37 @@ test("keeps tag values scoped to each requested student profile", async () => {
   ])
 })
 
+test("normalizes additive education fields without an extra school request", async () => {
+  apiGet.mockResolvedValue({ data: { data: {
+    studentId: 10,
+    grade: "دوازدهم",
+    major: "ریاضی فیزیک",
+    sexuality: "female",
+    schoolId: 94,
+    schoolName: "مجموعه نمونه",
+    instituteType: "دولتی",
+    instituteName: "دبیرستان نمونه",
+    decile: "4",
+    scholarshipType: "نیمه‌بورسیه",
+    gpa: "12.37",
+  } } })
+
+  await expect(getStudentProfile(3130, 255046)).resolves.toEqual(expect.objectContaining({
+    grade: "دوازدهم",
+    major: "ریاضی فیزیک",
+    sexuality: "female",
+    schoolId: 94,
+    schoolName: "مجموعه نمونه",
+    instituteType: "دولتی",
+    instituteName: "دبیرستان نمونه",
+    decile: "4",
+    scholarshipType: "نیمه‌بورسیه",
+    gpa: "12.37",
+  }))
+  expect(apiGet).toHaveBeenCalledTimes(1)
+  expect(apiGet).toHaveBeenCalledWith("http://127.0.0.1:8040/adviser-portal/support-forms/3130/students/255046/profile")
+})
+
 test("preserves ordered previous answers from the profile without merging sessions", async () => {
   apiGet.mockResolvedValue({ data: { data: { studentId: 10, previousAnswers: [
     { sourceFormId: 2, sourceFormTitle: "اول", questionId: 5, questionTitle: "سؤال اول", answerText: "پاسخ", hasAnswer: true, updatedAt: "2026-09-10T10:00:00Z" },

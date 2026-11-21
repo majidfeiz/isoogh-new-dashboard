@@ -34,6 +34,8 @@ import UsernameAsPhoneSwitch from "./UsernameAsPhoneSwitch.jsx";
 import {
   appendStudentCreateImportFields,
   DEFAULT_USE_USERNAME_AS_PHONE,
+  STUDENT_IMPORT_HEADERS,
+  studentImportSampleRows,
 } from "./studentImportUtils.js";
 
 import {
@@ -133,31 +135,7 @@ const StudentList = () => {
   const baseImportColumns = useMemo(() => {
     if (importMode !== "create") return ["username"];
 
-    return [
-      "username",
-      "name",
-      "password",
-      "phone",
-      "ssn",
-      "email",
-      "birthday",
-      "point",
-      "phone_2",
-      "phone_3",
-      "shift",
-      "city",
-      "province",
-      "region",
-      "institute_type",
-      "institute_name",
-      "gpa",
-      "emergency_phone",
-      "village",
-      "religion",
-      "relationship",
-      "group_id",
-      "work_shift_id",
-    ];
+    return STUDENT_IMPORT_HEADERS;
   }, [importMode]);
 
   const importModeMeta = useMemo(() => {
@@ -189,9 +167,9 @@ const StudentList = () => {
       uploadLabel: "آپلود و ایمپورت",
       successLabel: "ایمپورت با موفقیت انجام شد",
       supportedColumns:
-        "username (الزامی)، name، password، phone، ssn، email، birthday، point، phone_2، phone_3، shift، city، province، region، institute_type، institute_name، gpa، emergency_phone، village، religion، relationship، group_id، work_shift_id",
+        `${STUDENT_IMPORT_HEADERS.join("، ")} (username الزامی است)`,
       helpText:
-        "ستون code خودکار از username ساخته می‌شود — نیازی به وارد کردن ندارد. حجم فایل: حداکثر ۱۵ مگابایت.",
+        "نام و ترتیب headerهای انگلیسی فایل نمونه را تغییر ندهید. ستون code خودکار از username ساخته می‌شود و مجموعه مقصد از انتخاب همین صفحه ارسال می‌شود. حجم فایل: حداکثر ۱۵ مگابایت.",
     };
   }, [importMode]);
 
@@ -211,7 +189,7 @@ const StudentList = () => {
     const keys = new Set(baseImportColumns);
     importRows.forEach((row) => {
       Object.keys(row || {}).forEach((k) => {
-        if (k !== "voip_phone") keys.add(k);
+        keys.add(k);
       });
     });
     return Array.from(keys);
@@ -561,11 +539,7 @@ const StudentList = () => {
         const sheetName = workbook.SheetNames?.[0];
         if (!sheetName) throw new Error("Sheet not found");
         const sheet = workbook.Sheets[sheetName];
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }).map((row) => {
-          const supportedRow = { ...row };
-          delete supportedRow.voip_phone;
-          return supportedRow;
-        });
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
         setImportRows(rows);
         setImportFileName(file.name);
         setImportPreviewPage(1);
@@ -584,31 +558,11 @@ const StudentList = () => {
 
   const handleDownloadSample = async () => {
     const XLSX = await import("xlsx")
-    const sampleRows =
-      importMode === "create"
-        ? [
-            {
-              username: "09123456789", name: "علی احمدی", password: "Pass1234",
-              phone: "09123456789", ssn: "1234567890", email: "ali@example.com",
-              birthday: "1385/01/01", point: "", phone_2: "", phone_3: "",
-              shift: "", city: "تهران", province: "تهران", region: "",
-              institute_type: "", institute_name: "", gpa: "", emergency_phone: "",
-              village: "", religion: "", relationship: "", group_id: "",
-              work_shift_id: "",
-            },
-            {
-              username: "09198765432", name: "زهرا حسینی", password: "Pass5678",
-              phone: "09198765432", ssn: "0987654321", email: "zahra@example.com",
-              birthday: "1386/06/15", point: "", phone_2: "", phone_3: "",
-              shift: "", city: "اصفهان", province: "اصفهان", region: "",
-              institute_type: "", institute_name: "", gpa: "", emergency_phone: "",
-              village: "", religion: "", relationship: "", group_id: "",
-              work_shift_id: "",
-            },
-          ]
-        : [{ username: "student001" }, { username: "student002" }]
-    const ws = XLSX.utils.json_to_sheet(sampleRows)
-    ws["!cols"] = Object.keys(sampleRows[0]).map((k) => ({ wch: Math.max(k.length + 2, 14) }))
+    const sampleRows = importMode === "create"
+      ? studentImportSampleRows()
+      : [["username"], ["student001"], ["student002"]]
+    const ws = XLSX.utils.aoa_to_sheet(sampleRows)
+    ws["!cols"] = sampleRows[0].map((header) => ({ wch: Math.max(header.length + 2, 14) }))
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "students")
     XLSX.writeFile(wb, importModeMeta.sampleFileName)

@@ -7,7 +7,7 @@ jest.mock("../../services/studentService.jsx", () => ({ getStudentProfile: jest.
 
 const student = { id: 12, schools: [{ id: 7, name: "مدرسه امید" }] };
 const profile = {
-  student: { id: 12, name: "علی رضایی", code: "ST-12", city: "تهران", gpa: 19, schools: student.schools, tags: [{ id: 1, name: "کنکوری" }] },
+  student: { id: 12, name: "علی رضایی", code: "ST-12", city: "تهران", grade: "دوازدهم", major: "ریاضی فیزیک", decile: "4", scholarship_type: "نیمه‌بورسیه", gpa: "12.37", schools: student.schools, tags: [{ id: 1, name: "کنکوری" }] },
   identity: { name: "علی رضایی", username: "ali12", phone: "09121234567", email: "a@test.ir", ssn: "0012345678", gender: "مرد" },
   workShift: { id: 2, name: "صبح" },
   contacts: [{ id: 5, title: "پدر", phoneNumber: "09120000000", isDefault: true }],
@@ -29,6 +29,8 @@ test("requests the selected student profile and renders every section and defaul
   expect(screen.getByText("پیش‌فرض")).toBeInTheDocument();
   expect(screen.getByText("مشاور نمونه")).toBeInTheDocument();
   expect(screen.getByText("صبح")).toBeInTheDocument();
+  expect(screen.getByText("12.37")).toBeInTheDocument();
+  ["دوازدهم", "ریاضی فیزیک", "نیمه‌بورسیه"].forEach((value) => expect(screen.getByText(value)).toBeInTheDocument());
 });
 
 test("asks for school context before requesting a multi-school student", async () => {
@@ -63,8 +65,8 @@ test.each([
   expect(getStudentProfile).toHaveBeenCalledTimes(2);
 });
 
-test("renders null shift, default contact and adviser states", async () => {
-  getStudentProfile.mockResolvedValue({ ...profile, workShift: null, contacts: [], defaultContact: null, advisers: [], identity: {}, student: { ...profile.student, phone: null } });
+test("renders null shift, education, default contact and adviser states", async () => {
+  getStudentProfile.mockResolvedValue({ ...profile, workShift: null, contacts: [], defaultContact: null, advisers: [], identity: {}, student: { ...profile.student, phone: null, grade: null, major: null, decile: null, scholarship_type: null, gpa: null } });
   render(<StudentProfileModal isOpen student={student} activeSchoolId="7" onClose={jest.fn()} />);
 
   expect(await screen.findByText("اطلاعات فردی")).toBeInTheDocument();
@@ -72,5 +74,8 @@ test("renders null shift, default contact and adviser states", async () => {
   expect(screen.getByText("مخاطب یا شماره تلفنی ثبت نشده است.")).toBeInTheDocument();
   const shiftLabel = screen.getByText("شیفت کاری").parentElement;
   expect(within(shiftLabel).getByText("—")).toBeInTheDocument();
+  ["پایه تحصیلی", "رشته تحصیلی", "دهک", "نوع بورسیه", "معدل"].forEach((label) => {
+    expect(within(screen.getByText(label).parentElement).getByText("—")).toBeInTheDocument();
+  });
   expect(screen.getByText("مخاطب پیش‌فرض:").parentElement).toHaveTextContent("—");
 });
