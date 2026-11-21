@@ -42,6 +42,7 @@ import { useAuth } from "../../context/AuthContext.jsx";
 import { toast } from "react-toastify";
 import AdviserRowActions from "./AdviserRowActions.jsx";
 import AdviserSubordinatesModal from "./AdviserSubordinatesModal.jsx";
+import AdviserCreateImportModal from "./AdviserCreateImportModal.jsx";
 import { adviserAccountActive, adviserAccountErrorMessage, INACTIVE_CONFIRMATION, withAdviserAccountStatus } from "./adviserAccountStatusUtils.js";
 
 /**
@@ -90,6 +91,9 @@ const AdviserList = () => {
   const [accountMutationIds, setAccountMutationIds] = useState({});
   const [mutationError, setMutationError] = useState("");
   const [subordinatesAdviser, setSubordinatesAdviser] = useState(null);
+  const [createImportModal, setCreateImportModal] = useState(false);
+  const [createImportMode, setCreateImportMode] = useState("register");
+  const canCreate = auth?.hasPermission?.("advisers.create") === true;
   const canShow = auth?.hasPermission?.("advisers.show") === true;
   const canUpdate = auth?.hasPermission?.("advisers.update") === true;
   const isAdminLike = useMemo(() => (auth?.user?.roles || []).some((role) => {
@@ -97,6 +101,15 @@ const AdviserList = () => {
     return ["admin", "super_admin", "super-admin", "super admin"].includes(name);
   }), [auth?.user?.roles]);
   const managerAutoSchool = !isAdminLike && schools.length === 1 ? schools[0] : null;
+  const selectedSchool = useMemo(
+    () => schools.find((school) => String(school.id) === String(filters.schoolId)),
+    [schools, filters.schoolId]
+  );
+
+  const openCreateImport = (mode) => {
+    setCreateImportMode(mode);
+    setCreateImportModal(true);
+  };
 
   const buildSearchQuery = useCallback((currentFilters) => {
     return [currentFilters.code, currentFilters.name, currentFilters.username, currentFilters.phone]
@@ -626,6 +639,8 @@ const AdviserList = () => {
 
                 <div className="d-flex align-items-center gap-2">
                   {loading && <Spinner size="sm" color="primary" />}
+                  {canCreate && <Button color="primary" onClick={() => openCreateImport("register")}>افزودن مشاور</Button>}
+                  {canCreate && <Button color="info" outline onClick={() => openCreateImport("import")}>ورود گروهی مشاوران</Button>}
                   <Button
                     color="success"
                     outline
@@ -889,6 +904,15 @@ const AdviserList = () => {
       canUpdate={canUpdate}
       onClose={() => setSubordinatesAdviser(null)}
       onChanged={() => fetchData(meta.page, filters, sort)}
+    />
+    <AdviserCreateImportModal
+      isOpen={createImportModal}
+      toggle={() => setCreateImportModal(false)}
+      mode={createImportMode}
+      schoolId={filters.schoolId}
+      schoolName={selectedSchool?.name || selectedSchool?.title || selectedSchool?.code}
+      grades={allGrades}
+      onSuccess={() => fetchData(meta.page, filters, sort)}
     />
 
     <Modal isOpen={gradeModal} toggle={() => !modalSaving && setGradeModal(false)} size="lg">
