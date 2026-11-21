@@ -111,6 +111,8 @@ export const API_ROUTES = {
   advisers: {
     list: "/advisers",
     create: "/advisers",
+    register: "/advisers/register",
+    import: "/advisers/import",
     detail: (id) => `/advisers/${id}`,
     update: (id) => `/advisers/${id}`,
     delete: (id) => `/advisers/${id}`,

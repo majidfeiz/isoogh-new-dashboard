@@ -65,6 +65,22 @@ export async function createAdviser(payload) {
   return res.data;
 }
 
+export async function registerAdviser(payload) {
+  const res = await apiPost(getApiUrl(API_ROUTES.advisers.register), {
+    ...payload,
+    schoolId: Number(payload.schoolId),
+  }, { silent: true });
+  return res?.data?.data ?? res?.data;
+}
+
+export async function importAdvisers(formData, options = {}) {
+  const res = await apiPost(getApiUrl(API_ROUTES.advisers.import), formData, {
+    onUploadProgress: options.onUploadProgress,
+    silent: true,
+  });
+  return res?.data?.data ?? res?.data;
+}
+
 export async function updateAdviser(id, payload) {
   const url = getApiUrl(API_ROUTES.advisers.update(id));
   const res = await apiPatch(url, payload);
