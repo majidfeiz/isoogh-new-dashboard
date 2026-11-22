@@ -217,6 +217,8 @@ export const API_ROUTES = {
     valueDeleteTemplate: (id) => `/parent-tags/${id}/value-delete-template/download`,
     importValues: (id) => `/parent-tags/${id}/values/import`,
     deleteImportValues: (id) => `/parent-tags/${id}/values/delete-import`,
+    childrenImportTemplate: (id) => `/parent-tags/${id}/children/import-template/download`,
+    importChildren: (id) => `/parent-tags/${id}/children/import`,
     studentTags: (studentId) => `/parent-tags/students/${studentId}`,
   },
   voip: {
