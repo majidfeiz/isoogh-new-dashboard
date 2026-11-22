@@ -20,6 +20,12 @@ describe("billing API contract", () => {
     expect(result.items[0]).toEqual(expect.objectContaining({ schoolId: "145", invoiceNumber: "ISOOGH-3", issuedAt: "2026-10-30", totalAmount: "20000000", schoolName: "گروه سلمان" }))
   })
 
+  test("normalizes authoritative invoice totals and defaults legacy nullable financial fields to zero", async () => {
+    apiGet.mockResolvedValue({ data: { data: { items: [{ id: 3, subtotal_amount: null, discount_amount: null, tax_amount: null, vat_amount: null, total_amount: "987654" }], meta: {} } } })
+    const result = await getBillingInvoices()
+    expect(result.items[0]).toEqual(expect.objectContaining({ subtotalAmount: 0, discountAmount: 0, taxAmount: 0, vatAmount: 0, totalAmount: "987654" }))
+  })
+
   test("preserves two invoices for the same adviser and period as independent records", async () => {
     const commonLine = { adviser_id: 5314, period_start: "2026-10-23", period_end: "2026-11-22" }
     apiGet.mockResolvedValue({ data: { data: { items: [
@@ -124,7 +130,7 @@ describe("billing API contract", () => {
 
   test("submits pricing as API rial fields", async () => {
     apiPatch.mockResolvedValue({ data: { data: {} } })
-    const payload = { baseMonthlyAmount: 100000, includedStudents: 200, extraStudentStep: 5, extraStepPercent: 10, capacityStepPercent: 20, capacityStepAmount: 50000 }
+    const payload = { baseMonthlyAmount: 100000, includedStudents: 200, extraStudentStep: 5, extraStepPercent: 10, capacityStepPercent: 20, capacityStepAmount: 50000, taxPercent: 3.5, vatPercent: 9 }
     await updateBillingPricing(payload)
     expect(apiPatch).toHaveBeenCalledWith(expect.stringMatching(/\/billing\/pricing$/), payload)
   })

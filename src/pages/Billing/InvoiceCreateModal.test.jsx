@@ -31,7 +31,51 @@ test("renders backend Jalali period, peak usage and monthly form evidence", asyn
   fireEvent.click(screen.getByText("مبنای محاسبه"));
   expect(screen.getByText("فرم اول")).toBeInTheDocument();
   expect(screen.getByText(/دانش‌آموز تکراری بین فرم‌ها فقط یک‌بار/)).toBeInTheDocument();
+  expect(screen.getByText(/حداکثر تا پایان روز پنجم/)).toBeInTheDocument();
   expect(screen.getByText("فعال در بخشی از ماه")).toBeInTheDocument();
+});
+
+test("renders only each month forms returned by the backend for a three-month breakdown", async () => {
+  getBillingInvoicePreview.mockResolvedValue({ ...preview, durationMonths: 3, period: { ...preview.period, months: [{ jalaliLabel: "دی" }, { jalaliLabel: "بهمن" }, { jalaliLabel: "اسفند" }] }, advisers: [{ ...preview.advisers[0], months: [
+    { jalaliLabel: "دی", distinctStudentCount: 0, contributingFormCount: 0, forms: [] },
+    { jalaliLabel: "بهمن", distinctStudentCount: 20, contributingFormCount: 1, forms: [{ formId: 6, formTitle: "فرم روز ششم", studentCount: 20 }] },
+    { jalaliLabel: "اسفند", distinctStudentCount: 30, contributingFormCount: 1, forms: [{ formId: 7, formTitle: "فرم بدون پایان", studentCount: 30 }] },
+  ] }] });
+  render(<InvoiceCreateModal {...props} />);
+  selectAban1405();
+  fireEvent.change(screen.getByLabelText("مدت اشتراک"), { target: { value: "3" } });
+  await screen.findByText("مریم احمدی");
+  fireEvent.click(screen.getByText("مبنای محاسبه"));
+  expect(screen.getByText("فرم روز ششم")).toBeInTheDocument();
+  expect(screen.getByText("فرم بدون پایان")).toBeInTheDocument();
+  expect(screen.getByText("در این ماه فرم مؤثری ثبت نشده است.")).toBeInTheDocument();
+  expect(screen.queryByText("فرم پایان روز پنجم")).not.toBeInTheDocument();
+});
+
+test("omits blank overrides and preserves explicit zero independently", async () => {
+  createBillingInvoice.mockResolvedValue({ id: 10 });
+  render(<InvoiceCreateModal {...props} allowOverrides />);
+  selectAban1405();
+  await screen.findByText("مریم احمدی");
+  fireEvent.click(screen.getByLabelText("انتخاب مریم احمدی"));
+  fireEvent.change(screen.getByLabelText("نام و نام خانوادگی"), { target: { value: "کاربر تست" } });
+  fireEvent.change(screen.getByLabelText("کد ملی"), { target: { value: "0012345678" } });
+  fireEvent.change(screen.getByLabelText("مالیات ثابت (ریال، اختیاری)"), { target: { value: "0" } });
+  fireEvent.click(screen.getByRole("button", { name: "صدور فاکتور" }));
+  await waitFor(() => expect(createBillingInvoice).toHaveBeenCalled());
+  const payload = createBillingInvoice.mock.calls[0][0];
+  expect(payload.taxAmount).toBe(0);
+  expect(payload).not.toHaveProperty("vatAmount");
+});
+
+test("hides fixed override controls without admin authorization and rejects decimal override", async () => {
+  const { rerender } = render(<InvoiceCreateModal {...props} />);
+  expect(screen.queryByLabelText("مالیات ثابت (ریال، اختیاری)")).not.toBeInTheDocument();
+  rerender(<InvoiceCreateModal {...props} allowOverrides />);
+  selectAban1405();
+  await screen.findByText("مریم احمدی");
+  fireEvent.change(screen.getByLabelText("مالیات ثابت (ریال، اختیاری)"), { target: { value: "1.5" } });
+  expect(screen.getByLabelText("مالیات ثابت (ریال، اختیاری)")).toBeInvalid();
 });
 
 test("uses a query key scoped by school, selected Jalali period, duration and adviser", () => {
