@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { addAutoInvoiceAdviser, billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, createWalletAdjustment, downloadBillingInvoice, exportWalletTransactions, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingPricingHistory, getBillingWallet, getBillingWallets, getWalletTopups, normalizeInvoiceKpis, payBillingInvoiceFromWallet, previewBillingCapacity, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
+import { addAutoInvoiceAdviser, billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, createWalletAdjustment, downloadBillingInvoice, executeAutoInvoiceForMonth, exportWalletTransactions, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingPricingHistory, getBillingWallet, getBillingWallets, getWalletTopups, normalizeInvoiceKpis, payBillingInvoiceFromWallet, previewBillingCapacity, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }))
 
@@ -189,6 +189,12 @@ describe("billing API contract", () => {
     apiPost.mockResolvedValue({ data: { data: { invoice: { id: 77 } } } })
     await addAutoInvoiceAdviser(12, { schoolId: "94", adviserId: "31", targetStudentCapacity: "240", idempotencyKey: "uuid-v4" })
     expect(apiPost).toHaveBeenCalledWith(expect.stringMatching(/auto-invoices\/12\/advisers$/), { schoolId: 94, adviserId: 31, targetStudentCapacity: 240, idempotencyKey: "uuid-v4" })
+  })
+
+  test("executes one automatic schedule for the selected Jalali month", async () => {
+    apiPost.mockResolvedValue({ data: { data: { invoice: { id: 88 } } } })
+    await executeAutoInvoiceForMonth(12, { schoolId: "94", jalaliYear: "1405", jalaliMonth: "8" })
+    expect(apiPost).toHaveBeenCalledWith(expect.stringMatching(/auto-invoices\/12\/execute$/), { schoolId: 94, jalaliYear: 1405, jalaliMonth: 8 })
   })
 
   test("loads immutable pricing history", async () => {
