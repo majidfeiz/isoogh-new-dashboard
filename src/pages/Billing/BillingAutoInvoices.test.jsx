@@ -1,17 +1,19 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import BillingAutoInvoices from "./BillingAutoInvoices.jsx";
 import { getAdvisers } from "../../services/adviserService.jsx";
-import { addAutoInvoiceAdviser, createAutoInvoice, executeAutoInvoices, getAutoInvoices, updateAutoInvoice } from "../../services/billingService.jsx";
+import { addAutoInvoiceAdviser, createAutoInvoice, executeAutoInvoiceForMonth, executeAutoInvoices, getAutoInvoices, updateAutoInvoice } from "../../services/billingService.jsx";
 
 jest.mock("../../context/AuthContext.jsx", () => ({ useAuth: () => ({ user: { schoolId: 94, schoolName: "مجموعه آزمون" }, selectedSchoolId: "94", setSelectedSchoolId: jest.fn(), hasPermission: () => true }) }));
 jest.mock("../IncomingCalls/IncomingCallsCommon.jsx", () => ({ SchoolPicker: () => null }));
 jest.mock("../../services/adviserService.jsx", () => ({ getAdvisers: jest.fn() }));
-jest.mock("../../services/billingService.jsx", () => ({ addAutoInvoiceAdviser: jest.fn(), createAutoInvoice: jest.fn(), executeAutoInvoices: jest.fn(), getAutoInvoices: jest.fn(), updateAutoInvoice: jest.fn() }));
+jest.mock("../../services/billingService.jsx", () => ({ addAutoInvoiceAdviser: jest.fn(), createAutoInvoice: jest.fn(), executeAutoInvoiceForMonth: jest.fn(), executeAutoInvoices: jest.fn(), getAutoInvoices: jest.fn(), updateAutoInvoice: jest.fn() }));
 
 const schedule = { id: 12, name: "قرارداد ماهانه", is_active: true, jalali_day: 1, due_days: 7, contracted_adviser_count: 56, adviser_monthly_amount: 4110000, included_students_per_adviser: 200, items: [] };
 const renderPage = () => render(<MemoryRouter><BillingAutoInvoices /></MemoryRouter>);
+const Location = () => { const location = useLocation(); return <div data-testid="location">{location.pathname}{location.search}</div>; };
+const renderPageWithLocation = () => render(<MemoryRouter initialEntries={["/billing/auto-invoices"]}><Routes><Route path="*" element={<><BillingAutoInvoices /><Location /></>} /></Routes></MemoryRouter>);
 const selectNewAdviser = async () => {
   await screen.findByRole("option", { name: "مشاور جدید" });
   fireEvent.change(screen.getByLabelText("مشاور"), { target: { value: "31" } });
@@ -25,6 +27,7 @@ beforeEach(() => {
   createAutoInvoice.mockResolvedValue({ id: 1 });
   updateAutoInvoice.mockResolvedValue({ id: 12 });
   executeAutoInvoices.mockResolvedValue({});
+  executeAutoInvoiceForMonth.mockResolvedValue({ invoice: { id: 88 } });
   addAutoInvoiceAdviser.mockResolvedValue({ invoice: { id: 77, totalAmount: 4110000, pricingSnapshot: { adviserBaseAmount: 4110000, includedStudentsPerAdviser: 200, extraSteps: 0 } } });
 });
 
@@ -101,4 +104,28 @@ test("shows a clear conflict and does not create a second request automatically"
   fireEvent.click(screen.getByRole("button", { name: "صدور فاکتور افزودن مشاور" }));
   expect(await screen.findByText(/فاکتور تکراری ساخته نشد/)).toBeInTheDocument();
   expect(addAutoInvoiceAdviser).toHaveBeenCalledTimes(1);
+});
+
+test("executes the selected Jalali month immediately and navigates to the returned invoice", async () => {
+  getAutoInvoices.mockResolvedValue([schedule]);
+  renderPageWithLocation();
+  fireEvent.click(await screen.findByRole("button", { name: "صدور فاکتور" }));
+  fireEvent.change(screen.getByLabelText("سال شمسی"), { target: { value: "1405" } });
+  fireEvent.change(screen.getByLabelText("ماه شمسی"), { target: { value: "8" } });
+  expect(screen.getByText((_, element) => element.classList?.contains("alert-warning") && element.textContent.includes("قرارداد ماهانه") && element.textContent.includes("مجموعه آزمون") && element.textContent.includes("آبان"))).toBeInTheDocument();
+  fireEvent.submit(screen.getByRole("button", { name: "تأیید و صدور فاکتور" }).closest("form"));
+  await waitFor(() => expect(executeAutoInvoiceForMonth).toHaveBeenCalledWith(12, { schoolId: "94", jalaliYear: 1405, jalaliMonth: "8" }));
+  expect(await screen.findByTestId("location")).toHaveTextContent("/billing/invoices/88?schoolId=94");
+});
+
+test("repeating the same month follows the idempotent invoice returned by backend", async () => {
+  getAutoInvoices.mockResolvedValue([schedule]);
+  executeAutoInvoiceForMonth.mockResolvedValueOnce({ id: 99 });
+  renderPageWithLocation();
+  fireEvent.click(await screen.findByRole("button", { name: "صدور فاکتور" }));
+  fireEvent.change(screen.getByLabelText("سال شمسی"), { target: { value: "1405" } });
+  fireEvent.change(screen.getByLabelText("ماه شمسی"), { target: { value: "7" } });
+  fireEvent.submit(screen.getByRole("button", { name: "تأیید و صدور فاکتور" }).closest("form"));
+  await waitFor(() => expect(executeAutoInvoiceForMonth).toHaveBeenCalledTimes(1));
+  expect(await screen.findByTestId("location")).toHaveTextContent("/billing/invoices/99?schoolId=94");
 });

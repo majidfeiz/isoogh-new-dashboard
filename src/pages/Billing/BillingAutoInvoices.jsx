@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toJalaali } from "jalaali-js";
 import { Alert, Badge, Button, Card, CardBody, CardHeader, Col, FormGroup, Input, Label, Modal, ModalBody, ModalFooter, ModalHeader, Row, Spinner, Table } from "reactstrap";
 import Breadcrumbs from "../../components/Common/Breadcrumb.jsx";
 import DeleteModal from "../../components/Common/DeleteModal.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { getAdvisers } from "../../services/adviserService.jsx";
-import { addAutoInvoiceAdviser, createAutoInvoice, executeAutoInvoices, getAutoInvoices, updateAutoInvoice } from "../../services/billingService.jsx";
+import { addAutoInvoiceAdviser, createAutoInvoice, executeAutoInvoiceForMonth, executeAutoInvoices, getAutoInvoices, updateAutoInvoice } from "../../services/billingService.jsx";
 import { SchoolPicker } from "../IncomingCalls/IncomingCallsCommon.jsx";
 import { billingErrorMessage, formatRial, getUserSchoolId, invalidateBillingCache, moneyDisplay } from "./billingUtils.js";
 import PricingRuleSummary from "./PricingRuleSummary.jsx";
@@ -15,8 +17,10 @@ const newAttemptKey = () => globalThis.crypto?.randomUUID?.() || `billing-${Date
 const readContract = (item = {}) => ({ adviserCount: item.adviserCount ?? item.contractedAdviserCount ?? item.contracted_adviser_count ?? "", adviserMonthlyAmount: item.adviserMonthlyAmount ?? item.adviser_monthly_amount ?? "", includedStudentsPerAdviser: item.includedStudentsPerAdviser ?? item.included_students_per_adviser ?? 200 });
 const completeLine = (item) => item.description.trim() && Number.isInteger(Number(item.quantity)) && Number(item.quantity) > 0 && Number.isInteger(Number(item.unitAmount)) && Number(item.unitAmount) > 0;
 const completeContract = (form) => Number.isInteger(Number(form.adviserCount)) && Number(form.adviserCount) >= 1 && Number.isInteger(Number(form.adviserMonthlyAmount)) && Number(form.adviserMonthlyAmount) >= 1 && Number.isInteger(Number(form.includedStudentsPerAdviser)) && Number(form.includedStudentsPerAdviser) >= 1;
+const JALALI_MONTHS = ["فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"];
 
 export default function BillingAutoInvoices() {
+  const navigate = useNavigate();
   const { user, selectedSchoolId, setSelectedSchoolId, hasPermission } = useAuth();
   const fixedSchoolId = getUserSchoolId(user) || "";
   const [schoolId, setSchoolId] = useState(String(fixedSchoolId || selectedSchoolId || ""));
@@ -33,6 +37,9 @@ export default function BillingAutoInvoices() {
   const [adviserResult, setAdviserResult] = useState(null);
   const [adviserError, setAdviserError] = useState("");
   const [adviserBusy, setAdviserBusy] = useState(false);
+  const [monthExecute, setMonthExecute] = useState(null);
+  const [monthExecuteBusy, setMonthExecuteBusy] = useState(false);
+  const [monthExecuteError, setMonthExecuteError] = useState("");
   const attemptKey = useRef("");
 
   useEffect(() => { if (!schoolId && (fixedSchoolId || selectedSchoolId)) setSchoolId(String(fixedSchoolId || selectedSchoolId)); }, [fixedSchoolId, schoolId, selectedSchoolId]);
@@ -81,6 +88,27 @@ export default function BillingAutoInvoices() {
     catch (caught) { setAdviserError(caught?.response?.status === 409 ? (caught?.response?.data?.message || "برای این مشاور اشتراک فعال یا فاکتور در انتظار پرداخت وجود دارد؛ فاکتور تکراری ساخته نشد.") : billingErrorMessage(caught)); }
     finally { setAdviserBusy(false); }
   };
+  const openMonthExecute = (schedule) => {
+    const today = new Date();
+    const current = toJalaali(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    setMonthExecute({ schedule, jalaliYear: current.jy, jalaliMonth: current.jm });
+    setMonthExecuteError("");
+  };
+  const closeMonthExecute = () => { if (!monthExecuteBusy) { setMonthExecute(null); setMonthExecuteError(""); } };
+  const submitMonthExecute = async (event) => {
+    event.preventDefault();
+    if (monthExecuteBusy || !monthExecute || Number(monthExecute.jalaliMonth) < 1 || Number(monthExecute.jalaliMonth) > 12) return;
+    setMonthExecuteBusy(true); setMonthExecuteError("");
+    try {
+      const result = await executeAutoInvoiceForMonth(monthExecute.schedule.id, { schoolId, jalaliYear: monthExecute.jalaliYear, jalaliMonth: monthExecute.jalaliMonth });
+      const invoice = result?.invoice || result;
+      const invoiceId = invoice?.id ?? invoice?.invoiceId ?? invoice?.invoice_id;
+      invalidateBillingCache(); window.dispatchEvent(new CustomEvent("billing-auto-invoices:invalidate"));
+      if (!invoiceId) throw new Error("شناسه فاکتور در پاسخ سرور موجود نیست.");
+      navigate(`/billing/invoices/${invoiceId}?schoolId=${schoolId}`);
+    } catch (caught) { setMonthExecuteError(caught?.response ? billingErrorMessage(caught) : caught.message || "صدور فاکتور انجام نشد."); }
+    finally { setMonthExecuteBusy(false); }
+  };
 
   const contractSummary = hasContract ? Number(form.adviserCount) * Number(form.adviserMonthlyAmount) : null;
   const resultInvoice = adviserResult?.invoice || adviserResult;
@@ -90,6 +118,7 @@ export default function BillingAutoInvoices() {
     <Card><CardBody>{fixedSchoolId ? <div><Label>مجموعه</Label><div className="form-control bg-light"><i className="bx bx-buildings text-primary ms-2" />{user?.schoolName || user?.school_name || user?.school?.name || "مجموعه من"} <Badge color="primary" className="float-start">انتخاب خودکار</Badge></div></div> : <SchoolPicker value={schoolId} onChange={selectSchool} />}</CardBody></Card>
     {error && <Alert color="danger" aria-live="polite">{error}</Alert>}
     {schoolId && <><Card><CardHeader className="d-flex justify-content-between align-items-center"><strong>تنظیمات صدور خودکار</strong>{hasPermission("billing.auto-invoices.execute") && <Button size="sm" color="warning" onClick={() => setExecuteConfirm(true)} disabled={busy}>اجرای دستی</Button>}</CardHeader><CardBody>{loading ? <div className="text-center py-4"><Spinner /></div> : items.length ? <div className="table-responsive"><Table hover className="align-middle"><thead><tr><th>نام</th><th>وضعیت</th><th>قرارداد مشاور</th><th>روز صدور</th><th>آخرین دوره</th><th /></tr></thead><tbody>{items.map((item) => { const contract = readContract(item); const active = item.isActive ?? item.is_active; return <tr key={item.id}><td>{item.name}</td><td><Badge color={active ? "success" : "secondary"}>{active ? "فعال" : "غیرفعال"}</Badge></td><td>{contract.adviserCount === "" ? "—" : <><strong>{Number(contract.adviserCount).toLocaleString("fa-IR")} مشاور</strong><div className="small text-muted">هر مشاور {moneyDisplay(contract.adviserMonthlyAmount)}؛ ظرفیت پایه {Number(contract.includedStudentsPerAdviser).toLocaleString("fa-IR")}</div></>}</td><td>{Number(item.jalaliDay ?? item.jalali_day ?? item.dayOfJalaliMonth ?? item.day_of_jalali_month).toLocaleString("fa-IR")}</td><td>{item.lastIssuedPeriod || item.last_issued_period || "هنوز صادر نشده"}</td><td><div className="d-flex gap-1 flex-wrap">{hasPermission("billing.auto-invoices.manage") && <Button size="sm" outline color="primary" onClick={() => edit(item)}>ویرایش</Button>}{hasPermission("billing.auto-invoices.manage") && active && contract.adviserCount !== "" && <Button size="sm" color="success" onClick={() => openAdviser(item)}>افزودن مشاور به قرارداد</Button>}</div></td></tr>; })}</tbody></Table></div> : <div className="text-muted text-center py-4">تنظیمی ثبت نشده است.</div>}</CardBody></Card>
+      {hasPermission("billing.execute") && items.length > 0 && <div className="row g-3 mb-3">{items.map((item) => <div className="col-md-6 col-xl-4" key={`execute-${item.id}`}><Card className="h-100 mb-0 border"><CardBody className="d-flex align-items-center justify-content-between gap-3"><div><strong>{item.name}</strong><div className="small text-muted">صدور فوری مستقل از روز زمان‌بندی</div></div><Button color="primary" size="sm" onClick={() => openMonthExecute(item)} disabled={monthExecuteBusy}>صدور فاکتور</Button></CardBody></Card></div>)}</div>}
       {hasPermission("billing.auto-invoices.manage") && <Card><CardHeader><strong>{form.id ? "ویرایش تنظیم" : "تنظیم جدید"}</strong></CardHeader><CardBody><form onSubmit={submit} noValidate>
         {formError && <Alert color="warning">{formError}</Alert>}
         <Row><FormGroup tag={Col} lg={4}><Label for="schedule-name">نام تنظیم</Label><Input id="schedule-name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></FormGroup><FormGroup tag={Col} md={3} lg={2}><Label for="jalali-day">روز ماه شمسی</Label><Input id="jalali-day" type="number" min="1" max="31" value={form.jalaliDay} onChange={(event) => setForm({ ...form, jalaliDay: event.target.value })} /></FormGroup><FormGroup tag={Col} md={3} lg={2}><Label for="due-days">مهلت پرداخت</Label><Input id="due-days" type="number" min="1" value={form.dueDays} onChange={(event) => setForm({ ...form, dueDays: event.target.value })} /></FormGroup><FormGroup tag={Col} md={4} lg={2}><Label>نوع مشتری</Label><Input type="select" value={form.customerType} onChange={(event) => setForm({ ...form, customerType: event.target.value, customerSnapshot: {} })}><option value="legal">حقوقی</option><option value="individual">حقیقی</option></Input></FormGroup><FormGroup tag={Col} md={2} className="d-flex align-items-center pt-4" switch><Input type="switch" checked={form.isActive} onChange={(event) => setForm({ ...form, isActive: event.target.checked })} /><Label check>فعال</Label></FormGroup></Row>
@@ -103,6 +132,7 @@ export default function BillingAutoInvoices() {
     </>}
     {!schoolId && <Alert color="info">مجموعه را انتخاب کنید.</Alert>}
     <DeleteModal show={executeConfirm} onCloseClick={() => !busy && setExecuteConfirm(false)} onDeleteClick={execute} loading={busy} message="صدور خودکار فاکتورهای سررسیدشده اجرا شود؟ نتیجه عملیات ممکن است چند فاکتور جدید ایجاد کند." confirmText="بله، اجرا کن" loadingText="در حال اجرا…" cancelText="انصراف" confirmColor="warning" icon="bx bx-calendar-check" />
+    <Modal isOpen={Boolean(monthExecute)} toggle={closeMonthExecute} centered><form onSubmit={submitMonthExecute}><ModalHeader toggle={closeMonthExecute}>صدور فوری فاکتور</ModalHeader><ModalBody>{monthExecuteError && <Alert color="danger">{monthExecuteError}</Alert>}<Row><FormGroup tag={Col} md={6}><Label for="execute-jalali-year">سال شمسی</Label><Input id="execute-jalali-year" type="number" min="1300" max="1600" value={monthExecute?.jalaliYear || ""} onChange={(event) => setMonthExecute({ ...monthExecute, jalaliYear: event.target.value })} required /></FormGroup><FormGroup tag={Col} md={6}><Label for="execute-jalali-month">ماه شمسی</Label><Input id="execute-jalali-month" type="select" value={monthExecute?.jalaliMonth || ""} onChange={(event) => setMonthExecute({ ...monthExecute, jalaliMonth: event.target.value })} required>{JALALI_MONTHS.map((name, index) => <option key={name} value={index + 1}>{name}</option>)}</Input></FormGroup></Row><Alert color="warning" className="mb-0">فاکتور <strong>{monthExecute?.schedule?.name}</strong> برای مجموعه <strong>{user?.schoolName || user?.school_name || user?.school?.name || schoolId}</strong> و ماه <strong>{JALALI_MONTHS[Number(monthExecute?.jalaliMonth || 1) - 1]} {Number(monthExecute?.jalaliYear || 0).toLocaleString("fa-IR", { useGrouping: false })}</strong> صادر شود؟ اگر قبلاً صادر شده باشد، همان فاکتور برگردانده می‌شود.</Alert></ModalBody><ModalFooter><Button type="button" color="light" onClick={closeMonthExecute} disabled={monthExecuteBusy}>انصراف</Button><Button type="submit" color="primary" disabled={monthExecuteBusy}>{monthExecuteBusy && <Spinner size="sm" className="ms-1" />}تأیید و صدور فاکتور</Button></ModalFooter></form></Modal>
     <Modal isOpen={Boolean(adviserModal)} toggle={closeAdviser} centered size="lg"><form onSubmit={addAdviser}><ModalHeader toggle={closeAdviser}>افزودن مشاور به قرارداد</ModalHeader><ModalBody>{adviserError && <Alert color="danger">{adviserError}</Alert>}{adviserResult ? <><Alert color="success">فاکتور مشاور جدید صادر شد. تعداد قراردادی فقط پس از پرداخت موفق افزایش می‌یابد.</Alert><div className="border rounded p-3"><div className="mb-2"><strong>مبلغ قطعی فاکتور: </strong>{moneyDisplay(resultInvoice?.totalAmount ?? resultInvoice?.total_amount ?? resultInvoice?.finalAmount ?? resultInvoice?.final_amount)}</div><PricingRuleSummary snapshot={resultSnapshot} /></div></> : <><Alert color="info">مبلغ پایه و هزینه پله‌های اضافه توسط backend محاسبه می‌شود و تعداد قرارداد تا پیش از پرداخت تغییر نمی‌کند.</Alert><FormGroup><Label for="new-contract-adviser">مشاور</Label><Input id="new-contract-adviser" type="select" value={adviserForm.adviserId} onChange={(e) => setAdviserForm({ ...adviserForm, adviserId: e.target.value })}><option value="">انتخاب کنید</option>{advisers.map((adviser) => <option key={adviser.id} value={adviser.id}>{adviser.name || adviser.user?.name || adviser.fullName || `مشاور ${adviser.id}`}</option>)}</Input></FormGroup><FormGroup><Label for="target-student-capacity">ظرفیت کل هدف</Label><Input id="target-student-capacity" type="number" min={adviserModal?.includedStudentsPerAdviser || 200} step="1" value={adviserForm.targetStudentCapacity} onChange={(e) => setAdviserForm({ ...adviserForm, targetStudentCapacity: e.target.value })} /><small className="text-muted">ظرفیت پایه {Number(adviserModal?.includedStudentsPerAdviser || 200).toLocaleString("fa-IR")} نفر در مبلغ ماهانه مشاور قرار دارد؛ فقط ظرفیت بالاتر از آن به‌صورت پله اضافه قیمت‌گذاری می‌شود.</small></FormGroup></>}</ModalBody><ModalFooter><Button type="button" color="light" onClick={closeAdviser} disabled={adviserBusy}>بستن</Button>{!adviserResult && <Button color="success" type="submit" disabled={adviserBusy || !adviserForm.adviserId || Number(adviserForm.targetStudentCapacity) < Number(adviserModal?.includedStudentsPerAdviser || 200)}>{adviserBusy && <Spinner size="sm" className="ms-1" />}صدور فاکتور افزودن مشاور</Button>}</ModalFooter></form></Modal>
   </div></div>;
 }
