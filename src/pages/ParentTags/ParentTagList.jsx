@@ -43,6 +43,7 @@ import {
   toParentTagImportSheetRows,
 } from "./parentTagImportUtils.js";
 import { formatParentTagJalaliDateTime } from "./parentTagDateUtils.js";
+import ParentTagChildrenImportModal from "./ParentTagChildrenImportModal.jsx";
 
 const IMPORT_JOB_STORAGE_KEY = "parent-tags:active-import";
 const IMPORT_STATUS_LABELS = {
@@ -109,6 +110,7 @@ const ParentTagList = () => {
   const [importPollingWarning, setImportPollingWarning] = useState("");
   const [schools, setSchools] = useState([]);
   const [schoolsLoading, setSchoolsLoading] = useState(false);
+  const [childrenImportParent, setChildrenImportParent] = useState(null);
   const importSubmitRef = useRef(false);
   const [virtualRange, setVirtualRange] = useState({ start: 0, end: 40 });
   const ROW_HEIGHT = 44;
@@ -262,6 +264,23 @@ const ParentTagList = () => {
     [meta.page, filters, sort, fetchData]
   );
 
+  const handleChildrenImported = useCallback(
+    async ({ parentTagId, schoolId }) => {
+      await Promise.all([
+        fetchData(meta.page, filters, sort),
+        getParentTags({
+          page: 1,
+          limit: meta.limit,
+          parentId: parentTagId,
+          schoolId,
+          sortBy: "id",
+          sortOrder: "DESC",
+        }),
+      ]);
+    },
+    [fetchData, filters, meta.limit, meta.page, sort]
+  );
+
   const columns = useMemo(
     () => [
       {
@@ -315,9 +334,20 @@ const ParentTagList = () => {
         enableSorting: false,
         cell: ({ row }) => {
           const id = row.original.id;
+          const isRootTag = row.original?.parent_id === 0;
 
           return (
             <div className="d-flex flex-wrap gap-2">
+              {isRootTag && auth?.hasPermission?.("parent-tags.create") && (
+                <Button
+                  color="success"
+                  outline
+                  size="sm"
+                  onClick={() => setChildrenImportParent(row.original)}
+                >
+                  ایمپورت زیرتگ‌ها
+                </Button>
+              )}
               <Button color="info" size="sm" onClick={() => handleManageUsers(id)}>
                 کاربران/مقادیر
               </Button>
@@ -339,7 +369,7 @@ const ParentTagList = () => {
         },
       },
     ],
-    [handleEdit, handleDelete, handleManageUsers, loading]
+    [auth, handleEdit, handleDelete, handleManageUsers, loading]
   );
 
   const handleSortingChange = useCallback(
@@ -1302,6 +1332,12 @@ const ParentTagList = () => {
           </Col>
         </Row>
       </div>
+      <ParentTagChildrenImportModal
+        isOpen={Boolean(childrenImportParent)}
+        toggle={() => setChildrenImportParent(null)}
+        parentTag={childrenImportParent}
+        onImported={handleChildrenImported}
+      />
     </div>
   );
 };

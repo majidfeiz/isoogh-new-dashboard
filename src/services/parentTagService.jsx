@@ -312,6 +312,26 @@ export async function importParentTagValues(id, { file, schoolId, deleteImport =
   return res?.data?.data ?? res?.data;
 }
 
+export async function downloadParentTagChildrenTemplate(id, schoolId) {
+  const res = await apiGet(getApiUrl(API_ROUTES.parentTags.childrenImportTemplate(id)), {
+    params: { schoolId: Number(schoolId) },
+    responseType: "blob",
+  });
+  return { blob: res?.data, headers: res?.headers || {} };
+}
+
+export async function importParentTagChildren(id, { file, schoolId }) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("schoolId", String(schoolId));
+  const res = await apiPost(
+    getApiUrl(API_ROUTES.parentTags.importChildren(id)),
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return res?.data?.data ?? res?.data;
+}
+
 export async function importParentTagUsers(formData, config = {}) {
   const url = getApiUrl(API_ROUTES.parentTags.import);
   const res = await apiPost(url, formData, {

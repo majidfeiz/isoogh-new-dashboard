@@ -34,7 +34,7 @@ beforeEach(() => {
 
 test("previews capacity before purchase and reuses one idempotency key", async () => {
   mockCanPurchase = true
-  previewBillingCapacity.mockResolvedValue({ currentCapacity: 200, addedCapacity: 20, capacityStepSeats: 20, steps: 1, pricePerStep: 1000, totalAmount: 1000, pricingEffectiveAt: "2026-11-01" })
+  previewBillingCapacity.mockResolvedValue({ currentCapacity: 200, addedCapacity: 20, capacityStepSeats: 20, steps: 1, pricePerStep: 1000, subtotalAmount: 1000, taxAmount: 30, vatAmount: 90, totalAmount: 1120, pricingEffectiveAt: "2026-11-01" })
   purchaseBillingCapacity.mockRejectedValueOnce({ response: { status: 503, data: { message: "خطای موقت" } } }).mockResolvedValueOnce({ invoiceId: 9 })
   render(<MemoryRouter initialEntries={["/reports/adviser-form-capacity?schoolId=2"]}><AdviserFormCapacity /></MemoryRouter>)
   await screen.findByText("۱۹۹")
@@ -43,6 +43,8 @@ test("previews capacity before purchase and reuses one idempotency key", async (
   fireEvent.click(screen.getByRole("button", { name: "دریافت پیش‌نمایش" }))
   expect(await screen.findByText("پیش‌نمایش قطعی backend")).toBeInTheDocument()
   expect(previewBillingCapacity).toHaveBeenCalledWith({ schoolId: 2, adviserId: 1, targetStudentCapacity: "220" })
+  expect(screen.getByText("جمع قبل از مالیات")).toBeInTheDocument()
+  expect(screen.getByText("ارزش افزوده")).toBeInTheDocument()
   fireEvent.click(screen.getByRole("button", { name: "تأیید و خرید ظرفیت" }))
   await waitFor(() => expect(purchaseBillingCapacity).toHaveBeenCalledTimes(1))
   const firstKey = purchaseBillingCapacity.mock.calls[0][0].idempotencyKey
