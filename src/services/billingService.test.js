@@ -60,6 +60,14 @@ describe("billing API contract", () => {
     expect(result.items[0]).toEqual(expect.objectContaining({ adviserId: "5389", adviserName: "سحر خوشبین", studentCount: 183, targetStudentCapacity: 250, baseAmount: "20000000", calculatedSteps: 3, finalAmount: "26000000" }))
   })
 
+  test("keeps invoice issue, payment due and line service period as independent fields", async () => {
+    apiGet.mockResolvedValue({ data: { data: { id: 21, issued_at: "2026-11-22", due_at: "2026-11-29", items: [{ id: 1, period_start: "2026-11-22", period_end: "2026-12-21" }] } } })
+    const result = await getBillingInvoice(21, 94)
+    expect(result).toEqual(expect.objectContaining({ issuedAt: "2026-11-22", dueAt: "2026-11-29" }))
+    expect(result.items[0]).toEqual(expect.objectContaining({ periodStart: "2026-11-22", periodEnd: "2026-12-21" }))
+    expect(result.items[0].periodEnd).not.toBe(result.dueAt)
+  })
+
   test("requests the server-authoritative Jalali period preview with an abort signal", async () => {
     const controller = new AbortController()
     const preview = { period: { jalaliLabel: "مهر ۱۴۰۵" }, advisers: [] }
