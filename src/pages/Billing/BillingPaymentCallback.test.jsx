@@ -4,12 +4,12 @@ import { MemoryRouter } from "react-router-dom"
 import BillingPaymentCallback from "./BillingPaymentCallback.jsx"
 import { savePendingPayment } from "./billingPayment.js"
 import { getBillingInvoice, verifyBillingPayment } from "../../services/billingService.jsx"
-import { invalidateBillingCache } from "./billingUtils.js"
+import { invalidateBillingContractViews } from "./billingUtils.js"
 
 jest.mock("../../services/billingService.jsx", () => ({ getBillingInvoice: jest.fn(), verifyBillingPayment: jest.fn() }))
 jest.mock("./billingUtils.js", () => {
   const actual = jest.requireActual("./billingUtils.js")
-  return { ...actual, invalidateBillingCache: jest.fn(), invalidateCapacityReport: jest.fn() }
+  return { ...actual, invalidateBillingContractViews: jest.fn() }
 })
 
 const renderCallback = (url, strict = false) => {
@@ -36,7 +36,7 @@ describe("billing payment callback", () => {
     expect(verifyBillingPayment).toHaveBeenCalledTimes(1)
     expect(verifyBillingPayment).toHaveBeenCalledWith("3", { schoolId: 145, authority: "A000", status: "OK" })
     expect(verifyBillingPayment.mock.calls[0][1]).not.toHaveProperty("reference")
-    expect(invalidateBillingCache).toHaveBeenCalledTimes(1)
+    expect(invalidateBillingContractViews).toHaveBeenCalledTimes(1)
     expect(getBillingInvoice).toHaveBeenCalledWith("3", 145)
     expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain("A000")
     expect(JSON.stringify(consoleSpy.mock.calls)).not.toContain("CLIENT-REF")

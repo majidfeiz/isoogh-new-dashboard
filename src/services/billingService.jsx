@@ -209,6 +209,7 @@ export const payBillingInvoiceFromWallet = async (id, schoolId) => unwrap(await 
 export const getAutoInvoices = async (schoolId) => unwrap(await apiGet(getApiUrl(API_ROUTES.billing.autoInvoices), { params: { schoolId: Number(schoolId) } }));
 export const createAutoInvoice = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.autoInvoices), payload));
 export const updateAutoInvoice = async (id, payload) => unwrap(await apiPatch(getApiUrl(API_ROUTES.billing.autoInvoice(id)), payload));
+export const addAutoInvoiceAdviser = async (id, payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.autoInvoiceAdvisers(id)), { schoolId: Number(payload.schoolId), adviserId: Number(payload.adviserId), targetStudentCapacity: Number(payload.targetStudentCapacity), idempotencyKey: payload.idempotencyKey }));
 export const executeAutoInvoices = async () => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.executeAutoInvoices)));
 export const previewBillingCapacity = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.capacityPreview), { schoolId: Number(payload.schoolId), adviserId: Number(payload.adviserId), targetStudentCapacity: Number(payload.targetStudentCapacity) }));
 export const purchaseBillingCapacity = async (payload) => unwrap(await apiPost(getApiUrl(API_ROUTES.billing.capacityPurchase), { schoolId: Number(payload.schoolId), adviserId: Number(payload.adviserId), targetStudentCapacity: Number(payload.targetStudentCapacity), idempotencyKey: payload.idempotencyKey }));

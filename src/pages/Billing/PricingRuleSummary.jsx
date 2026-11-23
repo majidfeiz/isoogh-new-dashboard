@@ -13,6 +13,12 @@ const number = (value) => Number(value).toLocaleString("fa-IR");
 export default function PricingRuleSummary({ snapshot }) {
   const rule = normalizePricingSnapshot(snapshot);
   const values = [
+    ["منبع قیمت‌گذاری", rule.source, "text"],
+    ["تعداد مشاور قراردادی", rule.contractedAdviserCount ?? rule.contracted_adviser_count, "advisers"],
+    ["مبلغ ماهانه هر مشاور", rule.adviserMonthlyAmount ?? rule.adviser_monthly_amount, "money"],
+    ["ظرفیت پایه هر مشاور", rule.includedStudentsPerAdviser ?? rule.included_students_per_adviser, "count"],
+    ["مبلغ پایه مشاور جدید", rule.adviserBaseAmount ?? rule.adviser_base_amount ?? rule.baseAdviserAmount ?? rule.base_adviser_amount, "money"],
+    ["جمع پله‌های اضافه", rule.extraStepsAmount ?? rule.extra_steps_amount ?? rule.capacitySurchargeAmount ?? rule.capacity_surcharge_amount, "money"],
     ["ظرفیت پایه", rule.includedStudents ?? rule.included_students, "count"],
     ["ظرفیت هدف", rule.targetStudentCapacity ?? rule.target_student_capacity, "count"],
     ["اندازه هر پله", rule.capacityStepSeats ?? rule.capacity_step_seats, "count"],
@@ -27,7 +33,7 @@ export default function PricingRuleSummary({ snapshot }) {
   return <div className="d-flex flex-column gap-2" style={{ minWidth: 250 }}>
     {values.map(([label, value, type]) => <div key={label} className="d-flex align-items-start justify-content-between gap-3 border-bottom pb-1">
       <span className="text-muted text-nowrap">{label}</span>
-      {type === "money" ? <strong className="text-nowrap">{moneyDisplay(value)}</strong> : <Badge color={type === "steps" ? "primary" : "light"} className={type === "steps" ? "" : "text-dark"}>{number(value)}{type === "percent" ? "٪" : type === "steps" ? " پله" : " نفر"}</Badge>}
+      {type === "money" ? <strong className="text-nowrap">{moneyDisplay(value)}</strong> : type === "text" ? <strong>{value === "adviser_contract_monthly" ? "قرارداد ماهانه مشاور" : value}</strong> : <Badge color={type === "steps" ? "primary" : "light"} className={type === "steps" ? "" : "text-dark"}>{number(value)}{type === "percent" ? "٪" : type === "steps" ? " پله" : type === "advisers" ? " مشاور" : " نفر"}</Badge>}
     </div>)}
   </div>;
 }

@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import Breadcrumbs from "../../components/Common/Breadcrumb";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { createManualBillingPayment, downloadBillingInvoice, getBillingInvoice, getBillingWallet, payBillingInvoiceFromWallet, requestBillingPayment, requestWalletTopup } from "../../services/billingService.jsx";
-import { billingErrorMessage, formatIntegerInput, formatJalali, formatRial, getUserSchoolId, insufficientWalletBalance, invalidateBillingCache, invalidateCapacityReport, INVOICE_TYPE_LABELS, moneyDisplay, normalizePositiveIntegerInput, numberToPersianWords, STATUS_LABELS, subscribeBillingCache, walletPaymentSummary } from "./billingUtils.js";
+import { billingErrorMessage, formatIntegerInput, formatJalali, formatRial, getUserSchoolId, insufficientWalletBalance, invalidateBillingContractViews, INVOICE_TYPE_LABELS, moneyDisplay, normalizePositiveIntegerInput, numberToPersianWords, STATUS_LABELS, subscribeBillingCache, walletPaymentSummary } from "./billingUtils.js";
 import { savePendingPayment, validatePaymentRequestResult } from "./billingPayment.js";
 import { savePendingWalletTopup } from "./walletPayment.js";
 import PricingRuleSummary from "./PricingRuleSummary.jsx";
@@ -58,7 +58,7 @@ export default function BillingInvoiceDetail() {
     if (busy || invoice?.status === "paid" || !manual.reference.trim() || manual.note.trim().length < 3) return;
     if (!window.confirm("این عملیات برگشت‌ناپذیر است و بلافاصله اشتراک و ظرفیت تمام ردیف‌های فاکتور را فعال می‌کند. ادامه می‌دهید؟")) return;
     setBusy("manual"); setError("");
-    try { await createManualBillingPayment(id, { schoolId: Number(schoolId || invoice.schoolId), reference: manual.reference.trim(), note: manual.note.trim() }); setManualOpen(false); setManual({ reference: "", note: "" }); invalidateBillingCache(); invalidateCapacityReport(); }
+    try { await createManualBillingPayment(id, { schoolId: Number(schoolId || invoice.schoolId), reference: manual.reference.trim(), note: manual.note.trim() }); setManualOpen(false); setManual({ reference: "", note: "" }); invalidateBillingContractViews(); }
     catch (err) { setError(billingErrorMessage(err)); } finally { setBusy(""); }
   };
   const openWallet = async () => { setBusy("wallet-load"); setError(""); setServerShortfall(null); try { const result = await getBillingWallet({ schoolId: schoolId || invoice.schoolId, page: 1, limit: 1 }); const balance = Number(result.wallet?.balance || 0); setWalletBalance(balance); setWalletOpen(true); const summary = walletPaymentSummary(balance, invoice.totalAmount); if (!summary.canPay) setTopupAmount(String(summary.shortfall)); } catch (caught) { setError(billingErrorMessage(caught)); } finally { setBusy(""); } };
@@ -66,7 +66,7 @@ export default function BillingInvoiceDetail() {
     const summary = walletPaymentSummary(walletBalance, invoice.totalAmount);
     if (busy || !summary.canPay) return;
     setBusy("wallet-pay"); setError(""); setServerShortfall(null);
-    try { await payBillingInvoiceFromWallet(id, schoolId || invoice.schoolId); setWalletOpen(false); setNotice("فاکتور با موفقیت از کیف پول پرداخت شد"); invalidateBillingCache(); invalidateCapacityReport(); await load(); }
+    try { await payBillingInvoiceFromWallet(id, schoolId || invoice.schoolId); setWalletOpen(false); setNotice("فاکتور با موفقیت از کیف پول پرداخت شد"); invalidateBillingContractViews(); await load(); }
     catch (caught) {
       const shortage = insufficientWalletBalance(caught);
       if (shortage) { setWalletBalance(shortage.balance); setServerShortfall(shortage.shortfall || Math.max(0, shortage.requiredAmount - shortage.balance)); setTopupAmount(String(shortage.shortfall || Math.max(0, shortage.requiredAmount - shortage.balance))); setError(shortage.message); await load(); }

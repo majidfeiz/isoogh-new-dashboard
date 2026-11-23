@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Button, Card, CardBody, Spinner } from "reactstrap";
 import { Link, useSearchParams } from "react-router-dom";
 import { getBillingInvoice, verifyBillingPayment } from "../../services/billingService.jsx";
-import { billingErrorMessage, invalidateBillingCache, invalidateCapacityReport, moneyDisplay } from "./billingUtils.js";
+import { billingErrorMessage, invalidateBillingContractViews, moneyDisplay } from "./billingUtils.js";
 import { clearPendingPayment, getPendingPayment, isCanceledCallback, parseProviderCallback, sanitizeCallbackUrl } from "./billingPayment.js";
 
 const initialState = { type: "verifying", message: "در حال بررسی نتیجه پرداخت...", result: null, invoice: null };
@@ -26,8 +26,7 @@ export default function BillingPaymentCallback() {
         authority: callback.authority,
         status: callback.status,
       });
-      invalidateBillingCache();
-      invalidateCapacityReport();
+      invalidateBillingContractViews();
       const invoice = await getBillingInvoice(context.invoiceId, context.schoolId);
       clearPendingPayment();
       setState({ type: "success", message: "پرداخت توسط سرور تأیید شد.", result, invoice });
