@@ -37,6 +37,7 @@ test("creates a 56 adviser contract without fixed invoice lines", async () => {
   expect(screen.getByText(/مبلغ پایه ماهانه قرارداد/)).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "ذخیره تنظیم" }));
   await waitFor(() => expect(createAutoInvoice).toHaveBeenCalledWith(expect.objectContaining({ schoolId: 94, adviserCount: 56, adviserMonthlyAmount: 4110000, includedStudentsPerAdviser: 200, items: [] })));
+  expect(createAutoInvoice.mock.calls[0][0]).not.toHaveProperty("isActive");
 });
 
 test("blocks increasing the contracted count directly and points to add-adviser action", async () => {
