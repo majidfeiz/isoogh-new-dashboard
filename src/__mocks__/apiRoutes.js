@@ -158,6 +158,7 @@ export const API_ROUTES = {
     walletTopupManual: "/billing/wallet/topups/manual",
     autoInvoices: "/billing/auto-invoices",
     autoInvoice: (id) => `/billing/auto-invoices/${id}`,
+    autoInvoiceAdvisers: (id) => `/billing/auto-invoices/${id}/advisers`,
     executeAutoInvoices: "/billing/auto-invoices/execute",
     capacityPurchase: "/billing/capacity/purchase",
     capacityPreview: "/billing/capacity/preview",

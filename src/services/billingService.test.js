@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, createWalletAdjustment, downloadBillingInvoice, exportWalletTransactions, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingPricingHistory, getBillingWallet, getBillingWallets, getWalletTopups, normalizeInvoiceKpis, payBillingInvoiceFromWallet, previewBillingCapacity, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
+import { addAutoInvoiceAdviser, billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, createWalletAdjustment, downloadBillingInvoice, exportWalletTransactions, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingPricingHistory, getBillingWallet, getBillingWallets, getWalletTopups, normalizeInvoiceKpis, payBillingInvoiceFromWallet, previewBillingCapacity, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }))
 
@@ -183,6 +183,12 @@ describe("billing API contract", () => {
     await purchaseBillingCapacity({ ...payload, idempotencyKey: "fixed-uuid" })
     expect(apiPost.mock.calls[0]).toEqual([expect.stringMatching(/capacity\/preview$/), payload])
     expect(apiPost.mock.calls[1]).toEqual([expect.stringMatching(/capacity\/purchase$/), { ...payload, idempotencyKey: "fixed-uuid" }])
+  })
+
+  test("adds an adviser to a monthly contract with the exact authoritative request", async () => {
+    apiPost.mockResolvedValue({ data: { data: { invoice: { id: 77 } } } })
+    await addAutoInvoiceAdviser(12, { schoolId: "94", adviserId: "31", targetStudentCapacity: "240", idempotencyKey: "uuid-v4" })
+    expect(apiPost).toHaveBeenCalledWith(expect.stringMatching(/auto-invoices\/12\/advisers$/), { schoolId: 94, adviserId: 31, targetStudentCapacity: 240, idempotencyKey: "uuid-v4" })
   })
 
   test("loads immutable pricing history", async () => {
