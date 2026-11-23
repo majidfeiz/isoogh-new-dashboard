@@ -45,7 +45,7 @@ import {
   deleteSupportFormQuestion,
   getSupportFormAdvisers,
   getSupportFormAdviserCandidates,
-  upsertSupportFormAdviser,
+  bulkAttachSupportFormAdvisers,
   toggleSupportFormAdviserActive,
   detachSupportFormAdviser,
   normalizeSupportFormActive,
@@ -581,7 +581,11 @@ const QuestionsTab = ({ formId }) => {
 
 // ─── Advisers Tab ──────────────────────────────────────────────────────────────
 
-const AdvisersTab = ({ formId }) => {
+export const supportFormAdviserCandidatesQueryKey = ({ supportFormId, page, limit = 10, gradeId, search = "", sortBy = "id", sortOrder = "DESC" }) => [
+  "support-forms", Number(supportFormId), "adviser-candidates", Number(page), Number(limit), gradeId ? Number(gradeId) : null, String(search).trim(), sortBy, sortOrder,
+];
+
+export const AdvisersTab = ({ formId }) => {
   const [data, setData] = useState([]);
   const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 });
   const [search, setSearch] = useState("");
@@ -594,7 +598,14 @@ const AdvisersTab = ({ formId }) => {
   const [attachGradeId, setAttachGradeId] = useState("");
   const [attachResults, setAttachResults] = useState([]);
   const [attachLoading, setAttachLoading] = useState(false);
+  const [attachError, setAttachError] = useState("");
+  const [attachMeta, setAttachMeta] = useState({ page: 1, limit: 10, total: 0, lastPage: 1 });
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState(() => new Set());
+  const [attaching, setAttaching] = useState(false);
   const [allGrades, setAllGrades] = useState([]);
+  const candidateAbortRef = useRef(null);
+  const candidateDebounceRef = useRef(null);
+  const candidateQueryKeyRef = useRef(null);
   const pendingToggleIds = useRef(new Set());
   const [toggleLoadingIds, setToggleLoadingIds] = useState({});
 
@@ -656,13 +667,49 @@ const AdvisersTab = ({ formId }) => {
     }
   };
 
+  const fetchCandidates = useCallback(async (page = 1, candidateSearch = attachSearch, gradeId = attachGradeId) => {
+    candidateAbortRef.current?.abort();
+    const controller = new AbortController();
+    candidateAbortRef.current = controller;
+    const queryKey = supportFormAdviserCandidatesQueryKey({ supportFormId: formId, page, limit: 10, gradeId, search: candidateSearch, sortBy: "id", sortOrder: "DESC" });
+    candidateQueryKeyRef.current = JSON.stringify(queryKey);
+    setAttachLoading(true);
+    setAttachError("");
+    try {
+      const res = await getSupportFormAdviserCandidates(formId, {
+        page,
+        limit: 10,
+        gradeId: gradeId ? Number(gradeId) : undefined,
+        search: candidateSearch.trim() || undefined,
+        sortBy: "id",
+        sortOrder: "DESC",
+      }, controller.signal);
+      if (candidateQueryKeyRef.current === JSON.stringify(queryKey)) {
+        setAttachResults(res.items || []);
+        setAttachMeta(res.pagination || { page, limit: 10, total: 0, lastPage: 1 });
+      }
+    } catch (error) {
+      if (error?.code !== "ERR_CANCELED") setAttachError("خطا در دریافت مشاوران قابل افزودن.");
+    } finally {
+      if (candidateAbortRef.current === controller) setAttachLoading(false);
+    }
+  }, [attachGradeId, attachSearch, formId]);
+
+  useEffect(() => {
+    clearTimeout(candidateDebounceRef.current);
+    candidateDebounceRef.current = setTimeout(() => fetchCandidates(1, attachSearch, attachGradeId), 350);
+    return () => clearTimeout(candidateDebounceRef.current);
+  }, [attachGradeId, attachSearch, fetchCandidates]);
+
+  useEffect(() => () => candidateAbortRef.current?.abort(), []);
+
   const handleDetach = async () => {
     const adviserId = pendingDelete?.adviser_id || pendingDelete?.adviser?.id;
     if (!adviserId) return;
     setActionLoading(adviserId);
     try {
       await detachSupportFormAdviser(formId, adviserId);
-      await fetchData(meta.page);
+      await Promise.all([fetchData(meta.page), fetchCandidates(attachMeta.page)]);
       setAlert({ type: "success", message: "مشاور حذف شد." });
     } catch {
       setAlert({ type: "danger", message: "خطا در حذف مشاور." });
@@ -673,43 +720,19 @@ const AdvisersTab = ({ formId }) => {
     }
   };
 
-  const handleAttachSearch = async (e) => {
-    e.preventDefault();
-    if (!attachSearch.trim() && !attachGradeId) return;
-    setAttachLoading(true);
+  const handleBulkAttach = async () => {
+    const adviserIds = Array.from(selectedCandidateIds);
+    if (!adviserIds.length || attaching) return;
+    setAttaching(true);
     try {
-      const res = await getSupportFormAdviserCandidates(formId, {
-        page: 1,
-        limit: 50,
-        search: attachSearch.trim() || undefined,
-        gradeId: attachGradeId ? Number(attachGradeId) : undefined,
-      });
-      setAttachResults(res.items || []);
-      if (!res.items?.length) setAlert({ type: "warning", message: "نتیجه‌ای یافت نشد." });
+      await bulkAttachSupportFormAdvisers(formId, adviserIds);
+      setSelectedCandidateIds(new Set());
+      await Promise.all([fetchData(meta.page), fetchCandidates(1)]);
+      setAlert({ type: "success", message: `${adviserIds.length.toLocaleString("fa-IR")} مشاور اضافه شد.` });
     } catch {
-      setAlert({ type: "danger", message: "خطا در جستجوی مشاور." });
+      setAlert({ type: "danger", message: "خطا در افزودن مشاوران." });
     } finally {
-      setAttachLoading(false);
-    }
-  };
-
-  const handleAttach = async (row) => {
-    const adviserId = row?.adviser_id || row?.adviser?.id || row?.id;
-    if (!adviserId) return;
-    setActionLoading(adviserId);
-    try {
-      await upsertSupportFormAdviser(formId, { adviser_id: adviserId, is_active: true });
-      await fetchData(meta.page);
-      setAttachResults((prev) =>
-        prev.map((item) =>
-          (item?.id || item?.adviser_id) === adviserId ? { ...item, _attached: true } : item
-        )
-      );
-      setAlert({ type: "success", message: "مشاور اضافه شد." });
-    } catch {
-      setAlert({ type: "danger", message: "خطا در افزودن مشاور." });
-    } finally {
-      setActionLoading(null);
+      setAttaching(false);
     }
   };
 
@@ -783,26 +806,19 @@ const AdvisersTab = ({ formId }) => {
         },
       },
       {
-        id: "add",
-        header: "افزودن",
+        id: "select",
+        header: "انتخاب",
         enableSorting: false,
         cell: ({ row }) => {
           const adviserId = row.original?.adviser_id || row.original?.adviser?.id || row.original?.id;
-          const done = row.original?._attached;
+          const selected = selectedCandidateIds.has(Number(adviserId));
           return (
-            <Button
-              size="sm"
-              color={done ? "secondary" : "success"}
-              disabled={done || actionLoading === adviserId}
-              onClick={() => handleAttach(row.original)}
-            >
-              {done ? "افزوده شد" : "افزودن"}
-            </Button>
+            <Input type="checkbox" aria-label={`انتخاب مشاور ${adviserId}`} checked={selected} disabled={attaching} onChange={() => setSelectedCandidateIds((current) => { const next = new Set(current); if (next.has(Number(adviserId))) next.delete(Number(adviserId)); else next.add(Number(adviserId)); return next; })} />
           );
         },
       },
     ],
-    [actionLoading]
+    [attaching, selectedCandidateIds]
   );
 
   return (
@@ -817,13 +833,14 @@ const AdvisersTab = ({ formId }) => {
       <Card className="border mb-4">
         <CardHeader className="bg-light"><h6 className="mb-0">افزودن مشاور</h6></CardHeader>
         <CardBody>
-          <Form onSubmit={handleAttachSearch}>
+          <Form onSubmit={(event) => { event.preventDefault(); clearTimeout(candidateDebounceRef.current); fetchCandidates(1); }}>
             <Row className="g-2 align-items-end">
               <Col md="5">
-                <Label className="form-label mb-1">جستجوی متنی</Label>
+                <Label className="form-label mb-1" htmlFor="adviser-candidate-search">جستجوی متنی</Label>
                 <InputGroup>
                   <InputGroupText><i className="bx bx-search" /></InputGroupText>
                   <Input
+                    id="adviser-candidate-search"
                     value={attachSearch}
                     onChange={(e) => setAttachSearch(e.target.value)}
                     placeholder="کد ملی، نام کاربری یا تلفن"
@@ -831,10 +848,11 @@ const AdvisersTab = ({ formId }) => {
                 </InputGroup>
               </Col>
               <Col md="4">
-                <Label className="form-label mb-1">فیلتر پایه</Label>
+                <Label className="form-label mb-1" htmlFor="adviser-candidate-grade">فیلتر پایه</Label>
                 <InputGroup>
                   <InputGroupText><i className="bx bx-book" /></InputGroupText>
                   <Input
+                    id="adviser-candidate-grade"
                     type="select"
                     value={attachGradeId}
                     onChange={(e) => setAttachGradeId(e.target.value)}
@@ -847,14 +865,14 @@ const AdvisersTab = ({ formId }) => {
                 </InputGroup>
               </Col>
               <Col md="3" className="d-flex align-items-end gap-2">
-                <Button color="primary" type="submit" className="w-100" disabled={attachLoading || (!attachSearch.trim() && !attachGradeId)}>
-                  {attachLoading ? "جستجو..." : "جستجو"}
+                <Button color="primary" type="submit" className="w-100" disabled={attachLoading}>
+                  جستجو
                 </Button>
                 <Button
                   color="light"
                   type="button"
                   className="flex-shrink-0"
-                  onClick={() => { setAttachSearch(""); setAttachGradeId(""); setAttachResults([]); }}
+                  onClick={() => { setAttachSearch(""); setAttachGradeId(""); }}
                   disabled={attachLoading}
                 >
                   ریست
@@ -862,8 +880,14 @@ const AdvisersTab = ({ formId }) => {
               </Col>
             </Row>
           </Form>
-          {attachResults.length > 0 && (
-            <div className="mt-3">
+          <div className="mt-3">
+              <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                <span className="text-muted">{Number(attachMeta.total || 0).toLocaleString("fa-IR")} مشاور قابل افزودن — {selectedCandidateIds.size.toLocaleString("fa-IR")} انتخاب‌شده</span>
+                <Button color="success" type="button" onClick={handleBulkAttach} disabled={attaching || selectedCandidateIds.size === 0}>
+                  {attaching ? <><Spinner size="sm" className="ms-1" />در حال افزودن...</> : "افزودن مشاوران انتخاب‌شده"}
+                </Button>
+              </div>
+              {attachError && <Alert color="danger">{attachError}<Button type="button" color="link" onClick={() => fetchCandidates(attachMeta.page)}>تلاش دوباره</Button></Alert>}
               <TableContainer
                 columns={candidateColumns}
                 data={attachResults}
@@ -872,8 +896,19 @@ const AdvisersTab = ({ formId }) => {
                 isLoading={attachLoading}
                 tableClass="table-bordered table-nowrap dt-responsive nowrap w-100"
               />
+              {!attachLoading && !attachError && attachResults.length === 0 && <div className="text-center text-muted py-3">مشاور قابل افزودنی یافت نشد.</div>}
+              {Number(attachMeta.lastPage) > 1 && <Paginations
+                perPageData={10}
+                data={attachResults}
+                totalRecords={Number(attachMeta.total || 0)}
+                totalPages={Number(attachMeta.lastPage || 1)}
+                currentPage={Number(attachMeta.page || 1)}
+                setCurrentPage={(page) => fetchCandidates(page)}
+                isShowingPageLength
+                paginationDiv="col-sm-auto"
+                paginationClass="pagination pagination-sm mb-0"
+              />}
             </div>
-          )}
         </CardBody>
       </Card>
 
