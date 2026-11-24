@@ -25,7 +25,7 @@ test("renders backend Jalali period, peak usage and monthly form evidence", asyn
   expect(await screen.findByText("مریم احمدی")).toBeInTheDocument();
   expect(screen.getAllByText("آبان ۱۴۰۵").length).toBeGreaterThan(0);
   expect(getBillingInvoicePreview).toHaveBeenCalledWith(expect.objectContaining({ schoolId: "94", jalaliYear: "1405", jalaliMonth: "8", durationMonths: 1 }));
-  expect(screen.getByText(/۰۰:۰۰ تا .*۲۳:۵۹/)).toBeInTheDocument();
+  expect(screen.getByText(/۱۴۰۵\/۰۸\/۰۱ تا ۱۴۰۵\/۰۸\/۳۰/)).toBeInTheDocument();
   expect(screen.queryByText(/۰۳:۳۰/)).not.toBeInTheDocument();
   expect(screen.getByText(/بیشترین مصرف ماهانه: ۲۳۰/)).toBeInTheDocument();
   fireEvent.click(screen.getByText("مبنای محاسبه"));
@@ -168,4 +168,42 @@ test("renders a three-month backend period that crosses the Jalali year boundary
   fireEvent.change(screen.getByLabelText("مدت اشتراک"), { target: { value: "3" } });
   expect(await screen.findByText("بهمن ۱۴۰۵ تا فروردین ۱۴۰۶")).toBeInTheDocument();
   expect(screen.getByText("بهمن ۱۴۰۵، اسفند ۱۴۰۵، فروردین ۱۴۰۶")).toBeInTheDocument();
+});
+
+const prepareValidInvoice = async () => {
+  selectAban1405();
+  await screen.findByText("مریم احمدی");
+  fireEvent.click(screen.getByLabelText("انتخاب مریم احمدی"));
+  fireEvent.change(screen.getByLabelText("نام و نام خانوادگی"), { target: { value: "کاربر تست" } });
+  fireEvent.change(screen.getByLabelText("کد ملی"), { target: { value: "0012345678" } });
+};
+
+test("includes the base amount by default and explains it before submit", async () => {
+  createBillingInvoice.mockResolvedValue({ id: 10 });
+  render(<InvoiceCreateModal {...props} />);
+  await prepareValidInvoice();
+  expect(screen.getByLabelText("محاسبه مبلغ ظرفیت پایه هر مشاور")).toBeChecked();
+  expect(screen.getByText("مبلغ پایه محاسبه می‌شود.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "صدور فاکتور" }));
+  await waitFor(() => expect(createBillingInvoice).toHaveBeenCalledWith(expect.objectContaining({ includeBaseAmount: true })));
+});
+
+test("can exclude the base amount and submits only the backend pricing choice", async () => {
+  createBillingInvoice.mockResolvedValue({ id: 11 });
+  render(<InvoiceCreateModal {...props} />);
+  await prepareValidInvoice();
+  fireEvent.click(screen.getByLabelText("محاسبه مبلغ ظرفیت پایه هر مشاور"));
+  expect(screen.getByText(/مبلغ پایه محاسبه نمی‌شود؛ فقط پله‌های مازاد/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "صدور فاکتور" }));
+  await waitFor(() => expect(createBillingInvoice).toHaveBeenCalledWith(expect.objectContaining({ includeBaseAmount: false })));
+});
+
+test("shows the backend error when excluding base produces no billable excess", async () => {
+  createBillingInvoice.mockRejectedValue({ response: { status: 400, data: { message: "هیچ ظرفیت مازادی برای صدور فاکتور بدون مبلغ پایه وجود ندارد" } } });
+  render(<InvoiceCreateModal {...props} />);
+  await prepareValidInvoice();
+  fireEvent.click(screen.getByLabelText("محاسبه مبلغ ظرفیت پایه هر مشاور"));
+  fireEvent.click(screen.getByRole("button", { name: "صدور فاکتور" }));
+  expect(await screen.findByText("هیچ ظرفیت مازادی برای صدور فاکتور بدون مبلغ پایه وجود ندارد")).toBeInTheDocument();
+  expect(props.toggle).not.toHaveBeenCalled();
 });
