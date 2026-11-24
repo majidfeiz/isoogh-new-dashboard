@@ -1,5 +1,5 @@
 import { apiGet, apiPatch, apiPost } from "../helpers/httpClient.jsx"
-import { billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, createWalletAdjustment, downloadBillingInvoice, exportWalletTransactions, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingPricingHistory, getBillingWallet, getBillingWallets, getWalletTopups, normalizeInvoiceKpis, payBillingInvoiceFromWallet, previewBillingCapacity, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
+import { addAutoInvoiceAdviser, billingPreviewQueryKey, createBillingInvoice, createCustomBillingInvoice, createManualBillingPayment, createManualWalletTopup, createWalletAdjustment, downloadBillingInvoice, executeAutoInvoiceForMonth, exportWalletTransactions, getAutoInvoices, getBillingInvoice, getBillingInvoicePreview, getBillingInvoices, getBillingPricingHistory, getBillingWallet, getBillingWallets, getWalletTopups, normalizeInvoiceKpis, payBillingInvoiceFromWallet, previewBillingCapacity, purchaseBillingCapacity, requestBillingPayment, requestWalletTopup, updateBillingPricing, verifyBillingPayment, verifyWalletTopup } from "./billingService.jsx"
 
 jest.mock("../helpers/httpClient.jsx", () => ({ apiGet: jest.fn(), apiPatch: jest.fn(), apiPost: jest.fn() }))
 
@@ -58,6 +58,14 @@ describe("billing API contract", () => {
     apiGet.mockResolvedValue({ data: { data: { id: "4", items: [{ id: "4", adviser_id: "5389", adviser_name_snapshot: "سحر خوشبین", student_count: 183, target_student_capacity: 250, base_unit_amount: "20000000", pricing_snapshot: { extraSteps: 3 }, final_amount: "26000000" }] } } })
     const result = await getBillingInvoice(4, 94)
     expect(result.items[0]).toEqual(expect.objectContaining({ adviserId: "5389", adviserName: "سحر خوشبین", studentCount: 183, targetStudentCapacity: 250, baseAmount: "20000000", calculatedSteps: 3, finalAmount: "26000000" }))
+  })
+
+  test("keeps invoice issue, payment due and line service period as independent fields", async () => {
+    apiGet.mockResolvedValue({ data: { data: { id: 21, issued_at: "2026-11-22", due_at: "2026-11-29", items: [{ id: 1, period_start: "2026-11-22", period_end: "2026-12-21" }] } } })
+    const result = await getBillingInvoice(21, 94)
+    expect(result).toEqual(expect.objectContaining({ issuedAt: "2026-11-22", dueAt: "2026-11-29" }))
+    expect(result.items[0]).toEqual(expect.objectContaining({ periodStart: "2026-11-22", periodEnd: "2026-12-21" }))
+    expect(result.items[0].periodEnd).not.toBe(result.dueAt)
   })
 
   test("requests the server-authoritative Jalali period preview with an abort signal", async () => {
@@ -183,6 +191,18 @@ describe("billing API contract", () => {
     await purchaseBillingCapacity({ ...payload, idempotencyKey: "fixed-uuid" })
     expect(apiPost.mock.calls[0]).toEqual([expect.stringMatching(/capacity\/preview$/), payload])
     expect(apiPost.mock.calls[1]).toEqual([expect.stringMatching(/capacity\/purchase$/), { ...payload, idempotencyKey: "fixed-uuid" }])
+  })
+
+  test("adds an adviser to a monthly contract with the exact authoritative request", async () => {
+    apiPost.mockResolvedValue({ data: { data: { invoice: { id: 77 } } } })
+    await addAutoInvoiceAdviser(12, { schoolId: "94", adviserId: "31", targetStudentCapacity: "240", idempotencyKey: "uuid-v4" })
+    expect(apiPost).toHaveBeenCalledWith(expect.stringMatching(/auto-invoices\/12\/advisers$/), { schoolId: 94, adviserId: 31, targetStudentCapacity: 240, idempotencyKey: "uuid-v4" })
+  })
+
+  test("executes one automatic schedule for the selected Jalali month", async () => {
+    apiPost.mockResolvedValue({ data: { data: { invoice: { id: 88 } } } })
+    await executeAutoInvoiceForMonth(12, { schoolId: "94", jalaliYear: "1405", jalaliMonth: "8" })
+    expect(apiPost).toHaveBeenCalledWith(expect.stringMatching(/auto-invoices\/12\/execute$/), { schoolId: 94, jalaliYear: 1405, jalaliMonth: 8 })
   })
 
   test("loads immutable pricing history", async () => {

@@ -26,4 +26,4 @@ export const formatBillingDateOnlyLabel = (value) => {
   return `${fa(jalali.jy, 4)}/${fa(jalali.jm)}/${fa(jalali.jd)}`;
 };
 
-export const formatBillingPeriodRange = (start, end) => `${formatBillingDateOnly(start)} تا ${formatBillingDateOnly(end, true)}`;
+export const formatBillingPeriodRange = (start, end) => `${formatBillingDateOnlyLabel(start)} تا ${formatBillingDateOnlyLabel(end)}`;

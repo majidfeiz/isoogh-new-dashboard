@@ -79,6 +79,13 @@ export const validateInvoiceAdjustment = ({ subtotal, discountAmount, hasManualA
 };
 
 export const invalidateCapacityReport = () => window.dispatchEvent(new CustomEvent("adviser-form-capacity:refresh"));
+export const invalidateBillingContractViews = () => {
+  invalidateBillingCache();
+  invalidateCapacityReport();
+  window.dispatchEvent(new CustomEvent("billing-invoice-preview:invalidate"));
+  window.dispatchEvent(new CustomEvent("billing-auto-invoices:invalidate"));
+  window.dispatchEvent(new CustomEvent("billing-wallet:invalidate"));
+};
 
 export const formatJalali = (value) => {
   if (!value) return "—";

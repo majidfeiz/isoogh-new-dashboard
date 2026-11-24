@@ -169,9 +169,9 @@ export async function getSupportFormAdvisers(id, params = {}) {
   };
 }
 
-export async function getSupportFormAdviserCandidates(id, params = {}) {
+export async function getSupportFormAdviserCandidates(id, params = {}, signal) {
   const url = getApiUrl(API_ROUTES.supportForms.adviserCandidates(id));
-  const response = await apiGet(url, { params });
+  const response = await apiGet(url, { params, signal });
   const payload = response?.data;
   const data = payload?.data ?? payload ?? {};
   const items = data.items || data.data || [];
