@@ -31,3 +31,12 @@ test("keeps legacy snapshot fallback", () => {
   expect(screen.getByText("ظرفیت پایه")).toBeInTheDocument()
   expect(screen.getByText("مبلغ ماهانه")).toBeInTheDocument()
 })
+
+test("renders excluded base amount and the server snapshot formula", () => {
+  render(<PricingRuleSummary snapshot={{ includedStudents: 200, baseAmountIncluded: false, baseMonthlyAmount: 4110000, chargedBaseMonthlyAmount: 0, excludedBaseMonthlyAmount: 4110000, targetStudentCapacity: 240, extraStudentCapacity: 40, capacityStepSeats: 20, extraSteps: 2, surchargePerStep: 411000, extraMonthlyAmount: 822000, calculatedMonthlyAmount: 822000, calculatedFinalAmount: 822000 }} />)
+  expect(screen.getByText("حذف شده")).toBeInTheDocument()
+  expect(screen.getByText("مبلغ پایه اخذشده")).toBeInTheDocument()
+  expect(screen.getByText("مبلغ پایه حذف‌شده")).toBeInTheDocument()
+  expect(screen.getByText(/فرمول:/)).toBeInTheDocument()
+  expect(screen.getByText("مبلغ نهایی محاسباتی")).toBeInTheDocument()
+})
