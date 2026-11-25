@@ -60,7 +60,7 @@ test("opens page two, keeps selections across pages and submits all ids", async 
   await waitFor(() => expect(bulkAttachSupportFormAdvisers).toHaveBeenCalledWith("3315", expect.arrayContaining([12, 18])));
 });
 
-test("candidate checkbox is clickable from the input, its hit area and keyboard", async () => {
+test("candidate checkbox delegates input and hit-area clicks to one controlled toggle", async () => {
   renderTab();
   const checkbox = await screen.findByLabelText("انتخاب مشاور 12");
   const hitArea = checkbox.closest(".support-form-question-check");
