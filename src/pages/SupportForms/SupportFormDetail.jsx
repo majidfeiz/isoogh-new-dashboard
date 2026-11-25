@@ -843,8 +843,7 @@ export const AdvisersTab = ({ formId }) => {
                 aria-label={`انتخاب مشاور ${adviserId}`}
                 checked={selected}
                 disabled={attaching}
-                onClick={(event) => event.stopPropagation()}
-                onChange={() => toggleCandidateSelection(adviserId)}
+                readOnly
               />
             </div>
           );
