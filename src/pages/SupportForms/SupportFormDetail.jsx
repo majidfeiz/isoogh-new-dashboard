@@ -736,6 +736,17 @@ export const AdvisersTab = ({ formId }) => {
     }
   };
 
+  const toggleCandidateSelection = useCallback((adviserId) => {
+    const normalizedId = Number(adviserId);
+    if (!Number.isFinite(normalizedId) || attaching) return;
+    setSelectedCandidateIds((current) => {
+      const next = new Set(current);
+      if (next.has(normalizedId)) next.delete(normalizedId);
+      else next.add(normalizedId);
+      return next;
+    });
+  }, [attaching]);
+
   const advisersColumns = useMemo(
     () => [
       { id: "code", header: "کد", enableSorting: false, cell: ({ row }) => row.original?.adviser?.code || "-" },
@@ -813,12 +824,34 @@ export const AdvisersTab = ({ formId }) => {
           const adviserId = row.original?.adviser_id || row.original?.adviser?.id || row.original?.id;
           const selected = selectedCandidateIds.has(Number(adviserId));
           return (
-            <Input type="checkbox" aria-label={`انتخاب مشاور ${adviserId}`} checked={selected} disabled={attaching} onChange={() => setSelectedCandidateIds((current) => { const next = new Set(current); if (next.has(Number(adviserId))) next.delete(Number(adviserId)); else next.add(Number(adviserId)); return next; })} />
+            <div
+              className="form-check d-inline-flex align-items-center justify-content-center p-2 support-form-question-check"
+              role="button"
+              tabIndex={attaching ? -1 : 0}
+              aria-disabled={attaching}
+              onClick={() => toggleCandidateSelection(adviserId)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  toggleCandidateSelection(adviserId);
+                }
+              }}
+            >
+              <input
+                type="checkbox"
+                className="form-check-input mt-0"
+                aria-label={`انتخاب مشاور ${adviserId}`}
+                checked={selected}
+                disabled={attaching}
+                onClick={(event) => event.stopPropagation()}
+                onChange={() => toggleCandidateSelection(adviserId)}
+              />
+            </div>
           );
         },
       },
     ],
-    [attaching, selectedCandidateIds]
+    [attaching, selectedCandidateIds, toggleCandidateSelection]
   );
 
   return (
