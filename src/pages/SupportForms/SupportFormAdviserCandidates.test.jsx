@@ -60,6 +60,22 @@ test("opens page two, keeps selections across pages and submits all ids", async 
   await waitFor(() => expect(bulkAttachSupportFormAdvisers).toHaveBeenCalledWith("3315", expect.arrayContaining([12, 18])));
 });
 
+test("candidate checkbox is clickable from the input, its hit area and keyboard", async () => {
+  renderTab();
+  const checkbox = await screen.findByLabelText("انتخاب مشاور 12");
+  const hitArea = checkbox.closest(".support-form-question-check");
+
+  expect(checkbox).not.toBeDisabled();
+  fireEvent.click(checkbox);
+  expect(checkbox).toBeChecked();
+
+  fireEvent.click(hitArea);
+  expect(checkbox).not.toBeChecked();
+
+  fireEvent.keyDown(hitArea, { key: "Enter" });
+  expect(checkbox).toBeChecked();
+});
+
 test("hides unnecessary pagination and gets off-page search results from API", async () => {
   getSupportFormAdviserCandidates.mockResolvedValueOnce(response([candidate(12)], 1, 1, 1)).mockResolvedValueOnce(response([candidate(44, "مریم احمدی")], 1, 1, 1));
   renderTab();
